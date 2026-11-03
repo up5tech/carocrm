@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Phiên bản** | 1.6.0 |
+| **Phiên bản** | 1.7.0 |
 | **Ngày** | 2026-11-03 |
 | **Phạm vi** | Toàn hệ thống (as-built) + đặc tả tầng AI CRM v2 |
 | **Trạng thái** | §1–§7: đã triển khai. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (phase 19-CHAT.20, 19-CHAT.21, 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (phase 19-CHAT.23). §9.7 + §10.1: **đã triển khai 2026-11-03** (phase 19-CHAT.24). §10.2–§11: quy trình áp dụng cho mọi đợt. |
@@ -257,7 +257,7 @@ Năm tool trí tuệ module (`19-CHAT.23`) là wrapper mỏng — mỗi tool tr�
 Hai sự thật as-built mà mọi thiết kế chip/agent phải tính tới (ghi nhận 19-CHAT.24):
 
 - Registry còn mang **`omnichannel.send_message`** (material_write, `requiresApproval: true`) do module Omnichannel đăng ký — **21 mục** trong registry, 20 mục phía Chat. Bảng trên liệt kê 20; cả 21 đều được assert một lần nữa trong `apps/api/test/ai-agent-runs.test.ts`.
-- Một agent **không thể mang quá 8 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`). Nghĩa là không tồn tại một assistant Chat nào trả lời được mọi chip; `assistant.tools` luôn là một tập con, và bộ lọc chip (§9.7) là cơ chế duy nhất giữ cho lời hứa của UI khớp với năng lực thật.
+- Một agent **không thể mang quá 20 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`). Con số 20 đúng bằng catalogue phía Chat, nên một assistant *có thể* cầm toàn bộ catalogue — trần này được nâng từ 8 lên 20 ngày 2026-11-03, vì 8 nằm dưới cỡ catalogue và khiến Chat không thể cấp đủ bộ tool mà các chip quảng bá. Cái giá phải trả không phải an toàn (mọi tool vẫn đăng ký bằng code, validate khi publish, ACL khi thực thi) mà là **chất lượng chọn tool**: model cầm 20 mô tả sẽ chọn sai thường hơn model cầm 6 (`§11`). Bộ lọc chip (§9.7) vẫn là cơ chế thường trực, vì grant vẫn là lựa chọn của operator và module có thể chưa cài — `assistant.tools` vẫn là tập con.
 
 ### 7.3 Agent template
 
@@ -608,8 +608,9 @@ nó không làm được.
   phiên bản agent đã publish (§7.5). Một tool bị vô hiệu hoá bằng settings vẫn còn trong grant, nên chip
   vẫn hiện và câu trả lời sẽ là "năng lực này không khả dụng". Rollback thật sự gọn là bỏ grant rồi publish
   lại — điều này được ghi vào `docs/architecture/crm-chat-contract.md` §7.5.
-- **Trần 8 tool mỗi agent** (§7.2) khiến "lọc theo grant" là cơ chế thường trực chứ không phải tình huống
-  hiếm: một assistant Chat không bao giờ cầm đủ 20 tool, do đó hàng chip luôn ngắn hơn bảng §9.7.
+- **Trần grant mỗi agent** (§7.2, hiện 20) khiến "lọc theo grant" là cơ chế thường trực chứ không phải tình huống
+  hiếm: một deployment có thể cấp ít hơn catalogue theo ý muốn, và tool của module chưa cài thì không tồn tại
+  trong registry để mà grant.
 - **Cả 8 khoá `requiresTool` là tool key thật**, được `CRMChatSuggestions.test.tsx` chặn cùng catalogue
   assert; tên tool viết sai sẽ không có chip nào render, thay vì âm thầm hiển thị một lời hứa sai.
 
@@ -672,6 +673,7 @@ Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số 
 | 1.0.0 | 2026-11-02 | Bản đầu. Chốt đặc tả as-built §1–§7; thêm phân tích khoảng trống §8 và đặc tả AI CRM tool catalogue v2 §9–§11. |
 | 1.1.0 | 2026-11-02 | Triển khai §9.6: `ai-agent-actor.ts` (khối "Acting user" + `promptSafe`), `AIAgentRunService.actorContext()`, seam `__FAKE_ECHO_ACTOR__`. Thêm `ai-agent-actor.test.ts` (10 case thuần) và 1 case end-to-end trong `ai-agent-runs.test.ts`. Cập nhật §7.6, §8.1, §8.2. Số entity chính xác: 115. |
 | 1.2.0 | 2026-11-02 | Nối SPEC với plan: §9.2–§9.7 giờ trỏ tới phase 19-CHAT.21–24 trong `PLAN_Phase_19_CRM_Chat.md` §17, và dòng trạng thái ở đầu ghi rõ phần nào đã thành phase. Không đổi nội dung kỹ thuật. |
+| 1.7.0 | 2026-11-03 | Đóng G37/G38/G39/G63. `MAX_TOOLS` nâng 8 → 20 (§7.2) vì 8 nằm dưới cỡ catalogue nên không assistant nào cầm đủ bộ tool chip quảng bá; §9.7 viết lại lý do bộ lọc chip vẫn thường trực. §7.4: `readTools` giờ là gate thật trên `POST action/turns` + `action/query/execute` (G38, hành vi thay đổi với deployment đang tắt flag). §10.1: `sources` của turn đi qua cùng luật re-read của citation (G39). Guard Case nhận stamp `assignedUserId` của create khi nó chính là người gọi (G37). SPA có route guard `/admin/*` đọc chính đáp án `GET /AdminPanel` (G63). |
 | 1.6.0 | 2026-11-03 | Triển khai 19-CHAT.24. §7.4: chip là dữ liệu (`CRMChatSuggestions.tsx`) với `requiresTool`, lọc theo `assistant.tools`; 8 chip thay vì 4. §7.2: ghi nhận registry có **21** mục (`omnichannel.send_message`) và trần **8 tool/agent**. §8.2/§8.3: chip hoạt động và D5 đóng. §9.7 as-built kèm ba chi tiết: bộ lọc đọc grant chứ không đọc `tools.disabled`, trần 8 tool, khoá tool phải là key thật. §10.1: thêm dòng Eval + Catalogue. §10.3 nói rõ rollback bằng bỏ grant + publish lại. |
 | 1.5.0 | 2026-11-03 | Triển khai 19-CHAT.23. §7.2 lên **20 tool** (thêm `crm_lead_score`, `crm_customer_health`, `crm_case_context`, `crm_stale_records`, `crm_run_report`) kèm bảng "tool nào trả lời câu gì". §9.4 đánh dấu đã triển khai kèm ba chỗ lệch as-built và hai chi tiết chốt (cột khoá của `stream_items`, và cách dịch ACL predicate sang SQL). Bốn tool do module sở hữu tự đăng ký, một tool do `ai-agents` đăng ký. |
 | 1.4.0 | 2026-11-02 | Triển khai 19-CHAT.22. §7.2 lên **16 tool** (thêm `crm_post_note`, `crm_log_activity`, `crm_draft_email`; `crm_create_task` và `crm_update_record_fields` lên v2) kèm bảng "ghi gì / bảo đảm gì". §8: D3, D4 đóng; "ghi lại kết quả công việc" và chip soạn email chuyển sang đã sửa. §9.3, §9.5 đánh dấu đã triển khai kèm ba chỗ lệch as-built. |

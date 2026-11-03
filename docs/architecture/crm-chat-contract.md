@@ -464,9 +464,11 @@ diagnostic the SPA has to guess at — the payload already carried it, and 19-CH
 
 Two consequences an administrator should expect:
 
-- An agent may hold at most **eight** tools (`MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts`),
-  so no Chat assistant can be granted the whole catalogue. The suggestion row shrinks and grows with the
-  grants; that is the intended behaviour, not a defect.
+- An agent may hold at most **twenty** tools (`MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts`),
+  which is the size of the Chat-facing catalogue — raised from eight on 2026-11-03 because eight made it
+  impossible to grant an assistant the tools the suggestions advertise. The filter still matters: grants
+  remain an operator's choice, a module may not be installed so its tool is not in the registry at all, and
+  a wider selection surface is a real cost in model accuracy rather than a safety one.
 - Disabling a tool through `AIAgents` settings (`settings.tools.disabled`) takes it out of the answers the
   agent can give, but the grant list is what the chip filter reads. A deployment that disables a tool
   should remove the grant as well if it wants the matching question to stop being offered.

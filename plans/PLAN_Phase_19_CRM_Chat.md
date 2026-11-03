@@ -1,7 +1,7 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
 > **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03 (module v1.2.0)  
-> **Plan version:** 1.6.0 (2026-11-03)  
+> **Plan version:** 1.7.0 (2026-11-03)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
@@ -1467,7 +1467,7 @@ new, and the row order is the declaration order.
 |---|---|
 | §9.7's "no tool required" chip (`opportunities`) declares `crm_search_records` | The dash was true relative to §9.6, but the question still reads records. Declaring the tool makes the chip hide from a docs-only assistant, which is the whole point of the phase. |
 | Two chips re-worded away from "this account" / "this lead" | The hero is an empty state: no record is selected, so a demonstrative would point at nothing. |
-| The evaluation set runs through **three** assistants, not one | `MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts` caps an agent at eight grants. Twenty tools cannot be held by one Chat assistant; `useAssistant(group)` repoints Chat per group of cases. |
+| The evaluation set runs through **three** assistants, not one | `MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts` capped an agent at eight grants *at the time*, so twenty tools could not be held by one Chat assistant and `useAssistant(group)` repoints Chat per group of cases. The ceiling is twenty now (raised 2026-11-03, with G37–G39/G63); the grouping stayed, as a test-local choice that keeps each published version small and proves the suite does not need one agent holding everything. |
 | The catalogue assertion covers **21** registry keys, not 20 | `omnichannel.send_message` shares the registry. Excluding it would leave an approval-gated, customer-visible tool unasserted and would make a "full set" claim false. |
 | The module version went 1.1.0 → 1.2.0; the **contract** version stayed 1.2.0 | No path, request shape, response shape, stream event or error code changed — `assistant.tools` was already in the payload. Bumping it would tell a client there is something to adapt to. `implementedPhases` now lists 20–24. |
 
@@ -1603,6 +1603,7 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 |---|---|---|
 | 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
 | 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
+| 1.7.0 | 2026-11-03 | Gap closure following 19-CHAT.24: **G38** `features.readTools` is now enforced on `POST action/turns` and `action/query/execute` and reported through `actions.canStartTurn` (deployment-visible — a flag-off installation stops answering until an operator switches it on); **G39** a turn's `result.sources` is re-authorized with the citation rule; **G37** the Case guard accepts the record API's own `own`/`team` create stamp instead of refusing it, and the IDOR test that had been passing on a failed create now asserts the create; **G63** `/admin/*` routes are guarded by the server's own `GET /AdminPanel` answer rather than a hand-written capability map. `MAX_TOOLS` raised 8 → 20 so one assistant can hold the Chat-facing catalogue; §17 phase 24's as-built row reworded accordingly. |
 | 1.6.0 | 2026-11-03 | Phase 19-CHAT.24 shipped: suggestions are declared data with `requiresTool`, filtered by `capabilities.assistant.tools` (`CRMChatSuggestions.tsx`, 8 chips, en+vi); 40 per-tool evaluation cases in `crm-chat-evaluation.test.ts` across three assistants (`MAX_TOOLS` = 8 grants per agent); catalogue asserted as 21 entries in `ai-agent-runs.test.ts`; module v1.2.0, `implementedPhases` 0–24, contract version unchanged. Updated §0.1, §16, §17 phase 24 and the final instruction. |
 | 1.5.0 | 2026-11-03 | Phase 19-CHAT.23 shipped: `crm_lead_score` (lead-score), `crm_customer_health` (customer-success), `crm_case_context` (service-desk), `crm_stale_records` and `crm_run_report` (ai-agents). Registry 15 → 20 keys. Four of the five are contributed by the module that owns the service (§9.1 rule 6). `crm_stale_records` is one ACL-aware SQL query with a single `NOT EXISTS` over `stream_items`. New suite `crm-chat-intelligence-tools.test.ts` (7 cases). Updated §0.1 and §17 phase 23. |
 | 1.4.0 | 2026-11-02 | Phase 19-CHAT.22 shipped: `crm_post_note` (Stream), `crm_log_activity`, `crm_draft_email` (never sends), `crm_create_task` v2 (parent + actor default), `crm_update_record_fields` v2 (wider allowlist, same class). Registry 12 → 15 keys. Corrected the plan's claim that grants reference a tool version. |

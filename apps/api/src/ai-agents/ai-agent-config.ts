@@ -20,7 +20,23 @@ import { DATA_CLASSES, EFFECT_CLASSES } from './ai-agents-module.js';
 
 export const MAX_SYSTEM_PROMPT_CHARS = 12_000;
 export const MAX_CONFIG_BYTES = 32_768;
-export const MAX_TOOLS = 8;
+/**
+ * How many tools one agent version may grant.
+ *
+ * Raised from 8 to 20 on 2026-11-03, because 8 was below the size of the Chat-facing catalogue: no
+ * assistant could be granted the tools the Chat suggestions advertise, and the evaluation set had to be
+ * run through three assistants to cover twenty keys. The ceiling is not a safety boundary by itself —
+ * every tool is registered in code, validated at publish and ACL-scoped at execution — so what raising
+ * it trades away is selection quality: a model handed twenty descriptions picks wrong more often than one
+ * handed six (`plans/SPEC.md` §11). The mitigation is the same one the catalogue grew with: distinct
+ * tool descriptions, a per-tool evaluation case, and grants staying an operator's choice. Nobody has to
+ * grant all twenty.
+ *
+ * Twenty covers the Chat-facing catalogue exactly. The registry holds one more key,
+ * `omnichannel.send_message`, so an agent that must both answer in Chat and send to a customer still has
+ * to choose between them — which is the intended reading of a ceiling, not an oversight.
+ */
+export const MAX_TOOLS = 20;
 export const MAX_JSON_SCHEMA_DEPTH = 4;
 export const MAX_JSON_SCHEMA_NODES = 100;
 

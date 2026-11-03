@@ -92,12 +92,12 @@ the array can be shorter, and the answer text is not rewritten.
 
 ### Verification
 
-* `apps/api/test/crm-chat-evaluation.test.ts` — 61 cases: the 19-CHAT.17 set plus **one case per tool, in
+* `apps/api/test/crm-chat-evaluation.test.ts` — 62 cases: the 19-CHAT.17 set plus **one case per tool, in
   Vietnamese and in English**, each submitted through `POST action/turns` and checked against the tool
-  call the runtime recorded. An agent can hold eight tools at most, so the set runs through three
-  assistants and points Chat at the one that can answer the question being asked. Removing any tool from
-  `AIToolRegistry` makes publishing fail, which turns the whole block red — verified by unregistering
-  `crm_stale_records` and watching it.
+  call the runtime recorded. The set is grouped across three assistants (a test-local choice — see
+  `TOOLS_PER_ASSISTANT`), and points Chat at the group that can answer the question being asked. Removing
+  any tool from `AIToolRegistry` makes publishing fail, which turns the whole block red — verified by
+  unregistering `crm_stale_records` and watching it.
 * `apps/web/src/pages/crm-chat/CRMChatSuggestions.test.tsx` — a chip whose tool the agent lacks is not in
   the rendered markup; the catalog carries every chip phrase in both locales.
 * `pnpm lint:arch`, `pnpm lint:ui`, `pnpm typecheck`, `pnpm test:web` and the Chat suites: see §17 of

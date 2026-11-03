@@ -45,7 +45,7 @@ const EVAL_USER = `AGENT_TEST-chat-eval-${runId}`;
 const ROLE_TOOL_EVAL = `AGENT_TEST-chat-eval-tools-${runId}`;
 const TOOL_EVAL_USER = `AGENT_TEST-chat-eval-tools-${runId}`;
 const PROVIDER_KEY = `agent-test-chat-eval-${runId}`;
-/** One assistant per group of tools: `MAX_TOOLS` caps an agent at eight grants. */
+/** One assistant per group of tools; see `TOOLS_PER_ASSISTANT` for why the set is grouped. */
 const ASSISTANT_PREFIX = `agent-test-${runId}-chat-eval`;
 /** A handbook page every reader may open, for the two documentation tools. */
 const OPEN_PAGE = 'user/chat-and-voice';
@@ -871,14 +871,17 @@ const TOOL_EVAL_CASES: readonly ToolEvalCase[] = [
 ];
 
 /**
- * An agent may hold at most eight tools (`MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts`),
- * which is the sharpest fact the chip filter has to live with: no single Chat assistant can be granted
- * this whole catalogue. The evaluation set therefore runs through one assistant per group and points
- * Chat at the group that can answer the question being asked.
+ * How many grants one evaluation assistant holds. A test-local choice, not the product ceiling:
+ * `MAX_TOOLS` was eight when this suite was written and is twenty now, so one assistant could carry the
+ * whole catalogue. Grouping stays, because it keeps each published version small and because it proves
+ * the suite does not depend on a single agent holding everything — which is the state a real deployment
+ * is still in when its assistant is granted a subset.
  */
+const TOOLS_PER_ASSISTANT = 8;
+
 const TOOL_EVAL_GROUPS: readonly (readonly ToolEvalCase[])[] = Array.from(
-  { length: Math.ceil(TOOL_EVAL_CASES.length / 8) },
-  (_unused, group) => TOOL_EVAL_CASES.slice(group * 8, group * 8 + 8),
+  { length: Math.ceil(TOOL_EVAL_CASES.length / TOOLS_PER_ASSISTANT) },
+  (_unused, group) => TOOL_EVAL_CASES.slice(group * TOOLS_PER_ASSISTANT, group * TOOLS_PER_ASSISTANT + TOOLS_PER_ASSISTANT),
 );
 
 /**
