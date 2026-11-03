@@ -1,7 +1,15 @@
 # Phase 19 — Marketing Automation Module (`MarketingAutomation`)
 
 > **Status:** Complete — Phases 19-MA.0 through 19-MA.19 are implemented and verified; quality gates
-> (typecheck, lint, marketing test suite) pass. **Completion report with the evidence:**
+> (typecheck, lint, marketing test suite) pass. **Read the limits before reading this line as "the
+> module has a UI":** `MARKETING_AUTOMATION_MODULE.implementedPhases`
+> (`apps/api/src/marketing-automation/marketing-automation-module.ts:244`) declares MA.0–MA.19, and the
+> backend is real (migrations 037–043, kernel `MailTransport` behind the send path), but
+> **journeys have no screen at all** — `grep -ri journey apps/web/src` returns nothing. MA.12 task 5
+> asked for a "simple editor/list-view UI using existing graph library if available"; no graph library is
+> installed, so the editor half is conditionally deferred, yet the list view is not and does not exist
+> either. Journey definitions are therefore API-only. The other accepted limits are the report's own §7
+> (split/join do not fan out, no A/B, no goal node, retention is dry-run only). Audited 2026-11-03. **Completion report with the evidence:**
 > `docs/implementation/marketing-automation-completion-report.md` (13 suites / 225 tests, migrations 037–043,
 > the defects found while closing the phase, settings inventory and known limitations).
 > A final hardening round (19-MA.19) fixed eight defects that only the missing tests could reveal — a webhook

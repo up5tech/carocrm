@@ -532,6 +532,36 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   text that the Phase 7A i18n work changed (the same `error.message` localization this phase exposed
   through `details.reason`), and `attachments`/`audit` abort the vitest worker when another booting
   suite shares the process, so `pnpm test` cannot run the whole suite in one process.
+  *(Update 2026-11-03: the last full `pnpm test` run completed — **257 files / 3 426 tests, all
+  passing** — so the worker-abort condition described above no longer reproduces. The browser-spec text
+  mismatches were not re-checked.)*
+
+## Phase 19 — the other domains, and what their status actually says (audited 2026-11-03)
+
+The Projects section above was the last Phase 19 entry this ledger carried, which left a reader to infer
+that Phase 19 ended there. It did not, and several `plans/PLAN_Phase_19_*.md` headers still said
+"Planned" over code that had shipped for weeks. The headers are corrected in place; this is the index of
+what is true, with the open items named rather than buried. Every row was checked against this checkout,
+and the whole database-backed suite passes (257 files / 3 426 tests).
+
+| Module | State | What is still open |
+| --- | --- | --- |
+| `Sales` | S.0–S.16 + S.18 declared; **S.17 and S.19 delivered in code and tests but absent from `implementedPhases`** (`apps/api/src/sales/sales-module.ts:267`) | Tier 4 e-invoicing / export adapters; four §18 documents (`commercial-documents.md`, `subscriptions.md`, `operations-and-troubleshooting.md`, `docs/compatibility/sales-reference-matrix.md`) |
+| `ServiceDesk` | SD.0–SD.18 declared and evidenced in the plan's own verification section | Skills-based routing, automated KB scoring, a dedicated report pack, a kanban workspace, browser E2E — all self-deferred |
+| `ESignature` | ES.0–ES.22 declared (`esignature-module.ts:535`) | The DocuSign live demo-account smoke test has never been run; provider behaviour is proven against stub transport only |
+| `LeadScore` | LS.0–LS.18 shipped, but `implementedPhases` (`lead-score-module.ts:423`) omits LS.14, LS.15 and LS.18 | Per-Lead engagement (activities cannot reference a Lead), per-action rate limits, an index for `scoreValue` sorting, web-to-lead |
+| `MarketingAutomation` | MA.0–MA.19 declared; the mail send path is real (kernel `MailTransport`), deliberately unconfigured by default | **The journey builder has no UI** — no journey screen exists in `apps/web/src`, though MA.12–14 require one; A/B tests and split/join fan-out are not built; retention is dry-run only |
+| `Omnichannel` | OM.0–OM.23 declared (`omnichannel-module.ts:201`) | No Fastify `form-urlencoded` parser, so a **live Twilio webhook cannot validate on the wire**; unlink has API/UI but no e2e case |
+| `VoiceCommunications` | VC.0–VC.17 declared; **VC.18's admin screen exists in code and is not declared anywhere** (`apps/web/src/admin/tabs/VoiceCommunicationsSettingsTab.tsx`) | VC.19 reporting, VC.20 hardening, VC.21 QA/release are not started; every vendor path is simulator-only, MMS/media/recording/transcript unimplemented |
+| `CustomerSuccess` | Backend CS.0–CS.11, CS.13, CS.14 declared; **CS.12 is genuinely not built** | No CSM screens (only the admin settings tab is wired), the dashlet catalogue is not consumed by the dashboard engine, adoption/support signals report unavailable |
+| `AIAgents` | AI.0–AI.13, AI.19, AI.20 delivered | AI.14 evaluations are built, switched off by default and **have no tests**; AI.15–AI.17's module-owned tools and the event/schedule/integration triggers were never delivered |
+| `AdvancedIntegrations` | INT.1–INT.27 declared (`advanced-integrations-health.service.ts:60`, the descriptor lives in the health service), nine connectors with real vendor endpoints | Live-vendor verification has never been exercised (the plan says so); tests stub `fetch` |
+| `CRMChat` | 19-CHAT.0 → 19-CHAT.24 shipped, module v1.2.0; the registry holds **21 tools** (20 Chat-facing) | The production assistant is granted 8 tools, so 12 of the catalogue never reach a user; model *routing* between tools is still unevaluated (the deterministic adapter pins the choice) |
+
+Two structural lessons, because both repeat: a `implementedPhases` array is a claim, not a measurement —
+three modules now under-state themselves and one over-states two phases; and a plan header that nobody
+re-reads becomes a false statement within weeks. The audit that produced this table found the stale
+headers by reading code, not by reading docs.
 
 ## Web UI theme (Carocrm)
 

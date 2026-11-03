@@ -1,5 +1,22 @@
 # Phase 19 — Sales & Commercial Operations Module
 
+> **Status:** Shipped on the backend and in the SPA, with a declaration gap and four missing documents.
+> Added 2026-11-03 during a Phase 19 audit; this plan previously carried no status line, and the only
+> machine-readable claim about Sales' state — `SALES_MODULE.implementedPhases`
+> (`apps/api/src/sales/sales-module.ts:267`) — stops at `19-S.16` plus `19-S.18`.
+> **That array understates the module.** `19-S.17` shipped (document send
+> `apps/api/src/sales/document/document-send.service.ts`, the line editor
+> `apps/web/src/components/LineItemEditor.tsx`, `DocumentSendModal.tsx`, `SalesSettingsTab.tsx`, the
+> per-entity layout/ACL audit `apps/api/test/sales-entity-layouts.test.ts`, `sales-document-send.test.ts`,
+> `e2e/sales-documents.spec.ts`) and `19-S.19` shipped (the two read contracts
+> `apps/api/src/sales/sales.controller.ts:1197,1208` + `sales-integrations-api.test.ts`), yet neither is
+> declared — the gap report's own opening lines still describe S.17's review pass as outstanding, which
+> §2 of that same file contradicts. `19-S.20` is the gap report itself, and it exists.
+> Declared and delivered: S.0–S.16, S.18. Not delivered: Tier 4 e-invoicing / export adapters and deeper
+> integrations (`docs/implementation/sales-phase19-gap-report.md` §1–§2).
+> **Four §18 documentation deliverables do not exist**: `docs/modules/sales/commercial-documents.md`,
+> `subscriptions.md`, `operations-and-troubleshooting.md` and
+> `docs/compatibility/sales-reference-matrix.md` (the module ships 8 other documents).  
 > **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Priority:** Implement before `CustomerSuccess` and before integrations that require commercial documents, especially `StripeIntegration`.  
 > **Module ID:** `sales`  

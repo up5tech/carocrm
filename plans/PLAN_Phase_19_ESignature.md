@@ -1,6 +1,14 @@
 # PLAN — Phase 19: ESignature Module (`ESignature`)
 
-> **Status:** Planned  
+> **Status:** Shipped — 19-ES.0 → 19-ES.22 delivered 2026-10-23 (`IMPLEMENTED_PHASES` in
+> `apps/api/src/esignature/esignature-module.ts:535`, 23 API suites, migrations `064`–`070`,
+> `docs/implementation/esignature-es1..es22-completion-report.md`). This header said "Planned" until a
+> Phase 19 audit corrected it on 2026-11-03.
+> **Open, honestly:** the DocuSign **live demo-account smoke test was never run** — no credentials — so
+> every provider behaviour is proven against the stub transport and the fake adapter only
+> (`esignature-es22-completion-report.md:43`); `correction` stays capability-false, the JWT grant is out
+> of scope, and scheduled reconciliation is not registered by default. Migrations `069`/`070` (provider
+> catalog, API-key credential) are Dropbox Sign scope that the ES.22 report does not cover.  
 > **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `ESignature`  
 > **Module key / slug:** `esignature`  

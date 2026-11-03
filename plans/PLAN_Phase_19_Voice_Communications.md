@@ -1,6 +1,18 @@
 # PLAN — Phase 19: Voice & Communications Module (`VoiceCommunications`)
 
-> **Status:** Planned  
+> **Status:** Partially shipped — 19-VC.0 → 19-VC.17 delivered (migrations `051`–`054`,
+> `docs/compatibility/voice-communications.md:4`). **19-VC.18 has landed in code but is not declared
+> anywhere**: the administration screen exists (`apps/web/src/admin/tabs/VoiceCommunicationsSettingsTab.tsx:41`,
+> wired through `apps/api/src/admin-panel/admin-panel.service.ts:80` and asserted registered by
+> `apps/api/test/navigation.test.ts:147`), yet `implementedPhases`
+> (`apps/api/src/voice-communications/voice-communications-module.ts:239`) stops at `19-VC.17` and the
+> operations doc scopes itself to "VC.2–VC.17". **19-VC.19, 19-VC.20 and 19-VC.21 are not started** —
+> no voice-side reporting/analytics routes, no security-hardening pass, no end-to-end QA or release
+> readiness record. This header said "Planned" until a Phase 19 audit corrected it on 2026-11-03.
+> **The standing limit, stated plainly:** every provider behaviour is proven against
+> `FakeVoiceProvider` and stub transports only — `docs/modules/voice-communications/providers.md:19,47-50`
+> marks the whole channel surface "experimental, not verified against a live vendor", and MMS, media,
+> recording download and Asterisk transcript are `not-implemented` (`:32-43`).  
 > **Parent roadmap:** `plans/PLAN.md` — advanced CRM domains  
 > **Target runtime:** NestJS / TypeScript backend with the existing React SPA  
 > **Canonical module name:** `VoiceCommunications`  

@@ -51,7 +51,7 @@ metadata-driven UI, and dedicated screens are optional polish per §10 of the pl
 | `pnpm typecheck` (api + web) | pass |
 | `pnpm build` (all workspaces) | pass |
 | `pnpm exec eslint` on every changed/new file | pass — the only repo-wide lint failure is the pre-existing `.trail/hook.cjs` (committed at HEAD, unrelated) |
-| `apps/api/test/customer-success-domain.test.ts` | **28/28 pass** |
+| `apps/api/test/customer-success-domain.test.ts` | **28/28 pass** *(as run then; the file has since grown to 31 tests — re-verified green in the full `pnpm test` run of 2026-11-03, 257 files / 3 426 tests)* |
 | `apps/api/test/customer-success.test.ts` | **21/21 pass** |
 | `apps/worker` package suite (`pnpm test` in `apps/worker`) | **179/179 pass** (18 files, incl. the CS handlers) |
 | `pnpm vitest run packages` | **299/299 pass** (28 files) |

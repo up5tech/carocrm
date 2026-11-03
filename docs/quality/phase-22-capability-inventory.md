@@ -181,7 +181,7 @@ risk** (works, but a tracked gap affects a release decision).
 | AdvancedIntegrations | **Verified with residual risk** | 22.14 recovery journey, provider/replay contracts; G47/G48/G50/G51/G53. |
 | ESignature | **Verified with residual risk** | 22.9 journey, 22.17 provider contracts, lifecycle suites; no Sales→ESignature consumer (G26); non-production fake adapter is capability-gated. |
 | LeadScore | **Verified with residual risk** | 22.8 conversion journey, LS suites; G22 fixed; conversion service test gap (G3 low). |
-| Omnichannel | **Verified with residual risk** | 22.11 conversation→Case journey, security/e2e suites; groups 4–6 of the 22 OM review remain open (routing fallback, stale banner, no unlink/e2e/AI tool grant). |
+| Omnichannel | **Verified with residual risk** | 22.11 conversation→Case journey, security/e2e suites; the 2026-10-27 review's groups 4–6 were re-checked on 2026-11-03: routing fallback (`case-assignment.service.ts:414`), the stale "coming soon" banner and the AI tool grant (`omnichannel-ai-tools.ts:58`) are **fixed**, unlink shipped in API + UI (`omnichannel.controller.ts:257`) but **still has no e2e case**; the live-wire risk stands — no Fastify `form-urlencoded` parser, so a real Twilio webhook cannot validate (`docs/omnichannel/release-readiness.md:117`). |
 | Portal | **Partial / verified with residual risk** | `portal.test.ts` only; IDOR risk is covered by 22.17 ACL/BOLA tests but the module suite is thin. |
 | SPA / admin | **Verified with residual risk** | 22.15 consistency, 22.16 browser critical paths (4/4), 22.17 security; G63/G64/G65/G66/G67/G68. |
 | CI | **Verified** | 22.22 DB-free scheduled gate; G78 (no PR gate). |

@@ -8,10 +8,14 @@ of what **is not** built. The implemented surface is in
 
 Nothing below is represented as delivered anywhere in the repository: `SALES_MODULE.implementedPhases`
 (and therefore `GET /api/v1/Sales/action/health`) stops at `19-S.16` plus `19-S.18`. `19-S.17` is absent
-on purpose and its split is stated in §2: its document work (editor, send, templates, settings,
-translations) — and, since this pass, the screen that drives every document command — is delivered; its
-review pass (per-entity layouts, navigation enablement, responsive/keyboard, import/export mappings) is
-not.
+from that array, and so is `19-S.19` — **both are delivered in code and tests, and the declaration is
+what is missing, not the work.** §2 states the split exactly: the document work (editor, send, templates,
+settings, translations, the screen that drives every document command) *and* the review pass that an
+earlier draft of this report still called outstanding (per-entity layouts and the ACL audit, navigation
+enablement, the responsive/keyboard pass, import/export mappings) are all closed — each row in §2 names
+the test or the browser pass that closed it. Adding `19-S.17` and `19-S.19` to `implementedPhases` is a
+bookkeeping change this report deliberately does not make, because the array is asserted elsewhere and
+belongs with the code that changes it.
 
 ---
 

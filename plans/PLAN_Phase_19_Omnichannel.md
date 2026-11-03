@@ -1,6 +1,17 @@
 # PLAN — Phase 19: Omnichannel (`Omnichannel`)
 
-> **Status:** Planned  
+> **Status:** Shipped — 19-OM.0 → 19-OM.23 delivered (`implementedPhases` in
+> `apps/api/src/omnichannel/omnichannel-module.ts:201`, 22 `omnichannel-*.test.ts` suites, migrations
+> `077`–`082`, `apps/web/src/pages/omnichannel/`). The header said "Planned" until a Phase 19 audit
+> corrected it on 2026-11-03. The 2026-10-27 review's four open items are now resolved **except one**:
+> routing fallback (`apps/api/src/service-desk/case-assignment.service.ts:414`), the stale "coming soon"
+> banner (gone from `apps/web/src`), unlink (`omnichannel.controller.ts:257` + `InboxPanel.tsx:267`) and
+> the AI tool grant (`omnichannel-ai-tools.ts:58`, `entityScopes: []`) are done — but **unlink has no
+> browser/e2e coverage** (`omnichannel-e2e.test.ts` never exercises it).
+> **Still open, and it is the one that matters for production:** no Fastify
+> `application/x-www-form-urlencoded` parser is registered, so a **real Twilio webhook cannot validate on
+> the wire** — `docs/omnichannel/release-readiness.md:117` open risk #1; the simulator paths are proven,
+> the live path is not. Module docs live at `docs/omnichannel/`, not `docs/modules/omnichannel/`.  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Domains  
 > **Canonical module name:** `Omnichannel`  
 > **NestJS module class:** `OmnichannelModule`  

@@ -16,7 +16,10 @@
 > 19-LS.11 answered *who this Lead may already be*, 19-LS.12 turned the contract's map and preview into code,
 > 19-LS.13 made the conversion run, 19-LS.14 put it on the Lead as a wizard, 19-LS.15 verified what it does
 > to the record's history, 19-LS.16 completed the target set with the optional Opportunity and 19-LS.17
-> added the optional AI fit insight; only 19-LS.18's rollout and verification remains.** A model can be
+> added the optional AI fit insight; **and 19-LS.18 shipped the reporting, the dashlet, the security
+> matrix and the runbook** (see the LS.18 row below and
+> `docs/implementation/lead-score-ls18-completion-report.md`). Nothing in this phase list remains.**
+> A model can be
 > configured, validated,
 > published, frozen and previewed
 > without writing anything; **recalculated per Lead** (evaluation row and the Lead's current-score projection
@@ -41,7 +44,9 @@
 > rather than replaced, its name composed from the Lead, and Sales' stage/document semantics untouched.
 > 19-LS.17 added the **optional** AI explanation: one operator-clicked AIAgents run, grounded in the stored
 > score and five business fields, stored as its own record and labelled as AI-generated — off by default, and
-> never able to change a score. Only 19-LS.18's rollout and verification remains.
+> never able to change a score. 19-LS.18 then delivered the rollout and verification: `GET action/report`
+> with four scope-aware views, the `leadScore` dashlet, the route-wide security matrix, the write guard,
+> the concurrency case, the migration review and `docs/runbooks/lead-score-operations.md`.
 > Canonical module name: `LeadScore` (no `Ua` prefix). API prefix: `/api/v1/lead-score` plus
 > `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics — realized, per §2.5, as
 > `LeadScore/action/score/*` and `LeadScore/action/conversion/*` (both delivered), with the plan §8.1

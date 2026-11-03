@@ -1,7 +1,35 @@
 # plans/PLAN_Phase_19_AI_Agents.md — AI Agents Module
 
-> **Status:** Implementation plan  
-> **Parent roadmap:** `plans/PLAN.md` — NestJS reimplementation of EspoCRM  
+> **Status:** Partially shipped — 19-AI.0 → 19-AI.13, 19-AI.19 and 19-AI.20 are delivered and green;
+> **19-AI.14, 19-AI.15, 19-AI.16, 19-AI.17 and 19-AI.18 are not complete.** This header was corrected
+> on 2026-11-03 during a Phase 19 audit; it previously read "Implementation plan" with no delivery
+> state at all. Per-phase reality, each verified against this checkout:
+>
+> - **19-AI.14 — Evaluation Framework and Publication Gates: built, dormant, untested.** The service,
+>   the three `ai_agent_eval_*` tables and the `action/evaluations` routes exist
+>   (`apps/api/src/ai-agents/ai-agent-evaluations.service.ts`), but `features.evaluations` defaults to
+>   `false` (`ai-agents-settings.service.ts:38`), the publication gate therefore never fires
+>   (`ai-agent-definitions.service.ts:572`), the `model_review` grader is documented as never running,
+>   and **no test file references the feature** — so the "every implemented row was tested" guarantee in
+>   `docs/compatibility/ai-agents.md` §5 does not hold for this phase.
+> - **19-AI.15 — Sales integration: not built.** No Sales-owned tool contribution exists; a Sales record
+>   is reachable only through the generic `crm_search_records` / `crm_read_record` path.
+> - **19-AI.16 — CustomerSuccess / ServiceDesk / Projects: two of three.** `crm_customer_health` and
+>   `crm_case_context` exist, contributed by their own modules in 19-CHAT.23 (`crm_lead_score` landed the
+>   same way, though LeadScore is not named by this phase); **Projects has no tool at all**.
+> - **19-AI.17 — MarketingAutomation and triggers: not built.** No marketing tool contribution, and the
+>   trigger half is declared-not-implemented: `triggers.integration` warns
+>   `trigger-not-implemented` (`ai-agent-definitions.service.ts:506`) and `eventTriggers` /
+>   `scheduledTriggers` default to `false` (`ai-agents-settings.service.ts:39-40`).
+> - **19-AI.18 — optional, half delivered.** The MCP-compatible adapter (`action/mcp/tools`,
+>   `action/mcp/call`) ships; model-backed retrieval stays deferred by design.
+>
+> The registry now holds **21 tools** (16 owned by `AIAgents`, 5 contributed by `crm-chat`,
+> `customer-success`, `lead-score`, `service-desk` and `omnichannel`), asserted as one complete table in
+> `apps/api/test/ai-agent-runs.test.ts`. `AI_AGENTS_MODULE.implementedPhases` declares `19-AI.0` →
+> `19-AI.20`, which overstates 14–17 for the same reason the header used to: the descriptor records the
+> phase that *landed code*, not the phase that reached its exit criterion.
+> **Parent roadmap:** `plans/PLAN.md` — NestJS reimplementation of EspoCRM
 > **Phase identifier:** Phase 19 — `AIAgents`  
 > **Module name:** `AIAgents` (**do not add a `Ua` prefix**)  
 > **Module registry key / route slug:** `ai-agents`  
