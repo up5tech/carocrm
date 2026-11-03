@@ -17,6 +17,7 @@ import { CustomerSuccessRenewalService } from "./customer-success-renewal.servic
 import { CustomerSuccessRiskService } from "./customer-success-risk.service.js";
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 import { HealthSignalRegistry } from "./customer-success-signals.js";
+import { CustomerSuccessToolContribution } from "./customer-success-tool-contribution.js";
 import { CustomerSuccessTouchpointService } from "./customer-success-touchpoint.service.js";
 import { CustomerSuccessWriteGuardService } from "./customer-success-write-guard.service.js";
 
@@ -52,6 +53,8 @@ export const CUSTOMER_SUCCESS_PROVIDERS: Provider[] = [
   CustomerSuccessRenewalService,
   CustomerSuccessTouchpointService,
   CustomerSuccessDashletService,
+  // 19-CHAT.23: registers `crm_customer_health` against the tool registry on init.
+  CustomerSuccessToolContribution,
 ];
 
 export { CustomerSuccessController } from "./customer-success.controller.js";
@@ -135,5 +138,6 @@ export {
   HealthSignalRegistry,
   type HealthSignalResult,
 } from "./customer-success-signals.js";
+export { CustomerSuccessToolContribution } from "./customer-success-tool-contribution.js";
 export { CustomerSuccessTouchpointService } from "./customer-success-touchpoint.service.js";
 export { CustomerSuccessWriteGuardService } from "./customer-success-write-guard.service.js";

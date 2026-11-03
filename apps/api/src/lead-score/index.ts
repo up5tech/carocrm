@@ -21,6 +21,7 @@ import { LeadScoreReportService } from './lead-score-report.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import { LeadScoreSignalsService } from './lead-score-signals.js';
 import { LeadScoreThresholdService } from './lead-score-threshold.service.js';
+import { LeadScoreToolContribution } from './lead-score-tool-contribution.js';
 import { LeadScoreWriteGuardService } from './lead-score-write-guard.service.js';
 
 /**
@@ -74,6 +75,8 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
+  // 19-CHAT.23: registers `crm_lead_score` against the tool registry on init.
+  LeadScoreToolContribution,
 ];
 
 export {
@@ -279,6 +282,7 @@ export {
   type ThresholdInput,
   type ThresholdOutcome,
 } from './lead-score-threshold.service.js';
+export { LeadScoreToolContribution } from './lead-score-tool-contribution.js';
 export {
   MAX_RULE_POINTS,
   type ModelAttributes,

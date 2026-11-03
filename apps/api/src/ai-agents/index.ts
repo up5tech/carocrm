@@ -4,6 +4,7 @@ import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
+import { AIAgentReportToolContribution, AIAgentStaleRecordsToolContribution } from './ai-agent-intelligence-tools.contribution.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
@@ -29,6 +30,7 @@ export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 export type { AIAgentActorProfile } from './ai-agent-directory.service.js';
 export { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 export { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
+export { AIAgentReportToolContribution, AIAgentStaleRecordsToolContribution } from './ai-agent-intelligence-tools.contribution.js';
 export { AI_AGENT_RETENTION_JOB, AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
 export { AIAgentMemoryService } from './ai-agent-memory.service.js';
 export type { PeriodToken, ResolvedPeriod } from './ai-agent-periods.js';
@@ -81,6 +83,9 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AnthropicProviderAdapter,
   OpenAICompatibleProviderAdapter,
   FakeProviderAdapter,
+  // 19-CHAT.23: register `crm_run_report` and `crm_stale_records` against the tool registry on init.
+  AIAgentReportToolContribution,
+  AIAgentStaleRecordsToolContribution,
   {
     provide: AIProviderRegistry,
     inject: [OpenAICompatibleProviderAdapter, AnthropicProviderAdapter, FakeProviderAdapter],

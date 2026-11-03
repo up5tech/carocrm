@@ -1,7 +1,7 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
-> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 planned  
-> **Plan version:** 1.2.0 (2026-11-02)  
+> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 shipped 2026-11-03; 19-CHAT.24 planned  
+> **Plan version:** 1.5.0 (2026-11-03)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
@@ -50,7 +50,7 @@ contract. Work that is still open is specified as **19-CHAT.20 → 19-CHAT.24** 
 | 19-CHAT.20 — acting-user context | **Shipped** 2026-11-02 | `apps/api/src/ai-agents/ai-agent-actor.ts`, `apps/api/test/ai-agent-actor.test.ts` |
 | 19-CHAT.21 — read tool family | **Shipped** 2026-11-02 | 4 tools, registry 8 → 12 keys; `ai-agent-periods.test.ts` (16 pure cases) + 8 new cases in `ai-agent-runs.test.ts`; design in `plans/SPEC.md` §9.2 |
 | 19-CHAT.22 — write loop closure | **Shipped** 2026-11-02 | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2, `crm_update_record_fields` v2; registry 12 → 15 keys; 6 new cases in `ai-agent-runs.test.ts` |
-| 19-CHAT.23 — module intelligence tools | Planned | §17 phase 19-CHAT.23; design in `plans/SPEC.md` §9.4 |
+| 19-CHAT.23 — module intelligence tools | **Shipped** 2026-11-03 | 5 tools, registry 15 → 20 keys; `apps/api/test/crm-chat-intelligence-tools.test.ts` (7 cases); design in `plans/SPEC.md` §9.4 |
 | 19-CHAT.24 — tool-aware suggestions, evaluation, release | Planned | §17 phase 19-CHAT.24; design in `plans/SPEC.md` §9.7 |
 
 Two rules follow from this split, and both have already cost time when ignored:
@@ -1381,7 +1381,7 @@ a record the user would never find again.
 
 ---
 
-### Phase 19-CHAT.23 — Module Intelligence Tools
+### Phase 19-CHAT.23 — Module Intelligence Tools ✅ shipped 2026-11-03
 
 Five thin wrappers over services that already exist. The rule for this phase is that no business rule
 is re-derived: if the domain service computes a health score, the tool returns that number.
@@ -1398,6 +1398,39 @@ is re-derived: if the domain service computes a health score, the tool returns t
 - A disabled or uninstalled module removes its tool from the catalogue, and Chat says the capability is unavailable rather than failing the turn.
 - `crm_stale_records` runs one query, not N+1, and respects record ACL — a record the caller cannot read never appears in the "silent" list.
 - `crm_run_report` cannot return a report the caller is not permitted to run.
+
+**As-built**
+
+| Tool | Registered by | File | Deviation from the task list |
+|---|---|---|---|
+| `crm_lead_score` | `lead-score` | `apps/api/src/lead-score/lead-score-tool-contribution.ts` | History is **optional** (`historyLimit`), not always returned: `score()` is the answer, `history()` is a second read that costs a query the caller did not ask for |
+| `crm_customer_health` | `customer-success` | `apps/api/src/customer-success/customer-success-tool-contribution.ts` | Accepts an `accountId` **as well as** a `profileId` and resolves the profile first; the agent usually holds an account, not a profile id |
+| `crm_case_context` | `service-desk` | `apps/api/src/service-desk/service-desk-tool-contribution.ts` | CSAT is `null` rather than an error when the caller is a portal user (staff-only results); the rest of the case context still answers |
+| `crm_stale_records` | `ai-agents` | `apps/api/src/ai-agents/ai-agent-intelligence-tools.contribution.ts` | §9.4's registration table did not name an owner for it. It is `ai-agents`, because it reads the generic `entity_records` / `stream_items` store through the shared record ACL — no domain module owns that store |
+| `crm_run_report` | `ai-agents` | `apps/api/src/ai-agents/ai-agent-intelligence-tools.contribution.ts` | A missing `reportId` **lists** the reports the caller may run instead of failing; the model needs the id before it can run anything |
+
+Two facts the task list left open, now settled in code:
+
+- **`stream_items` is keyed by `entity_type` / `entity_id` / `is_deleted`** — not `parent_type` / `parent_id` / `deleted_at`
+  as the plan's wording implied. The `NOT EXISTS` reads the real columns.
+- **The record ACL has to be folded into the same query.** `AclApiService.recordPredicate()` returns a
+  predicate, not SQL, so `crm_stale_records` reproduces the record store's own translation
+  (`allowAll` / `denyAll` / `own` / `team` / portal / project-scoped) — a list and this tool decide
+  identically, and a record the caller cannot read never reaches the result.
+
+**Evidence**
+
+`apps/api/test/crm-chat-intelligence-tools.test.ts` — 7 cases: the catalogue and each tool's owner;
+the lead score equals the projection the score engine stored on the Lead (42 / `Warm`); the customer
+health score equals the snapshot the health service reads (37); the case summary carries its SLA
+clock; the silent-record scan reports the silent account and excludes the one with timeline activity,
+and neither appears for a caller who may not read them; a private report is neither listed nor run
+for another user; an unknown argument is refused.
+
+Gates: `pnpm lint:arch` clean, `eslint` (sanctioned scope) clean, `pnpm lint:ui` clean,
+`pnpm typecheck` clean, and `ai-agent-runs`, `ai-agents`, `crm-chat*`, `customer-success`,
+`lead-score*` suites green.
+
 
 ---
 
@@ -1525,6 +1558,7 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 |---|---|---|
 | 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
 | 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
+| 1.5.0 | 2026-11-03 | Phase 19-CHAT.23 shipped: `crm_lead_score` (lead-score), `crm_customer_health` (customer-success), `crm_case_context` (service-desk), `crm_stale_records` and `crm_run_report` (ai-agents). Registry 15 → 20 keys. Four of the five are contributed by the module that owns the service (§9.1 rule 6). `crm_stale_records` is one ACL-aware SQL query with a single `NOT EXISTS` over `stream_items`. New suite `crm-chat-intelligence-tools.test.ts` (7 cases). Updated §0.1 and §17 phase 23. |
 | 1.4.0 | 2026-11-02 | Phase 19-CHAT.22 shipped: `crm_post_note` (Stream), `crm_log_activity`, `crm_draft_email` (never sends), `crm_create_task` v2 (parent + actor default), `crm_update_record_fields` v2 (wider allowlist, same class). Registry 12 → 15 keys. Corrected the plan's claim that grants reference a tool version. |
 | 1.3.0 | 2026-11-02 | Phase 19-CHAT.21 shipped: `crm_aggregate`, `crm_list_activities`, `crm_actor_context` (in `ai-agents`) and `crm_cross_module` (contributed by `crm-chat`); `ai-agent-periods.ts` resolver; `AIAgentActorDirectoryService` shared with the prompt; `EntityService.linkedSourceIds`. Registry 8 → 12 keys. Updated §0.1, §1.1, §17 phase 21. |
 | 1.2.0 | 2026-11-02 | Status corrected to implemented; added §0.1 delivery status and the two rules that follow from it. Added §1.1 capability-status paragraph, §5.4/§5.5/§5.6/§6.3/§10.3/§14.3 requirements learned from the shipped module, §18.1 v2 addendum, §19.2 v2 boundary. Added phases 19-CHAT.20 (shipped) → 19-CHAT.24 (planned) implementing the catalogue in `plans/SPEC.md` §9. Rewrote the final instruction to start at 19-CHAT.21. |
@@ -1533,10 +1567,10 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 
 ## Final Instruction to the Coding Agent
 
-Phases 19-CHAT.0 → 19-CHAT.20 are shipped. Do not re-implement them and do not extend them in place;
+Phases 19-CHAT.0 → 19-CHAT.23 are shipped. Do not re-implement them and do not extend them in place;
 a new capability is a new phase with its own acceptance evidence.
 
-Start at **Phase 19-CHAT.21 — Read Tool Family**. Before writing a tool:
+Start at **Phase 19-CHAT.24 — Tool-Aware Suggestions, Evaluation, and Release**. Before writing a tool:
 
 1. Read `plans/SPEC.md` §7 for the shipped registry and §9 for the tool design rules — especially §9.1 rule 6, which decides whether your tool belongs in `ai-agents` or in the domain module that owns the service.
 2. Read `apps/api/src/ai-agents/ai-agent-tools.ts` end to end. The registry is deliberately small; adding to it is a design decision, not a configuration change.

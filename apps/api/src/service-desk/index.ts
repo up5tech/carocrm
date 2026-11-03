@@ -15,6 +15,7 @@ import { ServiceDeskModuleHealthService } from "./service-desk-module-health.ser
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
 import { ServiceDeskRecords } from "./service-desk-records.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
+import { ServiceDeskToolContribution } from "./service-desk-tool-contribution.js";
 import { ServiceDeskWriteGuardService } from "./service-desk-write-guard.service.js";
 import { SlaService } from "./sla.service.js";
 import { WebToCaseService } from "./web-to-case.service.js";
@@ -25,6 +26,7 @@ export { CaseMergeService } from "./case-merge.service.js";
 export { CsatService } from "./csat.service.js";
 export { KnowledgeBaseService } from "./knowledge-base.service.js";
 export { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
+export { ServiceDeskToolContribution } from "./service-desk-tool-contribution.js";
 export { SlaService } from "./sla.service.js";
 export { WebToCaseService } from "./web-to-case.service.js";
 
@@ -51,6 +53,8 @@ export const SERVICE_DESK_PROVIDERS: Provider[] = [
   WebToCaseService,
   CaseMergeService,
   CsatService,
+  // 19-CHAT.23: registers `crm_case_context` against the tool registry on init.
+  ServiceDeskToolContribution,
 ];
 
 export { type CaseAssignInput, type CaseAssignmentDecision, type CaseAssignmentResult, CaseAssignmentService, type CaseRouteResult, type QueueWorkload } from "./case-assignment.service.js";

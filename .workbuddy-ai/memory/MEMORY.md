@@ -40,6 +40,23 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
 - Repo-wide `pnpm lint` is red on `.agents/**` (vendored). The sanctioned scope is
   `npx eslint apps packages e2e database scripts modules`.
 
+## AI tool contributions (19-CHAT.21 → 19-CHAT.24)
+
+- The registry is `AIToolRegistry` (`apps/api/src/ai-agents/ai-agent-tools.ts`); the model picks a
+  **key** only. A tool added by a domain module is an `@Injectable()` `OnModuleInit` class in that
+  module's dir that calls `tools.register(...)` — **and** it must be listed in that module's
+  `*_PROVIDERS` barrel array; the kernel does not auto-discover providers.
+- **Never import the `ai-agents` barrel (`./index.js`) from a contribution inside `ai-agents`** — the
+  barrel imports the contribution, so the class is `undefined` at runtime
+  (`UndefinedDependencyException`, arg index [0]). Import `./ai-agent-tools.js` directly.
+- A raw-SQL tool must translate the record ACL itself: `AclApiService.recordPredicate()` returns a
+  predicate, not SQL; the translation is private in `entity/entity-record.store.ts`
+  (`aclSql` / `aclSqlForAlias`). No grant and no `*` wildcard → `roleLevel` = `'no'` → `denyAll`.
+- `stream_items` is keyed by `entity_type` / `entity_id` / `is_deleted` — **not**
+  `parent_type` / `parent_id` / `deleted_at`.
+- Catalogue after 19-CHAT.23: **20 keys**. `19-CHAT.24` owns the chip `requiresTool` data, the
+  per-tool evaluation cases, `docs/architecture/crm-chat-contract.md` and the release notes.
+
 ## SQL / platform gotchas
 
 - `entity_records` has `created_at` + `modified_at`, never `updated_at`.
@@ -62,6 +79,10 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
   `afterAll` (`singleFork: true` leaks `process.env`). Stub the BullMQ hop, assert side effects.
 - Workspace packages resolve through `dist/`: `pnpm install && pnpm build` before typecheck/tests.
 - Run one file per `pnpm vitest run` — the one-fork full suite aborts at random boundaries.
+- A test that points the default AIAgents provider at its own fake provider must restore the
+  `aiAgents` `app_settings` row (capture before, restore in `afterAll`; `""` = unset). A dangling
+  `provider.defaultKey` makes `GET /api/v1/AIAgents/action/health` answer `ok: false` for every
+  later run — it broke `ai-agents.test.ts`.
 
 ## Shipped modules (pointers)
 

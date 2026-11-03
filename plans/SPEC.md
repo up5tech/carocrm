@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Phiên bản** | 1.0.0 |
-| **Ngày** | 2026-11-02 |
+| **Phiên bản** | 1.5.0 |
+| **Ngày** | 2026-11-03 |
 | **Phạm vi** | Toàn hệ thống (as-built) + đặc tả tầng AI CRM v2 |
-| **Trạng thái** | §1–§7: đã triển khai. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (phase 19-CHAT.20, 19-CHAT.21, 19-CHAT.22). §9.4 và §9.7–§11: đề xuất, đã chia thành phase **19-CHAT.23 → 19-CHAT.24** trong `plans/PLAN_Phase_19_CRM_Chat.md` §17, **chưa triển khai**. |
+| **Trạng thái** | §1–§7: đã triển khai. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (phase 19-CHAT.20, 19-CHAT.21, 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (phase 19-CHAT.23). §9.7–§11: đề xuất, đã chia thành phase **19-CHAT.24** trong `plans/PLAN_Phase_19_CRM_Chat.md` §17, **chưa triển khai**. |
 | **Ngôn ngữ** | Prose tiếng Việt; định danh, khoá tool, đường dẫn, schema giữ nguyên tiếng Anh. |
 
 ---
@@ -192,9 +192,9 @@ Chiều cao khung là `calc(100vh - 235px)` = 70 header + 48 content padding + 4
 
 Mỗi tool call chạy trong `scope.runAs(actorUserId)` — quyền của **người khởi chạy**, không phải quyền hệ thống.
 
-### 7.2 Tool registry — 16 tool hiện có
+### 7.2 Tool registry — 20 tool hiện có
 
-Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts` (trừ `crm_cross_module`, do `crm-chat` tự đăng ký — §9.1 luật 6). Đăng ký bằng code tin cậy; model chỉ chọn **key** + **arguments**, không bao giờ chọn handler, URL, bảng, SQL hay luật quyền.
+Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts`, cộng năm tool do module sở hữu tự đăng ký — `crm_cross_module` (`crm-chat`) và bốn tool của `19-CHAT.23` (`lead-score`, `customer-success`, `service-desk`, `ai-agents`) — theo §9.1 luật 6. Đăng ký bằng code tin cậy; model chỉ chọn **key** + **arguments**, không bao giờ chọn handler, URL, bảng, SQL hay luật quyền.
 
 | # | key | effect | Duyệt | `entityScopes` | Cap | Từ |
 |---|---|---|---|---|---|---|
@@ -213,6 +213,11 @@ Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts` (trừ `crm_cross_mod
 | 13 | `crm_draft_email` | low_write | không | `Email` | 4 KiB / 10 s | 19-CHAT.22 |
 | 14 | `crm_create_task` v2 | low_write | không | `Task` | 8 KiB / 10 s | 19-AI.6 → v2 19-CHAT.22 |
 | 15 | `crm_update_record_fields` v2 | material_write | **có** | 6 entity | 8 KiB / 10 s | 19-AI.6 → v2 19-CHAT.22 |
+| 16 | `crm_lead_score` | read | không | `Lead` | 16 KiB / 10 s | 19-CHAT.23 |
+| 17 | `crm_customer_health` | read | không | `CustomerSuccessProfile` | 16 KiB / 10 s | 19-CHAT.23 |
+| 18 | `crm_case_context` | read | không | `Case` | 24 KiB / 10 s | 19-CHAT.23 |
+| 19 | `crm_stale_records` | read | không | — | 24 KiB / 10 s | 19-CHAT.23 |
+| 20 | `crm_run_report` | read | không | — | 32 KiB / 15 s | 19-CHAT.23 |
 
 Ba tool đọc mới (`19-CHAT.21`) đóng đúng ba lỗ hổng của §8:
 
@@ -234,6 +239,16 @@ Bốn tool ghi (`19-CHAT.22`) khép vòng công việc — mỗi cái đều g�
 | `crm_create_task` v2 | Task có `parent` | mặc định assignee = người khởi chạy; link qua relation đã khai báo |
 
 `crm_update_record_fields` v2 mở rộng allowlist (`Opportunity.stage/amount/closeDate`, `Case.priority/assignedUserId`, `Task.dateEnd/assignedUserId`, `Lead.assignedUserId`) nhưng **giữ nguyên** `material_write` + approval + kiểm version.
+
+Năm tool trí tuệ module (`19-CHAT.23`) là wrapper mỏng — mỗi tool trả đúng giá trị của service sở hữu nó, không tính lại:
+
+| Tool | Trả lời câu hỏi gì | Nguồn duy nhất | Bảo đảm |
+|---|---|---|---|
+| `crm_lead_score` | "vì sao lead này nóng" | `LeadScoreExplanationService.score()` (+ `history()` khi được yêu cầu) | Cổng của module (`viewScore` + feature `scoring`) và ACL bản ghi do chính service áp; tool chỉ thêm schema, giới hạn và tóm tắt |
+| `crm_customer_health` | "khách nào sắp rời bỏ" | `CustomerSuccessHealthService.explanation()` | Điểm sức khoẻ, trạng thái, override, coverage, trend và component đều là của service; nhận `profileId` **hoặc** `accountId` |
+| `crm_case_context` | "soạn trả lời ticket này" | `Case` + `CaseSLAClock` + `KnowledgeBaseService.suggestForCase()` + CSAT | Case đọc qua Entity Engine nên ACL bản ghi áp; CSAT `null` (không phải lỗi) khi người gọi là portal |
+| `crm_stale_records` | "account nào im lặng 30 ngày?" | `entity_records` + `NOT EXISTS` trên `stream_items` | **Một** câu SQL: database loại trừ bản ghi có hoạt động, và record predicate của người gọi được gấp vào cùng câu — bản ghi không đọc được không bao giờ lọt vào kết quả |
+| `crm_run_report` | "báo cáo đã lưu nói gì" | `ReportService.list()` / `run()` | `canSee` của service là cửa duy nhất: report của người khác không được liệt kê, cũng không chạy được |
 
 **10 entity đọc được:** `Account`, `Contact`, `Lead`, `Opportunity`, `Case`, `Task`, `Project`, `Campaign`, `CustomerSuccessProfile`, `Quote`.
 
@@ -489,7 +504,7 @@ input: { name, description?, dateStart?,
 ```
 Sửa D3: task gắn được bản ghi cha qua `entity_links`.
 
-### 9.4 Đợt 3 — trí tuệ module (read)
+### 9.4 Đợt 3 — trí tuệ module (read) — ✅ đã triển khai 2026-11-03 (19-CHAT.23)
 
 Mỗi tool là wrapper mỏng trên service đã có; không nhân bản luật nghiệp vụ.
 
@@ -512,6 +527,21 @@ Mỗi tool là wrapper mỏng trên service đã có; không nhân bản luật 
 | `crm_run_report` | `ai-agents` | `reports` là shared core |
 
 Không tool nào trong bảng này được để `ai-agents` import ngược domain.
+
+**As-built khác bản đề xuất ở ba chỗ:**
+
+| Chỗ | Đề xuất | Đã làm | Lý do |
+|---|---|---|---|
+| `crm_stale_records` | bảng đăng ký §9.4 không nêu chủ sở hữu | `ai-agents` đăng ký | Nó đọc kho `entity_records` / `stream_items` qua record ACL dùng chung — không module nghiệp vụ nào sở hữu kho đó, và đặt nó vào một domain module sẽ tạo cạnh ngược |
+| `crm_lead_score` | `score/history` | `history` là **tuỳ chọn** (`historyLimit`) | `score()` là câu trả lời; `history()` là một lần đọc nữa mà model không phải lúc nào cũng cần |
+| `crm_run_report` | `ReportService.list/run` | thiếu `reportId` thì **liệt kê** report người gọi được chạy | Model cần id trước khi chạy được bất kỳ report nào; báo "không có report" là câu trả lời sai |
+
+**Hai chi tiết mà đặc tả đề xuất để ngỏ, nay đã chốt trong code:**
+
+- `stream_items` được khoá bằng `entity_type` / `entity_id` / `is_deleted` — **không** phải `parent_type` / `parent_id` / `deleted_at`.
+- `AclApiService.recordPredicate()` trả về một *predicate*, không phải SQL. `crm_stale_records` dịch lại
+  đúng cách dịch của record store (`allowAll` / `denyAll` / `own` / `team` / portal / project-scoped),
+  nên một list và tool này quyết định giống hệt nhau.
 
 ### 9.5 Nâng cấp tool hiện có — ✅ đã triển khai 2026-11-02 (19-CHAT.22)
 
@@ -615,5 +645,6 @@ Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số 
 | 1.0.0 | 2026-11-02 | Bản đầu. Chốt đặc tả as-built §1–§7; thêm phân tích khoảng trống §8 và đặc tả AI CRM tool catalogue v2 §9–§11. |
 | 1.1.0 | 2026-11-02 | Triển khai §9.6: `ai-agent-actor.ts` (khối "Acting user" + `promptSafe`), `AIAgentRunService.actorContext()`, seam `__FAKE_ECHO_ACTOR__`. Thêm `ai-agent-actor.test.ts` (10 case thuần) và 1 case end-to-end trong `ai-agent-runs.test.ts`. Cập nhật §7.6, §8.1, §8.2. Số entity chính xác: 115. |
 | 1.2.0 | 2026-11-02 | Nối SPEC với plan: §9.2–§9.7 giờ trỏ tới phase 19-CHAT.21–24 trong `PLAN_Phase_19_CRM_Chat.md` §17, và dòng trạng thái ở đầu ghi rõ phần nào đã thành phase. Không đổi nội dung kỹ thuật. |
+| 1.5.0 | 2026-11-03 | Triển khai 19-CHAT.23. §7.2 lên **20 tool** (thêm `crm_lead_score`, `crm_customer_health`, `crm_case_context`, `crm_stale_records`, `crm_run_report`) kèm bảng "tool nào trả lời câu gì". §9.4 đánh dấu đã triển khai kèm ba chỗ lệch as-built và hai chi tiết chốt (cột khoá của `stream_items`, và cách dịch ACL predicate sang SQL). Bốn tool do module sở hữu tự đăng ký, một tool do `ai-agents` đăng ký. |
 | 1.4.0 | 2026-11-02 | Triển khai 19-CHAT.22. §7.2 lên **16 tool** (thêm `crm_post_note`, `crm_log_activity`, `crm_draft_email`; `crm_create_task` và `crm_update_record_fields` lên v2) kèm bảng "ghi gì / bảo đảm gì". §8: D3, D4 đóng; "ghi lại kết quả công việc" và chip soạn email chuyển sang đã sửa. §9.3, §9.5 đánh dấu đã triển khai kèm ba chỗ lệch as-built. |
 | 1.3.0 | 2026-11-02 | Triển khai 19-CHAT.21. §7.2 lên **12 tool** (thêm `crm_actor_context`, `crm_aggregate`, `crm_list_activities`, `crm_cross_module`) kèm bảng "tool nào trả lời câu gì". §8.1/§8.2/§8.3 cập nhật: D1 và D2 đã sửa, chip "deal quý này" đã sửa, chip hoạt động và email còn lại cho 22/23. §9.2 đánh dấu đã triển khai kèm bảng ba chỗ lệch as-built. |
