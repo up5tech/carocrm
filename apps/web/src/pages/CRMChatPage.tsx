@@ -22,6 +22,7 @@ import { PermissionDenied } from '../components/PermissionDenied.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
 import { CRMChatComposer } from './crm-chat/CRMChatComposer.js';
 import { CRMChatMessageList } from './crm-chat/CRMChatMessageList.js';
+import { CRMChatSuggestions } from './crm-chat/CRMChatSuggestions.js';
 
 /**
  * The server state is kebab-case (`not-configured`); the catalog forbids hyphens in a key segment
@@ -261,13 +262,6 @@ export function CRMChatPage() {
     setComposerReset((current) => current + 1);
   };
 
-  const suggestions: readonly { key: string; label: string }[] = [
-    { key: 'opportunities', label: t('web.crmChat.suggestion.opportunities') },
-    { key: 'staleAccounts', label: t('web.crmChat.suggestion.staleAccounts') },
-    { key: 'closingQuarter', label: t('web.crmChat.suggestion.closingQuarter') },
-    { key: 'followUpEmail', label: t('web.crmChat.suggestion.followUpEmail') },
-  ];
-
   const threadTitle =
     selectedId === undefined ? t('web.crmChat.threadTitle') : (detail.data?.conversation.title ?? t('web.crmChat.untitled'));
   const threadMeta =
@@ -426,19 +420,10 @@ export function CRMChatPage() {
                   {data.actions.canStartTurn ? t('web.crmChat.heroHint') : t('web.crmChat.selectConversation')}
                 </p>
                 {data.actions.canStartTurn ? (
-                  <div className="carocrm-chat-suggestions" aria-label={t('web.crmChat.suggestionsTitle')}>
-                    {suggestions.map((suggestion) => (
-                      <button
-                        key={suggestion.key}
-                        type="button"
-                        className="carocrm-chat-suggestion"
-                        onClick={() => setPrefill({ text: suggestion.label, nonce: Date.now() })}
-                      >
-                        <ThunderboltOutlined aria-hidden="true" />
-                        <span>{suggestion.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <CRMChatSuggestions
+                    tools={data.assistant.tools}
+                    onSelect={(text) => setPrefill({ text, nonce: Date.now() })}
+                  />
                 ) : null}
               </div>
             ) : null}

@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { AIToolRegistry } from '../src/ai-agents/index.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
@@ -309,6 +310,61 @@ afterAll(async () => {
   await shutdownApi();
 });
 
+/** The ten records every CRM read tool may address (`plans/SPEC.md` §7.2). */
+const CRM_READ_SCOPE = [
+  'Account',
+  'Contact',
+  'Lead',
+  'Opportunity',
+  'Case',
+  'Task',
+  'Project',
+  'Campaign',
+  'CustomerSuccessProfile',
+  'Quote',
+];
+
+/**
+ * Phase 19-CHAT.24 — the catalogue as shipped, in one table
+ * (`plans/PLAN_Phase_19_CRM_Chat.md` §17 `19-CHAT.24`; `plans/SPEC.md` §7.2).
+ *
+ * This is the assertion that makes each tool *owned*: unregister one, rename its effect class, widen
+ * its entity scope or drop its approval gate, and this test names the tool and the field. The twenty
+ * CRM and handbook tools are the Chat-facing catalogue; `omnichannel.send_message` is the one
+ * module-owned tool outside it, and it is listed here because it shares the registry and the same
+ * approval rule.
+ */
+const EXPECTED_CATALOGUE: readonly {
+  readonly key: string;
+  readonly owningModule: string;
+  readonly version: string;
+  readonly effectClass: string;
+  readonly requiresApproval: boolean;
+  readonly entityScopes: readonly string[];
+}[] = [
+  { key: 'crm_search_records', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
+  { key: 'crm_read_record', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
+  { key: 'crm_list_related', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
+  { key: 'crm_record_summary', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
+  { key: 'docs_search', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  { key: 'docs_read_page', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  { key: 'crm_actor_context', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  { key: 'crm_aggregate', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
+  { key: 'crm_list_activities', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Call', 'Meeting', 'Task'] },
+  { key: 'crm_cross_module', owningModule: 'CRMChat', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Account', 'Opportunity', 'Project', 'Contact'] },
+  { key: 'crm_post_note', owningModule: 'AIAgents', version: '1', effectClass: 'low_write', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
+  { key: 'crm_log_activity', owningModule: 'AIAgents', version: '1', effectClass: 'low_write', requiresApproval: false, entityScopes: ['Call', 'Meeting'] },
+  { key: 'crm_draft_email', owningModule: 'AIAgents', version: '1', effectClass: 'low_write', requiresApproval: false, entityScopes: ['Email'] },
+  { key: 'crm_create_task', owningModule: 'AIAgents', version: '2', effectClass: 'low_write', requiresApproval: false, entityScopes: ['Task'] },
+  { key: 'crm_update_record_fields', owningModule: 'AIAgents', version: '2', effectClass: 'material_write', requiresApproval: true, entityScopes: ['Account', 'Contact', 'Lead', 'Opportunity', 'Case', 'Task'] },
+  { key: 'crm_lead_score', owningModule: 'LeadScore', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Lead'] },
+  { key: 'crm_customer_health', owningModule: 'CustomerSuccess', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['CustomerSuccessProfile'] },
+  { key: 'crm_case_context', owningModule: 'ServiceDesk', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Case'] },
+  { key: 'crm_stale_records', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  { key: 'crm_run_report', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  { key: 'omnichannel.send_message', owningModule: 'Omnichannel', version: '1', effectClass: 'material_write', requiresApproval: true, entityScopes: [] },
+];
+
 describe('agent definitions and versions (19-AI.5)', () => {
   it('creates a draft, validates it, publishes an immutable version and keeps old versions intact', async () => {
     const { id } = await createAgent({ suffix: 'lifecycle' });
@@ -459,6 +515,39 @@ describe('agent definitions and versions (19-AI.5)', () => {
     // Every tool that writes is either approval-gated or explicitly low-risk; nothing in this
     // catalogue may claim `material_write` without the approval flag (SPEC §9.1 rule 4).
     expect(catalogue.filter((tool) => tool.effectClass === 'high_impact')).toEqual([]);
+
+    // 19-CHAT.24 — the full catalogue, not a sample. The registry is the only place a tool key can
+    // come from, so an entry missing here is a capability that left the product.
+    const registry = ctx.app.get(AIToolRegistry);
+    expect(registry.list().map((tool) => tool.key).sort()).toEqual(
+      EXPECTED_CATALOGUE.map((entry) => entry.key).sort(),
+    );
+
+    for (const expected of EXPECTED_CATALOGUE) {
+      const definition = registry.get(expected.key);
+      expect(definition.owningModule, expected.key).toBe(expected.owningModule);
+      expect(definition.version, expected.key).toBe(expected.version);
+      expect(definition.effectClass, expected.key).toBe(expected.effectClass);
+      expect(definition.requiresApproval, expected.key).toBe(expected.requiresApproval);
+      expect([...definition.entityScopes].sort(), expected.key).toEqual([...expected.entityScopes].sort());
+
+      // SPEC §9.1 rules 1–3 on every entry: a hand-written JSON schema beside the Zod one, a bound on
+      // the payload and a deadline — a tool without them is not shippable, whatever else it does.
+      expect(definition.inputJsonSchema['type'], expected.key).toBe('object');
+      expect(definition.maxResultBytes, expected.key).toBeGreaterThan(0);
+      expect(definition.timeoutMs, expected.key).toBeGreaterThan(0);
+
+      // The admin-facing projection must not disagree with the registry about what a tool can do.
+      const projected = catalogue.find((tool) => tool.key === expected.key);
+      expect(projected, `${expected.key} is missing from the API catalogue`).toBeDefined();
+      expect(projected?.effectClass, expected.key).toBe(expected.effectClass);
+    }
+
+    // A material write with no human in the loop is the one shape this product refuses to have.
+    for (const expected of EXPECTED_CATALOGUE.filter((entry) => entry.effectClass === 'material_write')) {
+      expect(registry.get(expected.key).requiresApproval, expected.key).toBe(true);
+      expect(registry.get(expected.key).preview, expected.key).toBeDefined();
+    }
   });
 });
 

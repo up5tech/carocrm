@@ -2524,9 +2524,13 @@
     "suggestionsTitle": "Try asking",
     "suggestion": {
       "opportunities": "Summarize my open opportunities",
-      "staleAccounts": "Which accounts had no activity this month?",
       "closingQuarter": "Show the deals closing this quarter",
-      "followUpEmail": "Draft a follow-up email for my last meeting"
+      "myToday": "What do I have today?",
+      "staleAccounts": "Which accounts had no activity this month?",
+      "accountThreeSixty": "Summarize an account across every module",
+      "hotLeadScore": "Why is my hottest lead scored that way?",
+      "followUpEmail": "Draft a follow-up email for my last meeting",
+      "callOutcome": "Record the outcome of the call I just had"
     },
     "loadOlder": "Load older messages",
     "historyEmpty": "This conversation has no messages yet.",

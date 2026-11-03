@@ -1,9 +1,83 @@
-# CRM Chat Module — Release Notes v1.1
+# CRM Chat Module — Release Notes v1.2
 
-**Release Date:** 2026-10-21
+**Release Date:** 2026-11-03
 **Module:** CRMChat (`crm-chat`)
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Contract Version:** 1.2.0
+
+---
+
+## v1.2.0 — AI CRM tool catalogue v2 (2026-11-02 → 2026-11-03)
+
+Five sub-phases, 19-CHAT.20 → 19-CHAT.24, delivered the second AI CRM slice: the assistant can now
+answer the questions the workspace advertises, and the workspace only advertises what it can answer.
+
+**The catalogue went from 8 tools to 20.** Twelve new entries, in three batches:
+
+| Phase | Added | Count |
+| --- | --- | --- |
+| 19-CHAT.21 | `crm_actor_context`, `crm_aggregate`, `crm_list_activities` (+ `crm_cross_module` moved into the registry) | 8 → 12 |
+| 19-CHAT.22 | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` **v2**, `crm_update_record_fields` **v2** | 12 → 15 |
+| 19-CHAT.23 | `crm_lead_score`, `crm_customer_health`, `crm_case_context`, `crm_stale_records`, `crm_run_report` | 15 → 20 |
+
+The 20 keys, their effect class, approval requirement and entity scopes are asserted as one table in
+`apps/api/test/ai-agent-runs.test.ts`. `omnichannel.send_message` also lives in the registry and is in
+that table — 21 entries in total, 20 of them Chat-facing.
+
+### Two version bumps
+
+* **CRMChat module `1.1.0` → `1.2.0`**, and `implementedPhases` now lists `19-CHAT.20` … `19-CHAT.24`.
+* **Two tools went `v1` → `v2`**: `crm_create_task` (now attaches to the record it is about and defaults
+  its assignee to the acting user) and `crm_update_record_fields` (wider field allowlist, same
+  `material_write` class, same approval gate, same version check).
+
+The **contract version stays `1.2.0`**: no path, request shape, response shape, stream event or error
+code changed. Every new tool sits behind the existing turn surface, and Chat still neither grants nor
+executes a tool.
+
+### What a user sees
+
+* The empty state offers up to eight suggested questions. Each one declares the tool that has to be in
+  the answering agent's grants to be answerable, and a question whose tool the agent lacks is not
+  rendered. Nothing new is read from the server to make that decision — `capabilities.assistant.tools`
+  already carried it and only the diagnostics drawer used it.
+* Relative dates ("this quarter") resolve on the server, in the acting user's time zone, and the resolved
+  range is returned with the number, so an answer can name the window it counted.
+* Numbers come from aggregate queries, not from the model adding up a page of records.
+* A note, a logged call, a draft email or a task created by the assistant appears on the timeline of the
+  record it is about, attributed to the person who asked.
+* Nothing the assistant can now do sends an email. `crm_draft_email` produces a `Draft`; sending stays a
+  human action on the record.
+
+### Rollback, per phase
+
+No migration was introduced by any of the five phases, so every rollback is configuration:
+
+| Phase | Rollback |
+| --- | --- |
+| 19-CHAT.20 — actor in the system prompt | Pass `undefined` for the third `systemPrompt` argument; the prompt is byte-for-byte the previous string. |
+| 19-CHAT.21 — read family | `settings.tools.disabled: ["crm_aggregate", "crm_list_activities", "crm_actor_context", "crm_cross_module"]`. |
+| 19-CHAT.22 — write family | `settings.tools.disabled` for the five write keys, or `safety.allowWrites: false` in Chat settings to stop every mutation at the product gate. |
+| 19-CHAT.23 — module intelligence | Disable the owning module's own switch (`LeadScore`, `CustomerSuccess`, `ServiceDesk`) or the four tool keys; Chat then says the capability is unavailable instead of failing the turn. |
+| 19-CHAT.24 — suggestions | The chips are static data; hiding them needs no server change. Restoring the pre-24 behaviour means reverting `apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`. |
+
+Disabling a tool through `AIAgents` settings removes it from what the agent can execute. The suggestion
+filter reads the agent's **grants**, so a deployment that wants a question to stop being advertised should
+remove the grant (or republish the assistant without the tool) — the rule is written into
+`docs/architecture/crm-chat-contract.md` §7.5.
+
+### Verification
+
+* `apps/api/test/crm-chat-evaluation.test.ts` — 61 cases: the 19-CHAT.17 set plus **one case per tool, in
+  Vietnamese and in English**, each submitted through `POST action/turns` and checked against the tool
+  call the runtime recorded. An agent can hold eight tools at most, so the set runs through three
+  assistants and points Chat at the one that can answer the question being asked. Removing any tool from
+  `AIToolRegistry` makes publishing fail, which turns the whole block red — verified by unregistering
+  `crm_stale_records` and watching it.
+* `apps/web/src/pages/crm-chat/CRMChatSuggestions.test.tsx` — a chip whose tool the agent lacks is not in
+  the rendered markup; the catalog carries every chip phrase in both locales.
+* `pnpm lint:arch`, `pnpm lint:ui`, `pnpm typecheck`, `pnpm test:web` and the Chat suites: see §17 of
+  `plans/PLAN_Phase_19_CRM_Chat.md` for the per-phase evidence.
 
 ---
 
@@ -72,7 +146,7 @@ CRM Chat is a first-class conversational assistant for the CaroCRM platform, ena
 
 ---
 
-## Implemented Phases (19-CHAT.0 through 19-CHAT.19)
+## Implemented Phases (19-CHAT.0 through 19-CHAT.24)
 
 ### Core Infrastructure (19-CHAT.0 – 19-CHAT.4)
 - ✅ Repository audit and capability inventory
@@ -114,6 +188,13 @@ CRM Chat is a first-class conversational assistant for the CaroCRM platform, ena
 - ✅ Usage tracking and observability with safe logging
 - ✅ Comprehensive evaluation suite (77 tests)
 - ✅ Release readiness verification
+
+### AI CRM tool catalogue v2 (19-CHAT.20 – 19-CHAT.24)
+- ✅ Acting user named in the agent system prompt
+- ✅ Read family: actor context, aggregates, activities, cross-module analysis
+- ✅ Write loop: note, logged call/meeting, email draft, task with a parent, approved field update
+- ✅ Module intelligence: lead score, customer health, case context, silent records, saved reports
+- ✅ Tool-aware suggestions, one evaluation case per tool, the full 20-key catalogue assertion
 
 ---
 

@@ -2524,9 +2524,13 @@
     "suggestionsTitle": "Thử hỏi",
     "suggestion": {
       "opportunities": "Tóm tắt các cơ hội đang mở của tôi",
-      "staleAccounts": "Tài khoản nào chưa có hoạt động trong tháng này?",
       "closingQuarter": "Cho tôi xem các thương vụ sẽ chốt trong quý này",
-      "followUpEmail": "Soạn email theo dõi cho cuộc họp gần nhất"
+      "myToday": "Hôm nay tôi có những việc gì?",
+      "staleAccounts": "Tài khoản nào chưa có hoạt động trong tháng này?",
+      "accountThreeSixty": "Tóm tắt một tài khoản trên mọi phân hệ",
+      "hotLeadScore": "Vì sao lead nóng nhất của tôi được chấm điểm như vậy?",
+      "followUpEmail": "Soạn email theo dõi cho cuộc họp gần nhất",
+      "callOutcome": "Ghi lại kết quả cuộc gọi tôi vừa thực hiện"
     },
     "loadOlder": "Tải tin nhắn cũ hơn",
     "historyEmpty": "Hội thoại này chưa có tin nhắn nào.",

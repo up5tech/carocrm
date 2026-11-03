@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Phiên bản** | 1.5.0 |
+| **Phiên bản** | 1.6.0 |
 | **Ngày** | 2026-11-03 |
 | **Phạm vi** | Toàn hệ thống (as-built) + đặc tả tầng AI CRM v2 |
-| **Trạng thái** | §1–§7: đã triển khai. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (phase 19-CHAT.20, 19-CHAT.21, 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (phase 19-CHAT.23). §9.7–§11: đề xuất, đã chia thành phase **19-CHAT.24** trong `plans/PLAN_Phase_19_CRM_Chat.md` §17, **chưa triển khai**. |
+| **Trạng thái** | §1–§7: đã triển khai. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (phase 19-CHAT.20, 19-CHAT.21, 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (phase 19-CHAT.23). §9.7 + §10.1: **đã triển khai 2026-11-03** (phase 19-CHAT.24). §10.2–§11: quy trình áp dụng cho mọi đợt. |
 | **Ngôn ngữ** | Prose tiếng Việt; định danh, khoá tool, đường dẫn, schema giữ nguyên tiếng Anh. |
 
 ---
@@ -254,6 +254,11 @@ Năm tool trí tuệ module (`19-CHAT.23`) là wrapper mỏng — mỗi tool tr�
 
 **6 entity ghi được** (chỉ `description`, và `status` trên Lead/Case/Task): `Account`, `Contact`, `Lead`, `Opportunity`, `Case`, `Task`.
 
+Hai sự thật as-built mà mọi thiết kế chip/agent phải tính tới (ghi nhận 19-CHAT.24):
+
+- Registry còn mang **`omnichannel.send_message`** (material_write, `requiresApproval: true`) do module Omnichannel đăng ký — **21 mục** trong registry, 20 mục phía Chat. Bảng trên liệt kê 20; cả 21 đều được assert một lần nữa trong `apps/api/test/ai-agent-runs.test.ts`.
+- Một agent **không thể mang quá 8 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`). Nghĩa là không tồn tại một assistant Chat nào trả lời được mọi chip; `assistant.tools` luôn là một tập con, và bộ lọc chip (§9.7) là cơ chế duy nhất giữ cho lời hứa của UI khớp với năng lực thật.
+
 ### 7.3 Agent template
 
 | key | Mô tả | Tool | Memory |
@@ -267,7 +272,7 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 
 | Hạng mục | Giá trị |
 |---|---|
-| Version / loadOrder | `1.1.0` / `395` |
+| Version / loadOrder | `1.2.0` / `395` |
 | Capability | `use`, `manage`, `delete`, `feedback`, `prompts`, `admin` |
 | Feature flag | `workspace` (mặc định **on**), `readTools`, `helpRetrieval`, `actionProposals`, `feedback`, `conversationSearch` (mặc định **off**) |
 | Giới hạn mặc định | `maxMessageChars` 8000, `maxContextRefs` 5, `maxActiveTurnsPerUser` 1, `maxConversationsPerUser` 200, `turnTimeoutSeconds` 180 |
@@ -275,14 +280,18 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 | Hội thoại / tin nhắn | Thuộc `AIAgents` (`ai_agent_conversations`, `ai_agent_messages`) — Chat không sở hữu |
 | Trạng thái sẵn sàng | `not-configured` → `unresolvable` → `not-found` → `not-published` → `execution-disabled` → `execution-paused` → `memory-disabled` → `agent-memory-off` → `ready` |
 
-**4 chip gợi ý** (`apps/web/src/pages/CRMChatPage.tsx:264-269`), hardcode, không phụ thuộc tool:
+**Chip gợi ý là dữ liệu khai báo** (`apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`, từ 19-CHAT.24), mỗi chip mang `requiresTool` và **chỉ render khi tool đó có trong `capabilities.assistant.tools`**:
 
-| Chip | Khoá i18n |
+| Chip (khoá i18n) | `requiresTool` |
 |---|---|
-| Tóm tắt cơ hội đang mở của tôi | `web.crmChat.suggestion.opportunities` |
-| Account nào không có hoạt động tháng này? | `web.crmChat.suggestion.staleAccounts` |
-| Các deal chốt trong quý này | `web.crmChat.suggestion.closingQuarter` |
-| Soạn email follow-up cho cuộc họp gần nhất | `web.crmChat.suggestion.followUpEmail` |
+| `suggestion.opportunities` | `crm_search_records` |
+| `suggestion.closingQuarter` | `crm_aggregate` |
+| `suggestion.myToday` | `crm_list_activities` |
+| `suggestion.staleAccounts` | `crm_stale_records` |
+| `suggestion.accountThreeSixty` | `crm_cross_module` |
+| `suggestion.hotLeadScore` | `crm_lead_score` |
+| `suggestion.followUpEmail` | `crm_draft_email` |
+| `suggestion.callOutcome` | `crm_post_note` |
 
 ### 7.5 Bất biến an toàn của tầng AI
 
@@ -322,13 +331,13 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 | Trí tuệ module (score/health/SLA) | **Chưa có** | Service có, tool không |
 | Duyệt & kiểm toán | Đã có | `ai_agent_approvals`, audit, evaluation |
 
-### 8.2 Bốn chip: hai câu đã trả lời được, hai câu chưa
+### 8.2 Bốn chip: cả bốn đã trả lời được (19-CHAT.23, 19-CHAT.24)
 
 | Chip | Trạng thái | Nguyên nhân gốc |
 |---|---|---|
 | "Cơ hội đang mở **của tôi**" | **Đã sửa (§7.6)** | Trước: `systemPrompt()` chỉ nhận `agentName` + `config`, không có actor. Nay prompt mang `id` + `teams`, và `crm_search_records` lọc được `assignedUserId` — có test end-to-end chứng minh chuỗi này. |
 | "Deal chốt quý này" | **Đã sửa (19-CHAT.21)** | `crm_aggregate` nhận `period: "this_quarter"` + `dateField: "closeDate"`; server resolve kỳ hạn trong múi giờ người hỏi và trả kèm `period.label/from/to` để câu trả lời nêu đúng khoảng. Model không còn tự tính ngày. |
-| "Account không có hoạt động tháng này" | Chưa (19-CHAT.23) | `crm_list_activities` trả *có* hoạt động, nhưng câu hỏi cần phép phủ định trên `stream_items` — `crm_stale_records` mới làm được. |
+| "Account không có hoạt động tháng này" | **Đã sửa (19-CHAT.23)** | `crm_stale_records` làm phép phủ định ngay trong SQL: một `NOT EXISTS` trên `stream_items`, gấp thêm record predicate của người gọi. `crm_list_activities` trả *có* hoạt động — không đủ cho câu hỏi này. |
 | "Soạn email follow-up" | **Đã sửa (19-CHAT.22)** | `crm_draft_email` tạo Email `status: Draft` gắn vào bản ghi; test khẳng định **hàng đợi không có job gửi** nào cho email đó. |
 
 ### 8.3 Năm khiếm khuyết cấu trúc
@@ -339,13 +348,13 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 | D2 | ~~Năng lực có sẵn nhưng không expose~~ **đã sửa 19-CHAT.21** | `crm_cross_module` đăng ký từ `crm-chat` | Account-360 và project-delivery gọi được từ model; `CRMChatQueryService` vẫn chỉ REST (không cần) |
 | D3 | ~~Ghi không khép vòng~~ **đã sửa 19-CHAT.22** | `crm_create_task` v2 có `parent`; note/call/email đều link | Bản ghi tạo ra nằm trên timeline của bản ghi cha |
 | D4 | ~~`WRITABLE_FIELDS` quá hẹp~~ **đã sửa 19-CHAT.22** | thêm stage/amount/closeDate, priority, assignedUserId, dateEnd | Vẫn `material_write` + approval + kiểm version |
-| D5 | Chip không biết agent có tool gì | `assistant.tools` đã có trong payload (`types.ts:2781`) nhưng chỉ dùng cho drawer chẩn đoán | Chip hứa điều agent không làm được |
+| D5 | ~~Chip không biết agent có tool gì~~ **đã sửa 19-CHAT.24** | `assistant.tools` (`types.ts:2781`) giờ là đầu vào của bộ lọc chip; `CRMChatSuggestions.test.tsx` chứng minh chip vắng mặt khi tool vắng mặt | UI không còn hứa điều agent không làm được |
 
 ---
 
 ## 9. Đặc tả: AI CRM tool catalogue v2
 
-> Đặc tả này **đã được chia thành phase** trong `plans/PLAN_Phase_19_CRM_Chat.md` §17: §9.6 → 19-CHAT.20 ✅, §9.2 → 19-CHAT.21 ✅, §9.3 + §9.5 → 19-CHAT.22 ✅, §9.4 → 19-CHAT.23, §9.7 → 19-CHAT.24. Khi hai tài liệu lệch nhau, plan là nơi ghi trạng thái thực thi; SPEC là nơi ghi lý do thiết kế.
+> Đặc tả này **đã được chia thành phase** trong `plans/PLAN_Phase_19_CRM_Chat.md` §17: §9.6 → 19-CHAT.20 ✅, §9.2 → 19-CHAT.21 ✅, §9.3 + §9.5 → 19-CHAT.22 ✅, §9.4 → 19-CHAT.23 ✅, §9.7 → 19-CHAT.24 ✅. Khi hai tài liệu lệch nhau, plan là nơi ghi trạng thái thực thi; SPEC là nơi ghi lý do thiết kế.
 
 ### 9.1 Luật thiết kế cho mọi tool mới
 
@@ -573,22 +582,36 @@ Không thêm `delete`, `merge`, hay bất kỳ thao tác không hoàn tác đư�
 
 Đây là thay đổi **rẻ nhất và giá trị cao nhất** trong toàn bộ đề xuất: nó sửa D5 và chip #1 mà không cần tool nào.
 
-### 9.7 Chip gợi ý v2
+### 9.7 Chip gợi ý v2 — ✅ đã triển khai 2026-11-03 (19-CHAT.24)
 
-Chip trở thành **dữ liệu khai báo**, mỗi chip mang `requiresTool`; UI lọc theo `capabilities.assistant.tools` (đã có trong payload, **không cần đổi API**).
+Chip trở thành **dữ liệu khai báo** trong `apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`
+(`CRM_CHAT_SUGGESTIONS` + `visibleSuggestions()`), mỗi chip mang `requiresTool`; UI lọc theo
+`capabilities.assistant.tools` — payload đã có sẵn, **không đổi API**.
 
-| Chip | `requiresTool` |
-|---|---|
-| Cơ hội đang mở của tôi | — (đã chạy được bằng `crm_search_records` sau §9.6) |
-| Pipeline theo giai đoạn quý này | `crm_aggregate` |
-| Hôm nay tôi có gì? | `crm_list_activities` |
-| Tóm tắt 360° account này | `crm_cross_module` |
-| Account nào im lặng 30 ngày? | `crm_stale_records` |
-| Vì sao lead này điểm cao? | `crm_lead_score` |
-| Soạn nháp follow-up | `crm_draft_email` |
-| Ghi lại kết quả cuộc gọi vừa xong | `crm_post_note` |
+| Chip (§9.7 đề xuất) | `requiresTool` | As-built |
+|---|---|---|
+| Cơ hội đang mở của tôi | — | `suggestion.opportunities` → **`crm_search_records`**. Lệch có chủ đích: "—" chỉ đúng so với *trước* §9.6, còn câu hỏi vẫn cần một tool để đọc bản ghi. Khai báo tool khiến chip tự ẩn khi assistant chỉ có tool docs. |
+| Pipeline theo giai đoạn quý này | `crm_aggregate` | `suggestion.closingQuarter` (giữ nguyên câu chữ đã ship) |
+| Hôm nay tôi có gì? | `crm_list_activities` | `suggestion.myToday` |
+| Account nào im lặng 30 ngày? | `crm_stale_records` | `suggestion.staleAccounts` |
+| Tóm tắt 360° account này | `crm_cross_module` | `suggestion.accountThreeSixty` — diễn đạt không trỏ "account này", vì hero là empty state, chưa có bản ghi nào được chọn |
+| Vì sao lead này điểm cao? | `crm_lead_score` | `suggestion.hotLeadScore` — likewise "lead nóng nhất của tôi" |
+| Soạn nháp follow-up | `crm_draft_email` | `suggestion.followUpEmail` |
+| Ghi lại kết quả cuộc gọi vừa xong | `crm_post_note` | `suggestion.callOutcome` |
 
-Không chip nào hiển thị nếu agent chưa được cấp tool tương ứng. Đây là điều kiện để Chat không hứa điều nó không làm được.
+Không chip nào hiển thị nếu agent chưa được cấp tool tương ứng. Đây là điều kiện để Chat không hứa điều
+nó không làm được.
+
+**Ba chi tiết chỉ lộ ra khi làm:**
+
+- **Bộ lọc đọc *grant*, không đọc `settings.tools.disabled`.** `assistant.tools` là danh sách tool của
+  phiên bản agent đã publish (§7.5). Một tool bị vô hiệu hoá bằng settings vẫn còn trong grant, nên chip
+  vẫn hiện và câu trả lời sẽ là "năng lực này không khả dụng". Rollback thật sự gọn là bỏ grant rồi publish
+  lại — điều này được ghi vào `docs/architecture/crm-chat-contract.md` §7.5.
+- **Trần 8 tool mỗi agent** (§7.2) khiến "lọc theo grant" là cơ chế thường trực chứ không phải tình huống
+  hiếm: một assistant Chat không bao giờ cầm đủ 20 tool, do đó hàng chip luôn ngắn hơn bảng §9.7.
+- **Cả 8 khoá `requiresTool` là tool key thật**, được `CRMChatSuggestions.test.tsx` chặn cùng catalogue
+  assert; tên tool viết sai sẽ không có chip nào render, thay vì âm thầm hiển thị một lời hứa sai.
 
 ### 9.8 Ngoài phạm vi
 
@@ -608,6 +631,8 @@ Xoá/merge bản ghi; gửi email/SMS thật; ghi tài chính (quote, invoice, p
 | Cap | Kết quả vượt `maxResultBytes` bị cắt và đánh dấu `truncated` |
 | Grant | `entityScopes` chưa đăng ký → publish thất bại với thông báo rõ |
 | Approval | Tool `material_write` không thể publish mà thiếu `requiresApproval` |
+| Eval | **Một case mỗi tool, cả tiếng Việt lẫn tiếng Anh**, chạy qua `POST /CRMChat/action/turns` và đọc `ai_agent_tool_calls` (`apps/api/test/crm-chat-evaluation.test.ts`, 19-CHAT.24). Tool bị xoá khỏi registry làm publish fail → cả khối đỏ; đã kiểm chứng bằng cách unregister `crm_stale_records`. |
+| Catalogue | Toàn bộ 21 mục của registry được assert một bảng: `owningModule`, `version`, `effectClass`, `requiresApproval`, `entityScopes` (`apps/api/test/ai-agent-runs.test.ts`). |
 
 ### 10.2 Cổng trước khi merge
 
@@ -617,7 +642,9 @@ Test thuần mới phải được thêm vào `PURE_API_TESTS` trong `vitest.ci.
 
 ### 10.3 Rollback
 
-Tool mới vô hiệu hoá bằng `settings.tools.disabled` (không cần deploy). Chip tự ẩn theo `assistant.tools`. Không có migration nào trong đợt 1–2, nên rollback là cấu hình, không phải dữ liệu.
+Tool mới vô hiệu hoá bằng `settings.tools.disabled` (không cần deploy). Chip tự ẩn theo `assistant.tools`. Không có migration nào trong đợt 1–3, nên rollback là cấu hình, không phải dữ liệu.
+
+Một ranh giới cần nói thẳng (19-CHAT.24): `settings.tools.disabled` chặn **thực thi**, còn bộ lọc chip đọc **grant** của phiên bản agent đã publish. Tắt tool bằng settings mà không bỏ grant thì chip vẫn hiện. Rollback sạch là bỏ grant rồi publish lại assistant — hoặc chấp nhận Chat trả lời "năng lực này không khả dụng" cho câu hỏi đó.
 
 Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số thứ ba của `systemPrompt` — prompt trở về đúng chuỗi cũ, không có schema, không có dữ liệu nào phải hoàn tác.
 
@@ -645,6 +672,7 @@ Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số 
 | 1.0.0 | 2026-11-02 | Bản đầu. Chốt đặc tả as-built §1–§7; thêm phân tích khoảng trống §8 và đặc tả AI CRM tool catalogue v2 §9–§11. |
 | 1.1.0 | 2026-11-02 | Triển khai §9.6: `ai-agent-actor.ts` (khối "Acting user" + `promptSafe`), `AIAgentRunService.actorContext()`, seam `__FAKE_ECHO_ACTOR__`. Thêm `ai-agent-actor.test.ts` (10 case thuần) và 1 case end-to-end trong `ai-agent-runs.test.ts`. Cập nhật §7.6, §8.1, §8.2. Số entity chính xác: 115. |
 | 1.2.0 | 2026-11-02 | Nối SPEC với plan: §9.2–§9.7 giờ trỏ tới phase 19-CHAT.21–24 trong `PLAN_Phase_19_CRM_Chat.md` §17, và dòng trạng thái ở đầu ghi rõ phần nào đã thành phase. Không đổi nội dung kỹ thuật. |
+| 1.6.0 | 2026-11-03 | Triển khai 19-CHAT.24. §7.4: chip là dữ liệu (`CRMChatSuggestions.tsx`) với `requiresTool`, lọc theo `assistant.tools`; 8 chip thay vì 4. §7.2: ghi nhận registry có **21** mục (`omnichannel.send_message`) và trần **8 tool/agent**. §8.2/§8.3: chip hoạt động và D5 đóng. §9.7 as-built kèm ba chi tiết: bộ lọc đọc grant chứ không đọc `tools.disabled`, trần 8 tool, khoá tool phải là key thật. §10.1: thêm dòng Eval + Catalogue. §10.3 nói rõ rollback bằng bỏ grant + publish lại. |
 | 1.5.0 | 2026-11-03 | Triển khai 19-CHAT.23. §7.2 lên **20 tool** (thêm `crm_lead_score`, `crm_customer_health`, `crm_case_context`, `crm_stale_records`, `crm_run_report`) kèm bảng "tool nào trả lời câu gì". §9.4 đánh dấu đã triển khai kèm ba chỗ lệch as-built và hai chi tiết chốt (cột khoá của `stream_items`, và cách dịch ACL predicate sang SQL). Bốn tool do module sở hữu tự đăng ký, một tool do `ai-agents` đăng ký. |
 | 1.4.0 | 2026-11-02 | Triển khai 19-CHAT.22. §7.2 lên **16 tool** (thêm `crm_post_note`, `crm_log_activity`, `crm_draft_email`; `crm_create_task` và `crm_update_record_fields` lên v2) kèm bảng "ghi gì / bảo đảm gì". §8: D3, D4 đóng; "ghi lại kết quả công việc" và chip soạn email chuyển sang đã sửa. §9.3, §9.5 đánh dấu đã triển khai kèm ba chỗ lệch as-built. |
 | 1.3.0 | 2026-11-02 | Triển khai 19-CHAT.21. §7.2 lên **12 tool** (thêm `crm_actor_context`, `crm_aggregate`, `crm_list_activities`, `crm_cross_module`) kèm bảng "tool nào trả lời câu gì". §8.1/§8.2/§8.3 cập nhật: D1 và D2 đã sửa, chip "deal quý này" đã sửa, chip hoạt động và email còn lại cho 22/23. §9.2 đánh dấu đã triển khai kèm bảng ba chỗ lệch as-built. |

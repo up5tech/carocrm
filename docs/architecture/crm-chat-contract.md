@@ -2,7 +2,7 @@
 
 > **Plan:** `plans/PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.1`); decisions rest on
 > `docs/modules/crm-chat/repository-audit.md` (19-CHAT.0).
-> **Status:** delivered in 19-CHAT.1 and implemented in full through 19-CHAT.18
+> **Status:** delivered in 19-CHAT.1 and implemented in full through 19-CHAT.24
 > (`apps/api/src/crm-chat/`). Every route in §6 is served by the controller; the route table in
 > `crm-chat-contract.ts` is pinned against the controller by `apps/api/test/crm-chat-contract.test.ts`.
 > **Contract version:** `1.2.0`. Any breaking change to a path, a request shape, a response shape, a
@@ -442,6 +442,21 @@ published version `memory.mode === 'conversation'` → `ready`.
 The last two exist because the audit found `AIAgentMemoryService.conversationForRun` refuses a
 conversation id for an agent without conversation memory. Chat reports that; it does not flip it.
 
+**`assistant.tools` is load-bearing, not decoration** (19-CHAT.24). It is the list of tool keys the
+answering agent's published version grants, and it is what the workspace keys its suggestions on: the
+empty-state chips are declared data, each naming the tool that makes its question answerable, and a chip
+whose tool is absent is never rendered. That is why the field is part of `capabilities` rather than a
+diagnostic the SPA has to guess at — the payload already carried it, and 19-CHAT.24 made the UI read it.
+
+Two consequences an administrator should expect:
+
+- An agent may hold at most **eight** tools (`MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts`),
+  so no Chat assistant can be granted the whole catalogue. The suggestion row shrinks and grows with the
+  grants; that is the intended behaviour, not a defect.
+- Disabling a tool through `AIAgents` settings (`settings.tools.disabled`) takes it out of the answers the
+  agent can give, but the grant list is what the chip filter reads. A deployment that disables a tool
+  should remove the grant as well if it wants the matching question to stop being offered.
+
 ### 7.6 Specified for later phases
 
 ```ts
@@ -629,6 +644,11 @@ something outside its row is a blocker to report, not an exception to take.
 | 19-CHAT.17 | Usage, limits and observability | A locally computed price; a Chat-owned usage counter |
 | 19-CHAT.18 | Evaluation and end-to-end verification | A production model call in a test |
 | 19-CHAT.19 | Release readiness and operational handover | — |
+| 19-CHAT.20 | The acting user's identity in the agent system prompt | A tool that accepts a user id from the model |
+| 19-CHAT.21 | Read tools: `crm_aggregate`, `crm_list_activities`, `crm_actor_context`, `crm_cross_module` as a registry entry | A number the model added up itself; a model-computed date range |
+| 19-CHAT.22 | Write tools: note, activity, draft email, task v2, field update v2 | Any external send; an unapproved material write |
+| 19-CHAT.23 | Module intelligence tools contributed by `LeadScore`, `CustomerSuccess`, `ServiceDesk` and `AIAgents` | A second implementation of a score the owning module already computes |
+| 19-CHAT.24 | Tool-aware suggestions (chips are data filtered by `assistant.tools`), one evaluation case per tool, the full catalogue assertion | An API change; a chip for a capability the answering agent was not granted |
 
 ---
 
@@ -753,6 +773,8 @@ states the reasons they are safe.
 | `1.2.0` | 19-CHAT.12 | Action proposal routes marked implemented: a thin façade over `AIAgents` approvals that adds the `actionProposals` / `safety.allowWrites` product gate. |
 | `1.2.0` | 19-CHAT.14 | Saved prompt templates, answer feedback and conversation search marked implemented; the turn body field is documented as `prompt` / `contextRefs`, which is what the implementation and the SPA already send. |
 | `1.2.0` | 19-CHAT.17 | Per-turn usage read-out added (`action/turns/:turnId/usage`). |
+| `1.2.0` | 19-CHAT.20–19-CHAT.23 | No route, request shape, response shape, stream event or error code changed, so the contract version stays: the twelve tools added to the `AIAgents` registry are behind the existing turn surface, and Chat still neither grants nor executes a tool (§9). |
+| `1.2.0` | 19-CHAT.24 | `assistant.tools` documented as load-bearing: the workspace renders only the suggestions whose tool the answering agent holds. Module version 1.1.0 → 1.2.0; `implementedPhases` now lists 19-CHAT.20–24. No payload changed, so the contract version stays `1.2.0`. |
 
 ---
 

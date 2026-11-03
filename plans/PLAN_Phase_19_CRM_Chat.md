@@ -1,7 +1,7 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
-> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 shipped 2026-11-03; 19-CHAT.24 planned  
-> **Plan version:** 1.5.0 (2026-11-03)  
+> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03 (module v1.2.0)  
+> **Plan version:** 1.6.0 (2026-11-03)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
@@ -42,7 +42,8 @@ This plan describes intended behavior. Where it and the code disagree, the code 
 
 The module is **built and running**, not planned. Phases 19-CHAT.0 → 19-CHAT.19 are the historical
 specification that produced the shipped module; they stay in this file because they define its
-contract. Work that is still open is specified as **19-CHAT.20 → 19-CHAT.24** in §17.
+contract. The v2 work added after the review is specified as **19-CHAT.20 → 19-CHAT.24** in §17, and all
+five of those phases have shipped.
 
 | Phase range | Status | Evidence |
 |---|---|---|
@@ -51,7 +52,7 @@ contract. Work that is still open is specified as **19-CHAT.20 → 19-CHAT.24** 
 | 19-CHAT.21 — read tool family | **Shipped** 2026-11-02 | 4 tools, registry 8 → 12 keys; `ai-agent-periods.test.ts` (16 pure cases) + 8 new cases in `ai-agent-runs.test.ts`; design in `plans/SPEC.md` §9.2 |
 | 19-CHAT.22 — write loop closure | **Shipped** 2026-11-02 | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2, `crm_update_record_fields` v2; registry 12 → 15 keys; 6 new cases in `ai-agent-runs.test.ts` |
 | 19-CHAT.23 — module intelligence tools | **Shipped** 2026-11-03 | 5 tools, registry 15 → 20 keys; `apps/api/test/crm-chat-intelligence-tools.test.ts` (7 cases); design in `plans/SPEC.md` §9.4 |
-| 19-CHAT.24 — tool-aware suggestions, evaluation, release | Planned | §17 phase 19-CHAT.24; design in `plans/SPEC.md` §9.7 |
+| 19-CHAT.24 — tool-aware suggestions, evaluation, release | **Shipped** 2026-11-03 | 8 declarative chips filtered by `capabilities.assistant.tools` (`apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`); 40 new cases (20 tools × vi + en) in `crm-chat-evaluation.test.ts`; full 21-entry catalogue table in `ai-agent-runs.test.ts`; module v1.2.0; design in `plans/SPEC.md` §9.7 |
 
 Two rules follow from this split, and both have already cost time when ignored:
 
@@ -998,9 +999,9 @@ through the HTTP surface rather than through internal functions. Eight further s
 contract, conversations, security, docs/help, engagement, inline execution, and the AIAgents
 integration.
 
-Two gaps this arrangement leaves, which phase 19-CHAT.24 is meant to close: there is no case per **tool**, and
-there is no case that fails when a tool is *removed* from the registry. A suite that only tests the
-happy path cannot tell you that a capability disappeared.
+Two gaps this arrangement left, both closed by phase 19-CHAT.24: there was no case per **tool**, and no
+case that failed when a tool was *removed* from the registry. `crm-chat-evaluation.test.ts` now holds one
+case per tool in Vietnamese and in English, and the registry is asserted as one complete table.
 
 ---
 
@@ -1434,7 +1435,7 @@ Gates: `pnpm lint:arch` clean, `eslint` (sanctioned scope) clean, `pnpm lint:ui`
 
 ---
 
-### Phase 19-CHAT.24 — Tool-Aware Suggestions, Evaluation, and Release
+### Phase 19-CHAT.24 — Tool-Aware Suggestions, Evaluation, and Release ✅ shipped 2026-11-03
 
 The four suggestion chips are hardcoded. Two of them still promise what the assistant cannot do
 (activity-based and email drafting), and a third — "deals closing this quarter" — only half-works
@@ -1453,6 +1454,50 @@ can verify.
 - Removing any tool turns at least one evaluation case red — an untested tool is an unowned tool.
 - `pnpm lint:ui` clean: no missing `t()` key, no raw `<Empty>`, no sliced timestamp in the new UI.
 - Release notes state the new tool count, the two version bumps, and the rollback path for each phase.
+
+**As-built**
+
+The chip table lives in `apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx` as
+`CRM_CHAT_SUGGESTIONS` (declarative, with `requiresTool`) plus `visibleSuggestions(tools)`, and the page
+renders `<CRMChatSuggestions tools={data.assistant.tools} … />`. Seven new i18n phrases in `en` and `vi`;
+`CRMChatPage.tsx` no longer builds labels itself. Four of the §9.7 chips replaced the old four, four are
+new, and the row order is the declaration order.
+
+| Deviation from the task list | Reason |
+|---|---|
+| §9.7's "no tool required" chip (`opportunities`) declares `crm_search_records` | The dash was true relative to §9.6, but the question still reads records. Declaring the tool makes the chip hide from a docs-only assistant, which is the whole point of the phase. |
+| Two chips re-worded away from "this account" / "this lead" | The hero is an empty state: no record is selected, so a demonstrative would point at nothing. |
+| The evaluation set runs through **three** assistants, not one | `MAX_TOOLS` in `apps/api/src/ai-agents/ai-agent-config.ts` caps an agent at eight grants. Twenty tools cannot be held by one Chat assistant; `useAssistant(group)` repoints Chat per group of cases. |
+| The catalogue assertion covers **21** registry keys, not 20 | `omnichannel.send_message` shares the registry. Excluding it would leave an approval-gated, customer-visible tool unasserted and would make a "full set" claim false. |
+| The module version went 1.1.0 → 1.2.0; the **contract** version stayed 1.2.0 | No path, request shape, response shape, stream event or error code changed — `assistant.tools` was already in the payload. Bumping it would tell a client there is something to adapt to. `implementedPhases` now lists 20–24. |
+
+Two things this phase discovered about itself, both written into
+`docs/architecture/crm-chat-contract.md` §7.5:
+
+- The chip filter reads the assistant's **grants**, not `settings.tools.disabled`. Disabling a tool in
+  AIAgents settings stops execution but leaves the question advertised, so the honest rollback is removing
+  the grant and republishing.
+- "Both languages" is a narrower claim at tool level than it is at answer level. The fake adapter pins
+  which tool answers (it reads the `__FAKE_TOOL__` directive), so a case proves that the Vietnamese and
+  the English phrasing survive Chat validation, the agent prompt, the tool schema and the answer path —
+  not that a model would *route* to that tool. Model routing needs a live provider and belongs to
+  `ai_agent_eval_*`.
+
+**Evidence**
+
+- `apps/api/test/crm-chat-evaluation.test.ts` — 61 cases: the 19-CHAT.17 set plus 40 per-tool cases, each
+  a real `POST action/turns` (inline execution) with the tool call read back from `ai_agent_tool_calls`;
+  `crm_update_record_fields` asserts `waiting_for_approval`, one unexecuted tool call and an unchanged
+  record. Setup snapshots and restores four settings documents (`aiAgents`, `crmChat`, `leadScore`,
+  `serviceDesk`) and removes every row it created by id or by the run marker.
+- **Removal property verified, not claimed:** unregistering `crm_stale_records` makes publishing the
+  assistant fail with `Unknown AI tool "crm_stale_records"`, and the whole block goes red.
+- `apps/web/src/pages/crm-chat/CRMChatSuggestions.test.tsx` — 5 cases: a chip whose tool is absent is not
+  in the markup; every chip appears for a fully granted agent; no row renders for an unrelated grant; the
+  chip table has no duplicate tool; both locales carry every phrase.
+- `apps/api/test/ai-agent-runs.test.ts` — the catalogue test now asserts all 21 entries: `owningModule`,
+  `version`, `effectClass`, `requiresApproval`, `entityScopes`, the hand-written JSON Schema, the byte and
+  time caps, and that the API projection agrees with the registry.
 
 ---
 
@@ -1558,6 +1603,7 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 |---|---|---|
 | 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
 | 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
+| 1.6.0 | 2026-11-03 | Phase 19-CHAT.24 shipped: suggestions are declared data with `requiresTool`, filtered by `capabilities.assistant.tools` (`CRMChatSuggestions.tsx`, 8 chips, en+vi); 40 per-tool evaluation cases in `crm-chat-evaluation.test.ts` across three assistants (`MAX_TOOLS` = 8 grants per agent); catalogue asserted as 21 entries in `ai-agent-runs.test.ts`; module v1.2.0, `implementedPhases` 0–24, contract version unchanged. Updated §0.1, §16, §17 phase 24 and the final instruction. |
 | 1.5.0 | 2026-11-03 | Phase 19-CHAT.23 shipped: `crm_lead_score` (lead-score), `crm_customer_health` (customer-success), `crm_case_context` (service-desk), `crm_stale_records` and `crm_run_report` (ai-agents). Registry 15 → 20 keys. Four of the five are contributed by the module that owns the service (§9.1 rule 6). `crm_stale_records` is one ACL-aware SQL query with a single `NOT EXISTS` over `stream_items`. New suite `crm-chat-intelligence-tools.test.ts` (7 cases). Updated §0.1 and §17 phase 23. |
 | 1.4.0 | 2026-11-02 | Phase 19-CHAT.22 shipped: `crm_post_note` (Stream), `crm_log_activity`, `crm_draft_email` (never sends), `crm_create_task` v2 (parent + actor default), `crm_update_record_fields` v2 (wider allowlist, same class). Registry 12 → 15 keys. Corrected the plan's claim that grants reference a tool version. |
 | 1.3.0 | 2026-11-02 | Phase 19-CHAT.21 shipped: `crm_aggregate`, `crm_list_activities`, `crm_actor_context` (in `ai-agents`) and `crm_cross_module` (contributed by `crm-chat`); `ai-agent-periods.ts` resolver; `AIAgentActorDirectoryService` shared with the prompt; `EntityService.linkedSourceIds`. Registry 8 → 12 keys. Updated §0.1, §1.1, §17 phase 21. |
@@ -1567,15 +1613,21 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 
 ## Final Instruction to the Coding Agent
 
-Phases 19-CHAT.0 → 19-CHAT.23 are shipped. Do not re-implement them and do not extend them in place;
+Phases 19-CHAT.0 → 19-CHAT.24 are shipped. Do not re-implement them and do not extend them in place;
 a new capability is a new phase with its own acceptance evidence.
 
-Start at **Phase 19-CHAT.24 — Tool-Aware Suggestions, Evaluation, and Release**. Before writing a tool:
+**There is no open phase in this plan.** `plans/SPEC.md` §9 is fully implemented. The next piece of AI
+work is a decision, not a task: the items §8 and §9.8 left outside the catalogue (a live-provider
+evaluation through `ai_agent_eval_*`, screenshots and native-review of the Vietnamese docs, and whatever
+`docs/quality/known-gaps.md` still lists for Phase 22) each need their own phase before code.
+
+When a new tool phase is opened:
 
 1. Read `plans/SPEC.md` §7 for the shipped registry and §9 for the tool design rules — especially §9.1 rule 6, which decides whether your tool belongs in `ai-agents` or in the domain module that owns the service.
 2. Read `apps/api/src/ai-agents/ai-agent-tools.ts` end to end. The registry is deliberately small; adding to it is a design decision, not a configuration change.
 3. Read the owning service before wrapping it. If the service already applies ACL, use it — do not build a second predicate.
 4. Add the Zod schema **and** the hand-written JSON Schema. The model never sees Zod.
 5. Add the catalogue assertion and one evaluation case in the same commit. A tool without a test is a tool nobody will notice breaking.
+6. If the tool unlocks a question worth advertising, add a chip to `CRM_CHAT_SUGGESTIONS` with its `requiresTool`, and both locales. A chip with a tool that does not exist is a chip that never renders.
 
 Follow `AGENTS.MD` for every database operation. Never create a separate test database, shadow schema or container, and never reset the configured database. Never let a test send a real message.
