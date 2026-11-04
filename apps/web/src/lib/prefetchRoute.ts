@@ -15,6 +15,8 @@ const imports: Record<string, () => Promise<unknown>> = {
   'advanced-integrations': () => import('../pages/AdvancedIntegrationsPage.js'),
   esignature: () => import('../pages/ESignaturePage.js'),
   'lead-score': () => import('../pages/LeadScorePage.js'),
+  'customer-success': () => import('../pages/CustomerSuccessPage.js'),
+  'marketing-journeys': () => import('../pages/MarketingJourneysPage.js'),
   profile: () => import('../pages/MyProfilePage.js'),
 };
 
@@ -41,6 +43,8 @@ export function prefetchRoute(route: string): void {
   if (path === '/advanced-integrations') return run('advanced-integrations');
   if (path === '/esignature') return run('esignature');
   if (path === '/lead-score') return run('lead-score');
+  if (path === '/customer-success') return run('customer-success');
+  if (path === '/marketing/journeys' || path.startsWith('/marketing/journeys/')) return run('marketing-journeys');
   if (path === '/profile') return run('profile');
   if (path === '/portal' || path.startsWith('/portal/')) {
     // portal reuses entity pages

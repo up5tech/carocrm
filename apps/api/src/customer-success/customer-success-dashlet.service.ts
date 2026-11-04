@@ -1,4 +1,6 @@
+import { ValidationError } from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
+import { z } from "zod";
 
 import type { PortfolioQueue } from "./customer-success-domain.js";
 import { CustomerSuccessPortfolioService } from "./customer-success-portfolio.service.js";
@@ -40,12 +42,53 @@ export const CUSTOMER_SUCCESS_DASHLET_DEFINITIONS: readonly CustomerSuccessDashl
   { key: "successPlans", label: "Success plans", description: "Active success plans.", entity: "CustomerSuccessPlan", kind: "entityList" },
 ];
 
+export const CustomerSuccessDashletConfigSchema = z
+  .object({
+    key: z.string().trim().min(1).max(64),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+  })
+  .strict();
+
 @Injectable()
 export class CustomerSuccessDashletService {
   constructor(@Inject(CustomerSuccessPortfolioService) private readonly portfolio: CustomerSuccessPortfolioService) {}
 
   definitions(): readonly CustomerSuccessDashletDefinition[] {
     return CUSTOMER_SUCCESS_DASHLET_DEFINITIONS;
+  }
+
+  /**
+   * The options a Customer Success dashlet carries (19-CS.13).
+   *
+   * A dashlet names one catalogue entry by key; it is not a free-form entity/measure pair, so a dashlet
+   * can never become a second query surface the module has not bounded. The key itself is checked against
+   * the catalogue in `assertConfig`, which is what keeps this schema and the list above from drifting.
+   */
+  assertConfig(raw: unknown): { key: string; limit: number } {
+    const parsed = CustomerSuccessDashletConfigSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid Customer Success dashlet options.', { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    const definition = CUSTOMER_SUCCESS_DASHLET_DEFINITIONS.find((entry) => entry.key === parsed.data.key);
+    if (definition === undefined || definition.kind === 'entityList') {
+      throw new ValidationError(`Unknown Customer Success dashlet "${parsed.data.key}".`, {
+        dashlets: CUSTOMER_SUCCESS_DASHLET_DEFINITIONS.filter((entry) => entry.kind !== 'entityList').map((entry) => entry.key),
+      });
+    }
+    return { key: parsed.data.key, limit: parsed.data.limit };
+  }
+
+  /** Run one catalogue entry under the reader's own record scope. */
+  async run(key: string, limit: number): Promise<Record<string, unknown>> {
+    const definition = CUSTOMER_SUCCESS_DASHLET_DEFINITIONS.find((entry) => entry.key === key);
+    if (definition === undefined) throw new ValidationError(`Unknown Customer Success dashlet "${key}".`);
+    if (definition.kind === 'trend') {
+      return { dashletKey: definition.key, label: definition.label, view: 'summary', ...(await this.runSummary()) };
+    }
+    const queue = definition.queue;
+    if (queue === undefined) throw new ValidationError(`Customer Success dashlet "${key}" names no portfolio queue.`);
+    const result = await this.runPortfolio(queue, limit);
+    return { dashletKey: definition.key, label: definition.label, view: 'queue', ...result };
   }
 
   /** Run a portfolio-queue dashlet, ACL-scoped and bounded. */

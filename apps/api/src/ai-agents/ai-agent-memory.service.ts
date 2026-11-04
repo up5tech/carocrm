@@ -575,6 +575,18 @@ export class AIAgentMemoryService {
       .returning('id')
       .execute();
     out.runEvents = events.length;
+
+    // AI.14 — `retention.evaluationsDays` was read by nothing, so `ai_agent_eval_runs` grew without a
+    // ceiling while the settings screen offered the number as if it did something. A passing run is
+    // what the publication gate matches on by checksum, so the window must stay long enough that a
+    // draft published after a quiet stretch is not refused for evidence that was swept away.
+    const evaluationCutoff = new Date(now.getTime() - settings.retention.evaluationsDays * 86_400_000);
+    const evaluations = await this.database.db
+      .deleteFrom('ai_agent_eval_runs')
+      .where('created_at', '<', evaluationCutoff)
+      .returning('id')
+      .execute();
+    out.evaluationRuns = evaluations.length;
     return out;
   }
 
@@ -602,6 +614,13 @@ export class AIAgentMemoryService {
       runEvents: await count(
         sql<{ count: string }>`select count(*)::text as count from ai_agent_run_events
           where created_at < ${eventCutoff}`.execute(this.database.db).then((r) => r.rows),
+      ),
+      // The dry run must count exactly what the sweep would delete, or the operator's rehearsal lies.
+      evaluationRuns: await count(
+        sql<{ count: string }>`select count(*)::text as count from ai_agent_eval_runs
+          where created_at < ${new Date(now.getTime() - settings.retention.evaluationsDays * 86_400_000)}`
+          .execute(this.database.db)
+          .then((r) => r.rows),
       ),
     };
   }

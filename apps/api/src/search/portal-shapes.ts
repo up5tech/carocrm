@@ -62,7 +62,9 @@ export const DashletInputSchema = z.object({
   // ESignature module under the reader's own record scope.
   // `leadScore` is the Phase 19-LS.18 operational dashlet: one of the Lead Score report's curated views,
   // computed by that module under the reader's own record scope.
-  kind: z.enum(['list', 'chart', 'kpi', 'projectTasks', 'esignature', 'leadScore']),
+  // `customerSuccess` is the Phase 19-CS.13 portfolio dashlet: one entry of the Customer Success dashlet
+  // catalogue — a portfolio queue or a portfolio aggregate — computed under the reader's own record scope.
+  kind: z.enum(['list', 'chart', 'kpi', 'projectTasks', 'esignature', 'leadScore', 'customerSuccess']),
   position: z.number().int().min(0).max(10_000).default(0),
   config: z.record(z.string(), z.unknown()).prefault({}),
 });

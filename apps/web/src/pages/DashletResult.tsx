@@ -64,6 +64,9 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
   if (dashlet.kind === 'leadScore') {
     return <LeadScoreDashletBody data={(result['data'] ?? {}) as Record<string, unknown>} />;
   }
+  if (dashlet.kind === 'customerSuccess') {
+    return <CustomerSuccessDashletBody view={String(result['view'] ?? '')} data={result} />;
+  }
   // A grouped dashlet aggregates over a bounded scan; say so instead of showing a silent cap.
   const hint =
     result['truncated'] === true ? (
@@ -282,5 +285,81 @@ function LeadScoreDashletBody({ data }: { data: Record<string, unknown> }) {
         />
       )}
     </Space>
+  );
+}
+
+/**
+ * CS.13 — one Customer Success portfolio view. The payload is either one queue (rows the reader could
+ * open in the portfolio) or the portfolio aggregate; both are computed under the reader's own record
+ * scope, so a shared dashboard shows a shared number, never someone else's book of business.
+ */
+function CustomerSuccessDashletBody({ view, data }: { readonly view: string; readonly data: Record<string, unknown> }) {
+  const line = (label: string, value: unknown) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <Typography.Text type="secondary">{label}</Typography.Text>
+      <Typography.Text strong>{value === null || value === undefined ? '—' : String(value)}</Typography.Text>
+    </div>
+  );
+  const counts = (value: unknown): [string, number][] => Object.entries((value ?? {}) as Record<string, number>);
+
+  if (view === 'summary') {
+    const onboarding = (data['onboarding'] ?? {}) as Record<string, number>;
+    return (
+      <div>
+        {line(t('web.dashboards.csTotal'), data['total'])}
+        {counts(data['byHealth']).map(([key, value]) => line(key, value))}
+        {line(t('web.dashboards.csUnassigned'), data['unassigned'])}
+        {line(t('web.dashboards.csOnboardingInProgress'), onboarding['inProgress'])}
+        {line(t('web.dashboards.csOnboardingOverdue'), onboarding['overdue'])}
+        {line(t('web.dashboards.csOpenRisks'), data['openRiskTotal'])}
+        {counts(data['renewalsByWindow']).map(([key, value]) => line(t('web.dashboards.csRenewalWindow', { days: key }), value))}
+      </div>
+    );
+  }
+
+  const rows = ((data['list'] ?? []) as Record<string, unknown>[]) ?? [];
+  if (rows.length === 0) return <Typography.Text type="secondary">{t('web.dashboards.csQueueEmpty')}</Typography.Text>;
+  return (
+    <div>
+      <Table
+        size="small"
+        rowKey={(row) => String(row['id'])}
+        pagination={false}
+        dataSource={rows}
+        columns={[
+          {
+            title: t('web.dashboards.csProfile'),
+            dataIndex: 'name',
+            render: (_: unknown, row) => (
+              <Link to={`/CustomerSuccessProfile/${String(row['id'])}`}>{String(row['name'] ?? row['id'])}</Link>
+            ),
+          },
+          {
+            title: t('web.dashboards.csHealth'),
+            dataIndex: 'effectiveHealthStatus',
+            width: 110,
+            render: (value: string | null) => <Tag>{value ?? '—'}</Tag>,
+          },
+          {
+            title: t('web.dashboards.csScore'),
+            dataIndex: 'healthScore',
+            width: 70,
+            render: (value: number | null) => (value === null || value === undefined ? '—' : String(value)),
+          },
+          {
+            title: t('web.dashboards.csRenewal'),
+            dataIndex: 'daysToRenewal',
+            width: 90,
+            render: (value: number | null) =>
+              value === null || value === undefined ? '—' : t('web.dashboards.csDays', { days: String(value) }),
+          },
+        ]}
+      />
+      {data['truncated'] === true ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('web.dashboards.csTruncated', { count: String(data['count'] ?? '0') })}
+        </Typography.Text>
+      ) : null}
+    </div>
   );
 }

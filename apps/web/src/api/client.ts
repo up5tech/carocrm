@@ -932,7 +932,9 @@ export const api = {
     request<unknown>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations/run`, post({ suiteId })),
   aiAgentsEvalRuns: (agentId: string, maxSize?: number) =>
     request<{ list: unknown[] }>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations${maxSize === undefined ? '' : `?maxSize=${maxSize}`}`),
-  aiAgentsDecideEval: (agentId: string, runId: string, caseKey: string, decision: 'passed' | 'failed', note?: string) =>
+  // The DTO enum is `approve | reject` (`DecisionEvaluationSchema`); a `passed | failed` payload here
+  // was refused with 422 before it ever reached a decision.
+  aiAgentsDecideEval: (agentId: string, runId: string, caseKey: string, decision: 'approve' | 'reject', note?: string) =>
     request<unknown>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations/${encodeURIComponent(runId)}/decide`, post({ caseKey, decision, note })),
   aiAgentsCompareEval: (agentId: string) =>
     request<unknown>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations/compare`),
@@ -975,6 +977,19 @@ export const api = {
   customerSuccessSettings: () => request<ModuleSettingsView>('/CustomerSuccess/action/settings'),
   saveCustomerSuccessSettings: (input: Record<string, unknown>) =>
     request<ModuleSettingsView>('/CustomerSuccess/action/settings', post(input)),
+  // Phase 19-CS.12 — the CSM portfolio surface. Every one of these answers under the reader's own record
+  // scope; the page renders what the server says and never decides what is visible by itself.
+  customerSuccessPortfolioSummary: () => request<Record<string, unknown>>('/CustomerSuccess/action/portfolioSummary'),
+  customerSuccessPortfolioQueue: (queue: string, limit = 50) =>
+    request<Record<string, unknown>>(`/CustomerSuccess/action/portfolioQueues?queue=${encodeURIComponent(queue)}&limit=${limit}`),
+  customerSuccessProfileSummary: (profileId: string) =>
+    request<Record<string, unknown>>(`/CustomerSuccess/action/profileSummary?profileId=${encodeURIComponent(profileId)}`),
+  customerSuccessHealthExplanation: (profileId: string) =>
+    request<Record<string, unknown>>(`/CustomerSuccess/action/healthExplanation?profileId=${encodeURIComponent(profileId)}`),
+  customerSuccessHealthHistory: (profileId: string) =>
+    request<Record<string, unknown>>(`/CustomerSuccess/action/healthHistory?profileId=${encodeURIComponent(profileId)}`),
+  customerSuccessRecalculateHealth: (profileId: string) =>
+    request<Record<string, unknown>>('/CustomerSuccess/action/recalculateHealth', post({ profileId })),
 
   // Phase 7A (PLAN §41.5): merged translation catalog, cacheable by content hash.
   i18nCatalog: (locale: string | undefined, clientCache?: string) => {
@@ -1650,6 +1665,39 @@ export const api = {
     request<MarketingUnsubscribeResult>(
       `/MarketingAutomation/public/unsubscribe/${encodeURIComponent(token)}`,
       post(input),
+    ),
+
+  // Phase 19-MA.12 — the journey editor and its enrollments. The graph always travels to the server as
+  // data and the server answers whether it is legal; the editor never decides publishability itself.
+  marketingJourneyValidate: (journeyId: string, graph: Record<string, unknown>) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/journey/${encodeURIComponent(journeyId)}/validate`,
+      post({ graph }),
+    ),
+  marketingJourneyPublish: (journeyId: string, graph: Record<string, unknown>, releaseNotes?: string) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/journey/${encodeURIComponent(journeyId)}/publish`,
+      post(releaseNotes === undefined || releaseNotes === '' ? { graph } : { graph, releaseNotes }),
+    ),
+  marketingJourneyEnroll: (journeyId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/journey/${encodeURIComponent(journeyId)}/enroll`,
+      post(input),
+    ),
+  marketingEnrollmentSuspend: (enrollmentId: string, reason?: string) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/enrollment/${encodeURIComponent(enrollmentId)}/suspend`,
+      post(reason === undefined || reason === '' ? {} : { reason }),
+    ),
+  marketingEnrollmentResume: (enrollmentId: string) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/enrollment/${encodeURIComponent(enrollmentId)}/resume`,
+      post({}),
+    ),
+  marketingEnrollmentExit: (enrollmentId: string, reason?: string) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/enrollment/${encodeURIComponent(enrollmentId)}/exit`,
+      post(reason === undefined || reason === '' ? {} : { reason }),
     ),
 
   // Phase 19-SD.11 — portal-safe Knowledge Base and CSAT entry points.

@@ -1,0 +1,17 @@
+# Phase 22.25 / G81 — the schedule for backup.service.
+#
+# SHIPPED, NOT INSTALLED. The interval below is a starting point, not an approved RPO: the RPO is the age of
+# the newest accepted backup, and until the owner approves a value (G80) no document may describe this timer
+# as meeting one. RandomizedDelaySec keeps a fleet of installations from hitting the same host at once.
+
+[Unit]
+Description=Hourly CaroCRM backup
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+Unit=backup.service
+
+[Install]
+WantedBy=timers.target

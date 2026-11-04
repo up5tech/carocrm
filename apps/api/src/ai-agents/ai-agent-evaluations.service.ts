@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
+import type { AIAgentEvalSuitesTable,AIAgentsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { type AgentConfig, agentConfigChecksum, parseAgentConfig } from './ai-agent-config.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
@@ -45,6 +47,8 @@ export interface EvalCaseResult {
   /** `passed`/`failed` for decided cases, `pending` for an undecided human review. */
   readonly outcome: 'passed' | 'failed' | 'pending';
   readonly detail: string;
+  /** Who turned a pending review into a result. A decision with no author is not an audit trail. */
+  readonly decidedByUserId?: string | undefined;
 }
 
 export interface EvalRunView {
@@ -148,7 +152,55 @@ export class AIAgentEvaluationService {
     @Inject(AIAgentsSettingsService) private readonly settings: AIAgentsSettingsService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
+
+  /**
+   * The caller's reach over agent records, mirroring `AIAgentDefinitionService.viewer()`.
+   *
+   * An evaluation run reads an agent's **draft configuration** — which tool grants, which budgets,
+   * which provider — so it is a read of that agent, and it has to obey the same visibility the agent
+   * list obeys. Reading the definitions service's rule here rather than injecting it keeps the
+   * dependency one way: `AIAgentDefinitionService` already depends on this service.
+   */
+  private async viewer(): Promise<{ readonly userId: string; readonly teamIds: readonly string[]; readonly seesEverything: boolean }> {
+    return {
+      userId: this.scope.userId ?? '',
+      teamIds: this.scope.teamIds(),
+      seesEverything: this.scope.isAdmin || (await this.permissions.can('publish')),
+    };
+  }
+
+  /**
+   * A hidden agent answers exactly like a missing one, for the same reason the definitions service
+   * answers that way: an evaluation result that names another team's agent would leak its shape.
+   */
+  private async visibleAgent(agentId: string): Promise<AIAgentsTable> {
+    const row = await this.database.db
+      .selectFrom('ai_agents')
+      .selectAll()
+      .where('id', '=', agentId)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    if (row === undefined) throw new NotFoundError(`Agent "${agentId}" does not exist.`);
+    const viewer = await this.viewer();
+    const visible =
+      viewer.seesEverything ||
+      row.visibility === 'organization' ||
+      (row.owner_user_id !== null && row.owner_user_id === viewer.userId) ||
+      (row.team_id !== null && viewer.teamIds.includes(row.team_id));
+    if (!visible) throw new NotFoundError(`Agent "${agentId}" does not exist.`);
+    return row;
+  }
+
+  /** A suite is addressed by its id or by its key, because the API route names the key. */
+  private async resolveSuite(idOrKey: string): Promise<AIAgentEvalSuitesTable | undefined> {
+    return this.database.db
+      .selectFrom('ai_agent_eval_suites')
+      .selectAll()
+      .where((eb) => eb.or([eb('id', '=', idOrKey), eb('suite_key', '=', idOrKey)]))
+      .executeTakeFirst();
+  }
 
   // -------------------------------------------------------------------------
   // suites and cases
@@ -230,18 +282,17 @@ export class AIAgentEvaluationService {
     input: { readonly caseKey: string; readonly title: string; readonly grader: string; readonly graderConfig?: Record<string, unknown> },
   ): Promise<EvalSuiteView['cases'][number]> {
     await this.permissions.assert('evaluation');
-    const suite = await this.database.db
-      .selectFrom('ai_agent_eval_suites')
-      .select(['id'])
-      .where('id', '=', suiteId)
-      .executeTakeFirst();
+    // The route addresses a suite by its key (`action/evaluations/:suiteKey`), and the built-in suite
+    // is only ever named by its key, so both forms resolve here. Matching on `id` alone made the
+    // documented route unusable for the suite it exists to extend.
+    const suite = await this.resolveSuite(suiteId);
     if (suite === undefined) throw new NotFoundError(`Evaluation suite "${suiteId}" does not exist.`);
     if (!KNOWN_GRADERS.has(input.grader)) {
       throw new ValidationError(`Unknown grader "${input.grader}".`, { graders: [...KNOWN_GRADERS] });
     }
     const row = {
       id: randomUUID(),
-      suite_id: suiteId,
+      suite_id: suite.id,
       case_key: input.caseKey,
       title: input.title,
       grader: input.grader,
@@ -263,10 +314,27 @@ export class AIAgentEvaluationService {
     };
   }
 
-  async deleteSuite(id: string): Promise<void> {
+  /**
+   * Retire a suite. `ai_agent_eval_runs.suite_id` cascades, so deleting a suite deletes the evidence
+   * of every gate it ever enforced — which is why a suite with runs is disabled instead, by an
+   * operator who owns the `evaluation` capability and can see what they are switching off.
+   */
+  async deleteSuite(idOrKey: string): Promise<void> {
     await this.permissions.assert('evaluation');
-    const result = await this.database.db.deleteFrom('ai_agent_eval_suites').where('id', '=', id).executeTakeFirst();
-    if (Number(result.numDeletedRows ?? 0) === 0) throw new NotFoundError(`Evaluation suite "${id}" does not exist.`);
+    const suite = await this.resolveSuite(idOrKey);
+    if (suite === undefined) throw new NotFoundError(`Evaluation suite "${idOrKey}" does not exist.`);
+    const runs = await this.database.db
+      .selectFrom('ai_agent_eval_runs')
+      .select(['id'])
+      .where('suite_id', '=', suite.id)
+      .executeTakeFirst();
+    if (runs !== undefined) {
+      throw new ValidationError(
+        `The suite "${suite.suite_key}" has evaluation runs; deleting it would delete that evidence. Disable it instead.`,
+        { suiteKey: suite.suite_key },
+      );
+    }
+    await this.database.db.deleteFrom('ai_agent_eval_suites').where('id', '=', suite.id).execute();
   }
 
   // -------------------------------------------------------------------------
@@ -281,13 +349,8 @@ export class AIAgentEvaluationService {
    */
   async runSuite(agentId: string, suiteId?: string): Promise<EvalRunView> {
     await this.permissions.assert('use');
-    const agent = await this.database.db
-      .selectFrom('ai_agents')
-      .selectAll()
-      .where('id', '=', agentId)
-      .where('is_deleted', '=', false)
-      .executeTakeFirst();
-    if (agent === undefined) throw new NotFoundError(`Agent "${agentId}" does not exist.`);
+    // Grading reads the agent's draft config, so the caller must be able to see the agent.
+    const agent = await this.visibleAgent(agentId);
     const suite =
       suiteId === undefined
         ? await this.firstEnabledSuite()
@@ -311,7 +374,9 @@ export class AIAgentEvaluationService {
       results.push(await this.runCase(entry, agent, parsed.ok ? parsed.config : null, parsed.ok ? [] : parsed.issues, settings));
     }
 
-    // Status is decided by deterministic outcomes alone; review cases only refine it.
+    // Status is decided by deterministic outcomes alone; review cases only refine it. A review can only
+    // be *rejected* through `decide()` — a fresh run always starts it as pending — so the rejection rule
+    // lives there and not here.
     const deterministicFailed = results.some((result) => result.kind === 'deterministic' && !result.passed);
     const reviewPending = results.some((result) => result.outcome === 'pending');
     const status = deterministicFailed ? 'failed' : reviewPending ? 'pending_review' : 'passed';
@@ -328,7 +393,8 @@ export class AIAgentEvaluationService {
         agent_version: agent.current_version,
         status,
         results: JSON.stringify(results),
-        created_by_user_id: null,
+        // Who asked for the run is part of the evidence; an unattributed gate is not an audit trail.
+        created_by_user_id: this.scope.userId ?? null,
         created_at: new Date(),
       })
       .execute();
@@ -347,6 +413,8 @@ export class AIAgentEvaluationService {
 
   async listRuns(agentId: string, maxSize = 25): Promise<{ list: EvalRunView[] }> {
     await this.permissions.assert('use');
+    // A run's results carry the agent's budgets, grants and provider — the agent's visibility decides.
+    await this.visibleAgent(agentId);
     const runs = await this.database.db
       .selectFrom('ai_agent_eval_runs')
       .selectAll()
@@ -368,6 +436,8 @@ export class AIAgentEvaluationService {
       .where('id', '=', runId)
       .executeTakeFirst();
     if (run === undefined) throw new NotFoundError(`Evaluation run "${runId}" does not exist.`);
+    // The decision is written onto the run of an agent; seeing that agent is the precondition.
+    await this.visibleAgent(run.agent_id);
     const results = asRecordArray(run.results) as unknown as EvalCaseResult[];
     const target = results.find((result) => result.caseKey === caseKey);
     if (target === undefined) throw new NotFoundError(`Case "${caseKey}" is not part of this evaluation run.`);
@@ -379,11 +449,16 @@ export class AIAgentEvaluationService {
       passed: decision === 'approve',
       outcome: decision === 'approve' ? 'passed' : 'failed',
       detail: `Human review: ${decision}${note === undefined || note === '' ? '' : ` — ${note}`}`,
+      decidedByUserId: this.scope.userId ?? undefined,
     };
     const updated = results.map((result) => (result.caseKey === caseKey ? decided : result));
     const deterministicFailed = updated.some((result) => result.kind === 'deterministic' && !result.passed);
+    // A human saying "no" is a refusal, not a refinement. §17.4 says a review can never *override* a
+    // failed deterministic case; it never said a rejection could be ignored, and until 2026-11-03 a run
+    // whose only review was rejected still reported `passed` — which the publication gate then honoured.
+    const reviewRejected = updated.some((result) => result.kind === 'review' && result.outcome === 'failed');
     const reviewPending = updated.some((result) => result.outcome === 'pending');
-    const status = deterministicFailed ? 'failed' : reviewPending ? 'pending_review' : 'passed';
+    const status = deterministicFailed || reviewRejected ? 'failed' : reviewPending ? 'pending_review' : 'passed';
     await this.database.db
       .updateTable('ai_agent_eval_runs')
       .set({ results: JSON.stringify(updated), status })
@@ -394,7 +469,10 @@ export class AIAgentEvaluationService {
       .select(['suite_key'])
       .where('id', '=', run.suite_id)
       .executeTakeFirst();
-    return this.toRunView({ ...run, results: JSON.stringify(updated), status }, suite?.suite_key ?? '');
+    // The view reads `results` as an array, so hand it the array: passing the JSON string here made
+    // every decision answer with an empty result list, hiding the outcome from the caller that just
+    // recorded it.
+    return this.toRunView({ ...run, results: updated, status }, suite?.suite_key ?? '');
   }
 
   // -------------------------------------------------------------------------
@@ -445,13 +523,7 @@ export class AIAgentEvaluationService {
     regressions: readonly { caseKey: string; title: string; published: string; draft: string }[];
   }> {
     await this.permissions.assert('use');
-    const agent = await this.database.db
-      .selectFrom('ai_agents')
-      .select(['id', 'current_version'])
-      .where('id', '=', agentId)
-      .where('is_deleted', '=', false)
-      .executeTakeFirst();
-    if (agent === undefined) throw new NotFoundError(`Agent "${agentId}" does not exist.`);
+    const agent = await this.visibleAgent(agentId);
     const suites = await this.database.db.selectFrom('ai_agent_eval_suites').select(['id', 'suite_key']).execute();
     const keys = new Map(suites.map((suite) => [suite.id, suite.suite_key]));
     const latest = await this.database.db

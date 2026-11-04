@@ -1,0 +1,16 @@
+# Phase 22.23 / G80 — the restore drill, on a schedule, against an approved isolated recovery environment.
+#
+# SHIPPED, NOT INSTALLED, and deliberately incomplete: the two blanks below are the things the owner has not
+# approved yet (G80). Fill them in, then this line is the whole drill — verification first, restore only
+# because `--allow-restore` says so, evidence written under RESTORE_EVIDENCE_DIR.
+#
+# The drill refuses to run if RESTORE_DATABASE_URL is unset, equals DATABASE_URL, or names an application
+# database, and it never creates a database (AGENTS.md §3.6). Provision the recovery target out of band.
+#
+# crontab -e (as the deployment owner):
+#   15 3 * * 1  cd /srv/carocrm && RESTORE_DATABASE_URL='postgresql://user:pass@recovery-host:5432/carocrm_recovery' \
+#                  BACKUP_PG_CONTAINER=postgres16 \
+#                  node scripts/restore-drill.mjs --target-env=RESTORE_DATABASE_URL --allow-restore \
+#                    --label='weekly-drill' >> /var/log/carocrm-restore-drill.log 2>&1
+#
+# Then read the evidence. A drill nobody reads is a drill that did not happen.

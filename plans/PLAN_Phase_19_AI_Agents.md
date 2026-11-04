@@ -1,17 +1,23 @@
 # plans/PLAN_Phase_19_AI_Agents.md — AI Agents Module
 
 > **Status:** Partially shipped — 19-AI.0 → 19-AI.13, 19-AI.19 and 19-AI.20 are delivered and green;
-> **19-AI.14, 19-AI.15, 19-AI.16, 19-AI.17 and 19-AI.18 are not complete.** This header was corrected
+> **19-AI.14 is built and tested but switched off by default; 19-AI.15, 19-AI.16, 19-AI.17 and 19-AI.18 are not complete.** This header was corrected
 > on 2026-11-03 during a Phase 19 audit; it previously read "Implementation plan" with no delivery
 > state at all. Per-phase reality, each verified against this checkout:
 >
-> - **19-AI.14 — Evaluation Framework and Publication Gates: built, dormant, untested.** The service,
->   the three `ai_agent_eval_*` tables and the `action/evaluations` routes exist
->   (`apps/api/src/ai-agents/ai-agent-evaluations.service.ts`), but `features.evaluations` defaults to
->   `false` (`ai-agents-settings.service.ts:38`), the publication gate therefore never fires
->   (`ai-agent-definitions.service.ts:572`), the `model_review` grader is documented as never running,
->   and **no test file references the feature** — so the "every implemented row was tested" guarantee in
->   `docs/compatibility/ai-agents.md` §5 does not hold for this phase.
+> - **19-AI.14 — Evaluation Framework and Publication Gates: built and tested; still off by default.**
+>   The service, the three `ai_agent_eval_*` tables and the `action/evaluations` routes exist
+>   (`apps/api/src/ai-agents/ai-agent-evaluations.service.ts`). `features.evaluations` defaults to `false`
+>   (`ai-agents-settings.service.ts:38`), so the publication gate
+>   (`ai-agent-definitions.service.ts:572`) does not fire until an operator turns it on. Since 2026-11-03
+>   `apps/api/test/ai-agent-evaluations.test.ts` (19 cases) covers it: every deterministic grader passes and
+>   fails as expected, the gate blocks a publish without a required suite pass and releases it after one, a
+>   draft edit invalidates the pass, hidden agents answer 404, results carry the reader's attribution, a
+>   rejected human review reports `failed`, and evaluation runs follow `retention.evaluationsDays`. Six
+>   defects found by those tests are fixed in the same change. The built-in required suite has a
+>   `human-review` case, so a run stops at `pending_review` until a person decides it — the Evaluations
+>   admin tab now carries that Approve/Reject control (`AIAgentsEvaluationsTab.tsx`), which is the gate's
+>   only exit. `model_review` remains advisory (§17.3).
 > - **19-AI.15 — Sales integration: not built.** No Sales-owned tool contribution exists; a Sales record
 >   is reachable only through the generic `crm_search_records` / `crm_read_record` path.
 > - **19-AI.16 — CustomerSuccess / ServiceDesk / Projects: two of three.** `crm_customer_health` and

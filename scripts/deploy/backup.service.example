@@ -1,0 +1,41 @@
+# Phase 22.25 / G81 — an encrypted, off-host backup run on a schedule.
+#
+# SHIPPED, NOT INSTALLED. Nothing in this repository enables a timer; a deployment owner installs this,
+# points BACKUP_ROOT at a path that is copied off-host, and chooses the recipient. Until that is evidenced,
+# G81 stays open and no document should claim the installation is backed up automatically.
+#
+# Install (as the deployment owner, on the host that runs the app):
+#   install -m 644 scripts/deploy/backup.service  /etc/systemd/system/
+#   install -m 644 scripts/deploy/backup.timer    /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now backup.timer
+#
+# Secrets: the unit reads them from an EnvironmentFile that is mode 600 and owned by root. They are never
+# committed and never printed by the script.
+
+[Unit]
+Description=CaroCRM encrypted database and file-storage backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=carocrm
+Group=carocrm
+WorkingDirectory=/srv/carocrm
+# BACKUP_ROOT must live on a volume that a copy step takes off-host; a backup on the same disk as the
+# database is not a backup.
+EnvironmentFile=/etc/carocrm/backup.env
+# Required contents of that file: DATABASE_URL, STORAGE_ROOT, BACKUP_ROOT, BACKUP_GPG_RECIPIENT.
+# Optional: BACKUP_PG_CONTAINER (run pg_dump inside the database container), BACKUP_KEEP_DAYS.
+ExecStart=/usr/bin/env node scripts/backup.mjs
+# The freshness check is the alert: it exits non-zero when the newest artifact is outside the window, so a
+# failed or stalled run shows up in `systemctl status backup` instead of only at restore time.
+ExecStartPost=/usr/bin/env node scripts/restore-drill.mjs --check-freshness
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

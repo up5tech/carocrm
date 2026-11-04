@@ -292,8 +292,10 @@ such), and a regression comparison with the prior published version.
 
 Publication gates are deterministic and mandatory: schema validity, tool-grant correctness, ACL
 denial behaviour, prompt-injection resistance, budget limits and idempotency invariants. A
-model-generated grade can never override a failed deterministic safety case. Evaluation tables are
-not created until AI.14 so no empty artefact is exposed.
+model-generated grade can never override a failed deterministic safety case. The three `ai_agent_eval_*`
+tables were added with the phase itself (migration `050_phase19_ai_agents_evaluations.sql`), not before it,
+so no empty artefact was exposed. `features.evaluations` still defaults to `false`: the gate is real and
+tested, and turning it on is the operator's decision.
 
 ---
 

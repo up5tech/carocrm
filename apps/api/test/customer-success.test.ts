@@ -431,6 +431,55 @@ describe('portfolio queues and dashlets (§5.2, §5.12)', () => {
     expect(dashlets.status).toBe(200);
     expect((dashlets.body['list'] as unknown[]).length).toBeGreaterThan(0);
   });
+
+  /**
+   * 19-CS.13: the catalogue was served but nothing consumed it, so a CSM could not put a portfolio view
+   * on a dashboard. It now runs through the shared `Dashboard` dashlet API like the Project, ESignature
+   * and Lead Score kinds, and the module still owns what a valid entry is.
+   */
+  it('runs a catalogue entry through the shared dashboard API and refuses an invented one (§5.12)', async () => {
+    const dashboardId = await create('Dashboard', { name: marker('cs dashlet board') });
+    const run = async (config: Record<string, unknown>, name: string) => {
+      const createdDashlet = await call('POST', `/api/v1/Dashboard/${dashboardId}/dashlets`, {
+        name,
+        kind: 'customerSuccess',
+        config,
+      });
+      return {
+        created: createdDashlet,
+        ran: createdDashlet.status === 201
+          ? await call('POST', `/api/v1/Dashboard/${dashboardId}/dashlets/${String(createdDashlet.body['id'])}/action/run`)
+          : createdDashlet,
+      };
+    };
+
+    const queue = await run({ key: 'criticalHealth', limit: 5 }, marker('cs critical health'));
+    expect(queue.created.status, JSON.stringify(queue.created.body)).toBe(201);
+    expect(queue.ran.status, JSON.stringify(queue.ran.body)).toBe(200);
+    expect(queue.ran.body['kind']).toBe('customerSuccess');
+    expect(queue.ran.body['view']).toBe('queue');
+    expect(queue.ran.body['dashletKey']).toBe('criticalHealth');
+    expect(Array.isArray(queue.ran.body['list'])).toBe(true);
+    expect(queue.ran.body['count']).toBeTypeOf('number');
+
+    const aggregate = await run({ key: 'portfolioHealthDistribution' }, marker('cs portfolio health'));
+    expect(aggregate.created.status, JSON.stringify(aggregate.created.body)).toBe(201);
+    expect(aggregate.ran.body['view']).toBe('summary');
+    expect(aggregate.ran.body['byHealth']).toBeTypeOf('object');
+
+    // The key is the module's vocabulary, not a free-form query: an invented one is refused at creation.
+    const invented = await run({ key: 'everybody' }, marker('cs invented key'));
+    expect(invented.created.status).toBe(422);
+
+    // A plain entity list is what the generic `list` kind already does; the catalogue says so, and the
+    // dashlet API refuses it here rather than running a second, unbounded query surface.
+    const entityList = await run({ key: 'openRisks' }, marker('cs entity list key'));
+    expect(entityList.created.status).toBe(422);
+
+    // The options are strict: a config that also names an entity is not a Customer Success dashlet.
+    const extraKeys = await run({ key: 'criticalHealth', entity: 'Account' }, marker('cs extra keys'));
+    expect(extraKeys.created.status).toBe(422);
+  });
 });
 
 describe('security and integrity (§9, §13)', () => {

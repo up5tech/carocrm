@@ -40,6 +40,8 @@
     "ci:migrations": "node scripts/check-migrations.mjs",
     "backup": "node scripts/backup.mjs",
     "verify:backup": "node scripts/verify-backup.mjs",
+    "restore:drill": "node scripts/restore-drill.mjs",
+    "backup:freshness": "node scripts/restore-drill.mjs --check-freshness",
     "ci:gate": "pnpm lint && pnpm lint:arch && pnpm typecheck && pnpm build && pnpm ci:migrations && pnpm test:ci && pnpm test:worker && pnpm test:web && pnpm ci:secrets",
     "verify": "concurrently -n lint,typecheck,test,test:web -c cyan,magenta,yellow,green \"pnpm lint\" \"pnpm typecheck\" \"pnpm test\" \"pnpm test:web\""
   },

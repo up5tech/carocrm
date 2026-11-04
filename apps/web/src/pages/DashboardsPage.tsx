@@ -16,6 +16,7 @@ import {
   StarOutlined,
   TableOutlined,
   ThunderboltOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons';
 import { App as AntApp, Button, Checkbox, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tooltip } from 'antd';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -40,7 +41,26 @@ const DASHLET_ICONS: Record<string, React.ReactNode> = {
   projectTasks: <ProjectOutlined />,
   esignature: <FileDoneOutlined />,
   leadScore: <ThunderboltOutlined />,
+  customerSuccess: <TrophyOutlined />,
 };
+
+/**
+ * The Customer Success dashlet keys offered by the dashlet form (19-CS.13). They are the portfolio-queue
+ * and aggregate entries of `CUSTOMER_SUCCESS_DASHLET_DEFINITIONS`; the two plain entity lists are left
+ * out because the generic `list` kind already covers them, and the server refuses them for this kind.
+ */
+const CUSTOMER_SUCCESS_DASHLETS = [
+  'criticalHealth',
+  'atRiskNoAction',
+  'unassignedProfiles',
+  'missingPlan',
+  'missingReview',
+  'onboardingNow',
+  'onboardingOverdue',
+  'upcomingRenewals',
+  'portfolioHealthDistribution',
+  'fallingHealth',
+] as const;
 
 const DASH_GAP = 16;
 const DASH_MIN_COLUMN = 420;
@@ -177,6 +197,8 @@ function dashletKindLabel(kind: string): string {
       return t('web.dashboards.kindESignature');
     case 'leadScore':
       return t('web.dashboards.kindLeadScore');
+    case 'customerSuccess':
+      return t('web.dashboards.kindCustomerSuccess');
     default:
       return kind;
   }
@@ -568,6 +590,8 @@ export function DashboardsPage() {
             ? { view: String(values.esignatureView ?? 'status'), days: Number(values.reportDays ?? 30) }
             : kind === 'leadScore'
               ? { view: String(values.leadScoreView ?? 'scores') }
+            : kind === 'customerSuccess'
+              ? { key: String(values.customerSuccessKey ?? 'criticalHealth'), limit: Number(values.customerSuccessRows ?? 10) }
             : {
                 entity: String(values.entity),
                 maxSize: 25,
@@ -843,19 +867,20 @@ export function DashboardsPage() {
                 { value: 'projectTasks', label: t('web.dashboards.kindProjectTasks') },
                 { value: 'esignature', label: t('web.dashboards.kindESignature') },
                 { value: 'leadScore', label: t('web.dashboards.kindLeadScore') },
+                { value: 'customerSuccess', label: t('web.dashboards.kindCustomerSuccess') },
               ]}
             />
           </Form.Item>
           <Form.Item
             name="entity"
             label={t('web.reports.entityLabel')}
-            rules={[{ required: dashletKind !== 'projectTasks' && dashletKind !== 'esignature' && dashletKind !== 'leadScore' }]}
+            rules={[{ required: !['projectTasks', 'esignature', 'leadScore', 'customerSuccess'].includes(String(dashletKind)) }]}
           >
             <Select
               options={entities}
               showSearch
               optionFilterProp="label"
-              disabled={dashletKind === 'projectTasks' || dashletKind === 'esignature' || dashletKind === 'leadScore'}
+              disabled={['projectTasks', 'esignature', 'leadScore', 'customerSuccess'].includes(String(dashletKind))}
             />
           </Form.Item>
           {dashletKind === 'projectTasks' ? (
@@ -917,7 +942,22 @@ export function DashboardsPage() {
               </Form.Item>
             </>
           ) : null}
-          {dashletKind === 'esignature' ? null : (
+          {dashletKind === 'customerSuccess' ? (
+            <>
+              <Form.Item name="customerSuccessKey" label={t('web.dashboards.customerSuccessDashlet')} initialValue="criticalHealth">
+                <Select
+                  options={CUSTOMER_SUCCESS_DASHLETS.map((value) => ({
+                    value,
+                    label: t(`web.dashboards.customerSuccessDashlets.${value}`),
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item name="customerSuccessRows" label={t('web.dashboards.rows')} initialValue={10}>
+                <InputNumber min={1} max={50} />
+              </Form.Item>
+            </>
+          ) : null}
+          {dashletKind === 'esignature' || dashletKind === 'customerSuccess' ? null : (
             <>
               <Form.Item name="groupBy" label={t('web.dashboards.groupByLabel')}>
                 <Input placeholder={t('web.dashboards.groupByPlaceholder')} />

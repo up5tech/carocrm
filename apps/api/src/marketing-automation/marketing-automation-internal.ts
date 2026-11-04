@@ -7,6 +7,7 @@ import {
   MARKETING_AUTOMATION_ENTITY_TYPES,
   MARKETING_CONSENT_ENTITY,
   MARKETING_CONSENT_EVENT_ENTITY,
+  MARKETING_JOURNEY_VERSION_ENTITY,
   MARKETING_PUBLIC_TOKEN_ENTITY,
   MARKETING_SEND_ENTITY,
   MARKETING_SEND_TRANSITION_ENTITY,
@@ -249,6 +250,11 @@ export const INTERNAL_ONLY_ENTITIES: readonly MarketingAutomationEntityType[] = 
   // campaign send somebody authorised by hand.
   MARKETING_SEND_ENTITY,
   MARKETING_SEND_TRANSITION_ENTITY,
+  // A published journey version is the immutable snapshot an enrollment is pinned to (19-MA.12
+  // acceptance: "published graph versions cannot be mutated in place"). Only `publish` writes one, and it
+  // does so under the module's service identity; a record-API edit would rewrite the graph a running
+  // enrollment believes it is executing, which is the one thing versioning exists to prevent.
+  MARKETING_JOURNEY_VERSION_ENTITY,
 ];
 
 /** The capability that must be on before a record of this kind may be written by a caller. */

@@ -167,8 +167,44 @@ pnpm test:e2e                                # only with the approved target, ne
 - Count comparison: `entity_records`, `users`, `roles`, `teams`, `app_settings`, `audit_log`,
   `stream_items`, `outbox_events`, `jobs` against the source snapshot.
 
-## 6. Provider reconciliation after a restore
+### 5.4 The automated drill (`pnpm restore:drill`)
 
+The procedure above is what a person does by hand. `scripts/restore-drill.mjs` is the same exercise made
+repeatable, measured and evidenced, and it exists because the drill is blocked on an approval rather than on
+tooling (G80):
+
+```bash
+# Verification only — checksums, `pg_restore --list`, file-archive presence, age and permissions.
+# No database is contacted. Safe to run whenever a backup exists.
+node scripts/restore-drill.mjs
+
+# The drill itself, once an isolated recovery target has been approved and provisioned out of band:
+RESTORE_DATABASE_URL='postgresql://…/carocrm_recovery' \
+  node scripts/restore-drill.mjs --target-env=RESTORE_DATABASE_URL --allow-restore --label='weekly-drill'
+
+# The alert a schedule should call after every backup:
+node scripts/restore-drill.mjs --check-freshness
+```
+
+Guards, all of them fatal rather than warnings:
+
+- **it never creates a database.** If `$RESTORE_DATABASE_URL` is unset the run refuses and says so;
+  provisioning the target is the approval, and it happens outside this tool (AGENTS.md §3.6).
+- **it refuses the primary.** The same URL as `DATABASE_URL` is rejected outright, and a target whose database
+  name is one of the application names (`carocrm_dev`, `carocrm`, `carocrm_prod`, `postgres`, `template0/1`,
+  plus anything in `RESTORE_DB_ALLOWLIST`) is rejected again — so pasting the primary URL behind a different
+  host still stops.
+- **it refuses to restore over a target that already has tables** unless `--allow-clean` is passed too, so a
+  drill cannot quietly reuse a database someone is working in.
+- **no credential is ever an argument.** The target is handed to libpq as `PG*` environment variables of the
+  child process, and the evidence file records a label and the database *name* only.
+- **a measurement is not an approval.** The evidence writes `rpoApproved: false, rtoApproved: false`, and the
+  markdown says the duration is input for the owner's decision, never a pass against an agreed target.
+
+Evidence lands in `.data/restore-drill/` (directory 700, files 600) as a JSON and markdown pair.
+`scripts/deploy/restore-drill.cron.example` shows the weekly line; it is shipped, not installed.
+
+## 6. Provider reconciliation after a restore
 A restored database is **older than the provider**. Between the snapshot and the restore, a provider
 may have delivered a webhook, a payment may have settled, a signature may have completed, or a message
 may have been sent. The restored platform must not blindly replay from its old cursor.

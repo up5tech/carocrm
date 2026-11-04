@@ -326,3 +326,143 @@ describe("suppression outranks the graph (19-MA.13 acceptance)", () => {
     expect(steps.length).toBe(0);
   });
 });
+
+/**
+ * 19-MA.12 acceptance through the HTTP API: publishing writes an immutable version, an invalid graph is
+ * refused *as a refusal*, and an enrollment stays on the version it entered.
+ *
+ * This path had no test until the journey editor was built, and it was broken in two ways the suite below
+ * now pins: `publish` read the journey with a `*` projection the Entity Engine rejects (every publish
+ * answered 400 "Unknown field \"*\""), and both refusals were thrown as bare `Error`s, which the error
+ * filter reports as an opaque 500 — so an operator could not tell an invalid graph from a server fault.
+ * The other suites in this file insert version rows directly, which is why neither defect surfaced.
+ */
+describe("publishing a journey version (19-MA.12 acceptance)", () => {
+  async function draftJourney(suffix: string): Promise<string> {
+    const created = await call("POST", "/api/v1/MarketingJourney", { name: marker(`journey ${suffix}`), status: "Draft" });
+    expect(created.status, JSON.stringify(created.body)).toBeLessThan(300);
+    const id = String(created.body["id"]);
+    journeyIds.push(id);
+    return id;
+  }
+
+  async function versions(journeyId: string): Promise<Record<string, unknown>[]> {
+    const rows = await ctx.database.db
+      .selectFrom("entity_records")
+      .select("attrs")
+      .where("entity_type", "=", "MarketingJourneyVersion")
+      .where(sql`attrs ->> 'journeyId'`, "=", journeyId)
+      .execute();
+    return rows.map((row) => row.attrs as Record<string, unknown>);
+  }
+
+  const linear = (tail: string): Graph => ({
+    start: "start",
+    nodes: [
+      { id: "start", type: "start", next: tail },
+      { id: tail, type: "end" },
+    ],
+  });
+
+  it("writes an immutable version and moves the journey to Published", async () => {
+    const journeyId = await draftJourney("publish");
+
+    const first = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/publish`, {
+      graph: linear("done"),
+      releaseNotes: "first cut",
+    });
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body["version"]).toBe(1);
+    expect(String(first.body["graphHash"] ?? "")).toHaveLength(64);
+
+    const afterFirst = await call("GET", `/api/v1/MarketingJourney/${journeyId}`);
+    expect(afterFirst.status).toBe(200);
+    expect(afterFirst.body["status"]).toBe("Published");
+    expect(afterFirst.body["currentVersion"]).toBe(1);
+    expect(String(afterFirst.body["publishedVersionId"] ?? "")).toBe(String(first.body["versionId"]));
+
+    // A second publish is a new version, not an edit of the old one.
+    const second = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/publish`, {
+      graph: linear("done2"),
+    });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(second.body["version"]).toBe(2);
+
+    const written = await versions(journeyId);
+    expect(written).toHaveLength(2);
+    // Two separate snapshots, not one row rewritten: each carries its own hash and its own graph.
+    const hashes = written.map((row) => String(row["graphHash"] ?? ""));
+    expect(new Set(hashes).size).toBe(2);
+    expect(written.every((row) => typeof row["graph"] === "string" && String(row["graph"]).includes('"end"'))).toBe(true);
+
+    // Published versions cannot be mutated in place, even by an administrator.
+    const versionId = String(first.body["versionId"]);
+    const edited = await ctx.app.inject({
+      method: "PATCH",
+      url: `/api/v1/MarketingJourneyVersion/${versionId}`,
+      headers: authHeader(ctx.adminToken),
+      payload: { graph: JSON.stringify(linear("rewritten")) },
+    });
+    expect(edited.statusCode).toBeGreaterThanOrEqual(400);
+
+    const after = await versions(journeyId);
+    expect(after.some((row) => String(row["graph"]).includes("rewritten"))).toBe(false);
+  });
+
+  it("refuses an invalid graph as a refusal and writes nothing", async () => {
+    const journeyId = await draftJourney("invalid");
+
+    const refused = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/publish`, {
+      graph: { start: "start", nodes: [{ id: "start", type: "exec", next: "elsewhere" }] },
+    });
+    // 422, not 500: the answer is about the caller's graph, and the findings say what to change.
+    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(JSON.stringify(refused.body)).toContain("exec");
+
+    expect(await versions(journeyId)).toHaveLength(0);
+    const journey = await call("GET", `/api/v1/MarketingJourney/${journeyId}`);
+    expect(journey.body["status"]).toBe("Draft");
+    expect(Number(journey.body["currentVersion"] ?? 0)).toBe(0);
+  });
+
+  it("keeps an enrollment pinned to the version it entered on", async () => {
+    const journeyId = await draftJourney("pinned");
+    const first = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/publish`, {
+      graph: linear("done"),
+    });
+    const versionId = String(first.body["versionId"]);
+
+    const dedupeKey = `${runId}-pinned`;
+    const enrolled = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/enroll`, {
+      graph: linear("done"),
+      versionId,
+      version: 1,
+      personType: "Contact",
+      personId: `AGENT_TEST_${runId}_pinned_person`,
+      source: "AgentTest",
+      dedupeKey,
+    });
+    expect(enrolled.status, JSON.stringify(enrolled.body)).toBeLessThan(300);
+    const enrollmentId = String(enrolled.body["enrollmentId"]);
+    enrollmentIds.push(enrollmentId);
+
+    // Publish a new version while the enrollment is running.
+    const second = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/publish`, {
+      graph: linear("done2"),
+    });
+    expect(second.body["version"]).toBe(2);
+
+    const row = await enrollmentRow(enrollmentId);
+    expect(row["version"]).toBe(1);
+    expect(row["versionId"]).toBe(versionId);
+  });
+
+  it("answers a missing graph on enroll with a validation error, not a server fault", async () => {
+    const journeyId = await draftJourney("no-graph");
+    const refused = await call("POST", `/api/v1/MarketingAutomation/action/journey/${journeyId}/enroll`, {
+      versionId: "whatever",
+    });
+    expect(refused.status).toBe(422);
+    expect(JSON.stringify(refused.body)).toContain("graph");
+  });
+});

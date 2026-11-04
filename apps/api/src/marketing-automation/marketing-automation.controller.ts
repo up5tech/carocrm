@@ -4,6 +4,7 @@ import {
   AuthenticationFailedError,
   AuthorizationDeniedError,
   InvalidQueryError,
+  ValidationError,
 } from "@carocrm/core/errors/index.js";
 import {
   Body,
@@ -711,7 +712,7 @@ export class MarketingAutomationController {
     const version = Number(b.version ?? 1);
     const graph = b.graph;
     const dedupeKey = typeof b.dedupeKey === "string" ? b.dedupeKey : crypto.randomUUID();
-    if (graph === undefined) throw new Error("Enrollment needs the journey graph.");
+    if (graph === undefined) throw new ValidationError("Enrollment needs the journey graph.");
     return this.journeyRuntime.enroll({
       journeyId: id,
       versionId: versionId ?? "",

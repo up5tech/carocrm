@@ -4,12 +4,25 @@
 > (typecheck, lint, marketing test suite) pass. **Read the limits before reading this line as "the
 > module has a UI":** `MARKETING_AUTOMATION_MODULE.implementedPhases`
 > (`apps/api/src/marketing-automation/marketing-automation-module.ts:244`) declares MA.0–MA.19, and the
-> backend is real (migrations 037–043, kernel `MailTransport` behind the send path), but
-> **journeys have no screen at all** — `grep -ri journey apps/web/src` returns nothing. MA.12 task 5
-> asked for a "simple editor/list-view UI using existing graph library if available"; no graph library is
-> installed, so the editor half is conditionally deferred, yet the list view is not and does not exist
-> either. Journey definitions are therefore API-only. The other accepted limits are the report's own §7
-> (split/join do not fan out, no A/B, no goal node, retention is dry-run only). Audited 2026-11-03. **Completion report with the evidence:**
+> backend is real (migrations 037–043, kernel `MailTransport` behind the send path), and since 2026-11-04
+> **journeys do have a screen**: `/marketing/journeys` (list) and `/marketing/journeys/:id` (editor) —
+> `apps/web/src/pages/MarketingJourneysPage.tsx` and `apps/web/src/pages/marketing-journeys/JourneyEditorPage.tsx`,
+> with the sidebar entry `marketingJourneys` and six client calls in `apps/web/src/api/client.ts`.
+> MA.12 task 5 asked for a "simple editor/list-view UI using existing graph library if available"; none is
+> installed, so the editor is the same ordered-node table the platform's own process editor uses over the
+> server's `{start, nodes[]}` document — ports, not a canvas. The editor drafts into the journey's free-form
+> `settings` field (no new table, no migration), asks the server whether the graph is publishable, publishes
+> immutable versions, and manages enrollments (suspend / resume / exit / enroll-by-id).
+> **Wiring the screen found two defects on that path, both now fixed and tested**
+> (`apps/api/test/marketing-automation-journey-runtime.test.ts`, four new cases): `publish` read the journey
+> with a `*` projection the Entity Engine rejects, so **every publish answered 400** — no test had ever called
+> it, because the other suites insert version rows directly; and both refusals (invalid graph, missing graph
+> on enroll) were thrown as bare `Error`s, which the error filter reports as an opaque 500. Publishing is now a
+> 422 with the findings attached, and `MarketingJourneyVersion` joined `INTERNAL_ONLY_ENTITIES`, which is what
+> makes MA.12's "published graph versions cannot be mutated in place" true — an administrator's PATCH used to
+> rewrite a running enrollment's graph. The other accepted limits are the report's own §7
+> (split/join do not fan out, no A/B, no goal node, retention is dry-run only). Audited 2026-11-03, journey UI
+> added 2026-11-04. **Completion report with the evidence:**
 > `docs/implementation/marketing-automation-completion-report.md` (13 suites / 225 tests, migrations 037–043,
 > the defects found while closing the phase, settings inventory and known limitations).
 > A final hardening round (19-MA.19) fixed eight defects that only the missing tests could reveal — a webhook

@@ -547,6 +547,14 @@ export class AIAgentsController {
     return this.evaluations.ensureStandardSuite();
   }
 
+  /** Retire a suite that has never produced a run; the service refuses to erase evidence. */
+  @Delete('action/evaluations/:suiteKey')
+  @HttpCode(204)
+  async deleteEvaluationSuite(@Param('suiteKey') suiteKey: string) {
+    await this.permissions.assert('evaluation');
+    await this.evaluations.deleteSuite(suiteKey);
+  }
+
   @Post('action/evaluations/:suiteKey')
   async createEvaluationCase(@Param('suiteKey') suiteKey: string, @Body() body: unknown) {
     await this.permissions.assert('evaluation');

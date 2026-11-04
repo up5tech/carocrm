@@ -16,6 +16,7 @@ const AdvancedIntegrationsPage = lazy(() => import('./pages/AdvancedIntegrations
 const AIAgentsPage = lazy(() => import('./pages/AIAgentsPage.js').then((m) => ({ default: m.AIAgentsPage })));
 const CalendarPage = lazy(() => import('./pages/CalendarPage.js').then((m) => ({ default: m.CalendarPage })));
 const CRMChatPage = lazy(() => import('./pages/CRMChatPage.js').then((m) => ({ default: m.CRMChatPage })));
+const CustomerSuccessPage = lazy(() => import('./pages/CustomerSuccessPage.js').then((m) => ({ default: m.CustomerSuccessPage })));
 const DashboardsPage = lazy(() => import('./pages/DashboardsPage.js').then((m) => ({ default: m.DashboardsPage })));
 const DocsLandingPage = lazy(() => import('./pages/docs/DocsLandingPage.js').then((m) => ({ default: m.DocsLandingPage })));
 const DocsPage = lazy(() => import('./pages/docs/DocsPage.js').then((m) => ({ default: m.DocsPage })));
@@ -32,8 +33,12 @@ const EntityListPage = lazy(() => import('./pages/EntityListPage.js').then((m) =
 const EntityManagerPage = lazy(() => import('./pages/EntityManagerPage.js').then((m) => ({ default: m.EntityManagerPage })));
 const ESignaturePage = lazy(() => import('./pages/ESignaturePage.js').then((m) => ({ default: m.ESignaturePage })));
 const HomePage = lazy(() => import('./pages/HomePage.js').then((m) => ({ default: m.HomePage })));
+const JourneyEditorPage = lazy(() =>
+  import('./pages/marketing-journeys/JourneyEditorPage.js').then((m) => ({ default: m.JourneyEditorPage })),
+);
 const LeadScorePage = lazy(() => import('./pages/LeadScorePage.js').then((m) => ({ default: m.LeadScorePage })));
 const LoginPage = lazy(() => import('./pages/LoginPage.js').then((m) => ({ default: m.LoginPage })));
+const MarketingJourneysPage = lazy(() => import('./pages/MarketingJourneysPage.js').then((m) => ({ default: m.MarketingJourneysPage })));
 const MarketingPreferencesPage = lazy(() => import('./pages/MarketingPreferencesPage.js').then((m) => ({ default: m.MarketingPreferencesPage })));
 const MyProfilePage = lazy(() => import('./pages/MyProfilePage.js').then((m) => ({ default: m.MyProfilePage })));
 const OmnichannelPage = lazy(() => import('./pages/OmnichannelPage.js').then((m) => ({ default: m.OmnichannelPage })));
@@ -158,6 +163,14 @@ export function AppRoutes() {
         {/* Phase 19-LS.8: the scoring model workspace, before the entity wildcard so "lead-score"
             is never read as an entity name. Visibility and authorization are decided by the server. */}
         <Route path="/lead-score" element={<LeadScorePage />} />
+        {/* Phase 19-CS.12: the CSM portfolio page, before the entity wildcard so "customer-success"
+            is not read as an entity name. */}
+        <Route path="/customer-success" element={<CustomerSuccessPage />} />
+        {/* Phase 19-MA.12: the journey list and editor, before the entity wildcard so "marketing"
+            is never read as an entity name. `MarketingJourney` is registered with `client.web: false`,
+            so these routes are the only way into journeys from the SPA. */}
+        <Route path="/marketing/journeys" element={<MarketingJourneysPage />} />
+        <Route path="/marketing/journeys/:id" element={<JourneyEditorPage />} />
         {/* Phase 19-OM.2: the Omnichannel workspace shell, before the entity wildcard so
             "omnichannel" is never read as an entity name. Visibility and authorization are decided
             by the server (nav seed + ACL + the module's workspace switch). */}

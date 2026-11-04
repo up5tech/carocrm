@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { ValidationError } from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
@@ -177,9 +178,18 @@ export class MarketingJourneyDefinitionService {
   async publish(journeyId: string, graph: unknown, releaseNotes?: string, actorUserId?: string): Promise<Record<string, unknown>> {
     const validation = this.validate(graph);
     if (!validation.valid) {
-      throw new Error(`Cannot publish invalid graph: ${validation.errors.join("; ")}`);
+      // A refusal is an answer about the user's data, so it travels as a validation error with the
+      // findings attached — a bare `Error` here surfaced to the editor as "Internal server error",
+      // which told the person nothing about what to fix.
+      throw new ValidationError("The journey graph cannot be published.", {
+        errors: validation.errors,
+        warnings: validation.warnings,
+      });
     }
-    const journey = await this.entities.get("MarketingJourney", journeyId, "*");
+    // No field projection: the engine's `select` is a list of field names and refuses `*`, which is what
+    // this call used to pass — so publishing failed with "Unknown field \"*\"" and no test noticed, because
+    // nothing exercised this endpoint until the journey editor was wired to it (19-MA.12).
+    const journey = await this.entities.get("MarketingJourney", journeyId);
     const data = ((journey as { data?: Record<string, unknown> })?.data ?? (journey as Record<string, unknown>) ?? {}) as Record<string, unknown>;
     const currentVersion = Number(data.currentVersion ?? 0) + 1;
     const versionRecord = await runAsMarketingSystem(this.scope, "journeyPublishVersion", async () =>

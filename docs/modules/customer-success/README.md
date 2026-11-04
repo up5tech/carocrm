@@ -44,7 +44,8 @@ purpose-built panels described in §10.2–§10.4 — see
 | Onboarding driven by a playbook (a seeded default template), idempotent per profile | `POST …/startOnboarding`, `POST …/completeOnboarding` |
 | Renewal readiness from the profile, a Subscription or an Opportunity, with configured windows | `GET …/renewalSummary`, `POST …/setRenewal`, `POST …/syncRenewal` |
 | Success reviews and touchpoints built on the existing Activity records — no second scheduler | `POST …/scheduleReview`, `GET …/reviews`, `GET …/recentTouchpoints` |
-| Dashlets for the shared dashboard engine | `GET /api/v1/CustomerSuccess/action/dashlets` |
+| Dashlets for the shared dashboard engine | `GET /api/v1/CustomerSuccess/action/dashlets`, and the `customerSuccess` dashlet kind on any dashboard |
+| The CSM portfolio screen: aggregate, every queue, and a profile drawer with the health explanation | `/customer-success` in the SPA |
 | Module diagnostics, dependency evidence and the validated settings document | `GET …/health`, `GET/POST …/settings` |
 
 Everything a *user* sees goes through the generic Entity Engine and `AclApiService`: list, detail,

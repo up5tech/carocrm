@@ -14,7 +14,7 @@ first-party Customer Success product).
 | Onboarding is a Playbook Run, not separate tables | Playbook Run + Step Run already express ordered steps, dependencies, due offsets, owners, pause/cancel/restart and skip-with-reason. Separate onboarding tables would duplicate that machinery. The plan's conditional option K allows this. |
 | Scoring configuration is a slice of the `customerSuccess` settings row | The versioned `app_settings` store already exists; a redundant `CustomerSuccessScoringConfig` table would be a second source of truth for the same policy (plan option C). |
 | A module-local notification writer instead of a platform service | There is no notification service. The writer follows the `system.sendReminders` table shape (`apps/worker/src/handlers/job-handlers.ts:132`), writes in-app rows only and is documented as a module-local facility — the smallest reusable dependency, not a kernel service invented for one consumer. |
-| 19-CS.12 (dedicated React screens) is **not** built | Per §10 of the plan, entities registered with `layouts` render through the generic metadata-driven UI; dedicated screens are optional polish. Every entity has list/detail/edit screens. **What is missing is the purpose-built panels, not the navigation**: a `customerSuccess` nav group *is* registered (`apps/api/src/admin-panel/navigation-defaults.ts:209`, eight entities), and the only module-owned screen in the SPA is the admin settings tab (`apps/web/src/admin/tabs/CustomerSuccessSettingsTab.tsx`). Portfolio overview, health explanation, plan/goal panels, risk queues, playbook views and renewal queues have **no UI and no client call** — `apps/web/src/api/client.ts` reaches nothing but `/CustomerSuccess/action/settings`, so the phase's exit criterion ("main CSM workflows complete through the SPA without manual API calls") is not met. Feature parity with §10.2–§10.4 panels is the known gap. |
+| 19-CS.12 (dedicated React screens) is **partially** built | Per §10 of the plan, entities registered with `layouts` render through the generic metadata-driven UI; dedicated screens are the purpose-built panels. A `customerSuccess` nav group *is* registered (`apps/api/src/admin-panel/navigation-defaults.ts`, eight entities), the admin settings tab exists (`apps/web/src/admin/tabs/CustomerSuccessSettingsTab.tsx`), and since 2026-11-04 the module has its own page: `/customer-success` (`apps/web/src/pages/CustomerSuccessPage.tsx`, sidebar entry `customerSuccess`) renders the portfolio aggregate, every portfolio queue, and a profile drawer with health + coverage, the active plan and its goals, open risks, renewal and review dates, the last meaningful touch, the per-signal health explanation and a recalculate action — all of it read from the module's own endpoints under the reader's record scope. **Still missing:** authoring plans, goals and risks from that screen (only the generic record pages do that today), playbook and onboarding views, scheduling a review, the health history view, and bulk assign / playbook-start. The phase is therefore not declared in `implementedPhases`. |
 | No support or adoption signals | The Service Desk module registers `Case` (Phase 19-SD), so the `service-desk` optional integration reads `available`, but the support-signal *adapter* is delivered in 19-SD.16 and the signal still reports `unavailable`; no usage connector exists either. Both families are present in the configuration surface and report `unavailable`, so enabling them later needs no schema change (§12.6, §12.7). |
 
 ## 2. Small platform changes this module required
@@ -56,12 +56,14 @@ Both are widenings, not new subsystems, and both are documented in
 
 ## 4. Known limitations
 
-1. **No dedicated Customer Success UI shell** (see 19-CS.12 above). Navigation is the generic entity
-   navigation. **The dashlet catalogue does not yet reach a dashboard:** `GET …/action/dashlets`
-   publishes the catalogue, but the shared dashboard engine knows no Customer Success kind
-   (`apps/api/src/search/portal-shapes.ts:65` lists `list | chart | kpi | projectTasks | esignature |
-   leadScore`), so nothing renders it — the `project-dashlet.service.ts` pattern the plan asked CS.13 to
-   follow has not been copied for this module.
+1. **The CSM surface is a reading surface** (see 19-CS.12 above): `/customer-success` covers the portfolio,
+   the queues and the health explanation, but plans, goals, risks and playbooks are still authored through the
+   generic entity screens. **The dashlet catalogue now does reach a dashboard** (2026-11-04): `customerSuccess`
+   is a dashlet kind (`apps/api/src/search/portal-shapes.ts`, migration
+   `087_phase19_customer_success_dashlet.sql`), validated and executed by `CustomerSuccessDashletService`
+   through the shared `DashboardService` — the pattern the plan asked CS.13 to copy from
+   `project-dashlet.service.ts` — so a queue or the portfolio aggregate can sit on a dashboard and answers
+   with the reader's own record scope.
 2. **The `CustomerSuccessReview` is a thin structured layer.** It links to an existing Activity and
    carries the review fields the platform's Task/Call/Meeting cannot safely express; it does not
    replace the Activity, and scheduling stays with the platform.

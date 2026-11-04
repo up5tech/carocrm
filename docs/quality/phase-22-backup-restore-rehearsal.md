@@ -6,6 +6,18 @@
 > recovery procedure and reconciliation policy are complete; there is **no approved isolated
 > recovery environment** and **no approved RPO/RTO**, and the plan/AGENTS.md forbid creating a new
 > database to work around that. The primary database was not altered.
+>
+> **Update 2026-11-04 — the blocker is an approval, not a missing tool.** `scripts/restore-drill.mjs`
+> (`pnpm restore:drill`) now performs tasks 4–6 as a repeatable, measured, evidenced run the moment an
+> approved target exists: it verifies the archive (SHA-256, `pg_restore --list`, file-archive presence, age,
+> permissions), restores only into a target the operator names, refuses that target if it is the primary URL
+> or an application database name, refuses a non-empty target without `--allow-clean`, never creates a
+> database, passes credentials to libpq through the child environment rather than argv, and writes evidence
+> that states RPO/RTO are unapproved. `pnpm backup:freshness` is the alert the schedule should call, and
+> `scripts/deploy/` carries the unit/cron templates — shipped, not installed. The verification half has been
+> run against a real schema-only archive (checksums verified, 927 TOC entries, no database contacted); the
+> restore half has **not** been run, because that is the part waiting on an owner. See
+> `docs/quality/known-gaps.md` G80 and `docs/operations/backup-restore.md` §5.4.
 
 ---
 

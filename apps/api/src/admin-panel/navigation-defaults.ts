@@ -152,6 +152,33 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     permission: { entity: 'SignatureRequest', action: 'read' },
     feature: { module: 'eSignature', flag: 'enabled' },
   },
+  // Phase 19-CS.12: the CSM portfolio page. It is a module page, not an entity list — the queues, the
+  // portfolio aggregate and the health explanation are computed by Customer Success under the reader's own
+  // record scope — so the entry asks for the same `CustomerSuccessProfile:read` the endpoints assert.
+  // Customer Success has no installation-level on/off switch, so there is no feature gate to name here.
+  {
+    key: 'customerSuccess',
+    kind: 'page',
+    route: '/customer-success',
+    labelKey: 'web.customerSuccess.title',
+    icon: 'TrophyOutlined',
+    order: 205,
+    inQuickSearch: true,
+    permission: { entity: 'CustomerSuccessProfile', action: 'read' },
+  },
+  // Phase 19-MA.12: journeys. `MarketingJourney` is registered with `client.web: false`, so the generic
+  // metadata navigation never offered them and the definitions were API-only. This entry is the door; the
+  // ACL is the same `MarketingJourney:read` (own) the entity itself enforces.
+  {
+    key: 'marketingJourneys',
+    kind: 'page',
+    route: '/marketing/journeys',
+    labelKey: 'web.journeys.title',
+    icon: 'ScheduleOutlined',
+    order: 185,
+    inQuickSearch: true,
+    permission: { entity: 'MarketingJourney', action: 'read' },
+  },
   // Phase 19-LS.8: the scoring model workspace. Models and rules are metadata entities whose base ACL is
   // refusal, so the entry asks for the same `LeadScoreModel:read` the module's commands assert, and the
   // module's own `enabled` switch can take the entry away (the gate runs after the ACL).

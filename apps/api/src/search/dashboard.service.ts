@@ -6,6 +6,7 @@ import { AclApiService } from '../acl/acl-api.service.js';
 import { patchOf } from '../common/patch-schema.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { CustomerSuccessDashletService } from '../customer-success/customer-success-dashlet.service.js';
 import type { Database } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ListQuery } from '../entity/entity.service.js';
@@ -37,7 +38,8 @@ export class DashboardService {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(ProjectDashletService) private readonly projectTasks: ProjectDashletService,
     @Inject(ESignatureReportService) private readonly eSignatureReports: ESignatureReportService,
-    @Inject(LeadScoreReportService) private readonly leadScoreReports: LeadScoreReportService) {}
+    @Inject(LeadScoreReportService) private readonly leadScoreReports: LeadScoreReportService,
+    @Inject(CustomerSuccessDashletService) private readonly customerSuccess: CustomerSuccessDashletService) {}
   assertEntity(entity: string): void {
     this.metadata.ensureLoaded();
     if (!ENTITY_NAME.test(entity) || !this.metadata.registry.hasEntity(entity)) throw new NotFoundError(`Entity "${entity}" does not exist.`);
@@ -128,6 +130,13 @@ export class DashboardService {
       if (!scoped.success) throw new ValidationError('Invalid Lead Score dashlet options.', { issues: scoped.error.issues.map((i) => i.message) });
       return;
     }
+    // A Customer Success dashlet names one entry of that module's catalogue (19-CS.13). The module owns
+    // the vocabulary, so the module decides what a valid key is — including that a plain entity list is
+    // not one, because the generic `list` kind already covers it.
+    if (kind === 'customerSuccess') {
+      this.customerSuccess.assertConfig(raw);
+      return;
+    }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Invalid dashlet config.', { issues: p.error.issues.map((i) => i.message) });
     this.assertEntity(p.data.entity);
@@ -208,6 +217,13 @@ export class DashboardService {
       if (!scoped.success) throw new ValidationError('Lead Score dashlet options are invalid.', { issues: scoped.error.issues.map((i) => i.message) });
       const section = await this.leadScoreReports.section(scoped.data.view);
       return { dashletId, kind: 'leadScore', ...section };
+    }
+    if (dashlet.kind === 'customerSuccess') {
+      // The reader's scope, not the dashboard owner's: a shared portfolio dashlet can only ever show the
+      // profiles its reader could open in the portfolio (19-CS.13).
+      const scoped = this.customerSuccess.assertConfig(raw);
+      const section = await this.customerSuccess.run(scoped.key, scoped.limit);
+      return { dashletId, kind: 'customerSuccess', ...section };
     }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Dashlet config is invalid.', { issues: p.error.issues.map((i) => i.message) });

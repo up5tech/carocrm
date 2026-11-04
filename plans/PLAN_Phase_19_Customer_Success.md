@@ -1,19 +1,33 @@
 # Phase 19 — Customer Success Module (`CustomerSuccess`)
 
-> **Status:** Partially shipped — the backend is delivered, the user-facing half is not. Added 2026-11-03
-> during a Phase 19 audit; this plan previously carried no status line at all.
+> **Status:** Partially shipped — the backend is delivered; the user-facing half is delivered *for the
+> portfolio*, and the dashlet is now wired. Corrected again on 2026-11-04 (it previously said the SPA called
+> nothing but the admin settings tab, which stopped being true that day).
 > `CUSTOMER_SUCCESS_MODULE.implementedPhases` (`apps/api/src/customer-success/customer-success-module.ts:180`)
-> declares `CS.0–CS.11, CS.13, CS.14` — and the omission of **19-CS.12 is accurate, not a bookkeeping
-> slip**: the only Customer Success screen in the SPA is the admin settings tab
-> (`apps/web/src/admin/tabs/CustomerSuccessSettingsTab.tsx`), and `apps/web/src/api/client.ts:975-977`
-> calls nothing else from the module. Profile list/detail, the health explanation, plan/goal panels, risk
-> queues, playbook views, review links and renewal queues therefore have **no UI**, so CS.12's own exit
-> criterion — "main CSM workflows complete through the SPA without manual API calls" (this file §19-CS.12)
-> **fails**.
-> Partial inside the shipped set: **CS.13's dashlet is not wired** — `GET action/dashlets` publishes a
-> catalogue, but the dashboard engine knows no Customer Success kind
-> (`apps/api/src/search/portal-shapes.ts:65`: `list | chart | kpi | projectTasks | esignature | leadScore`),
-> and bulk work covers `transitionLifecycleBulk` + `bulkRecalculateHealth` only, no assign/playbook-start.
+> still declares `CS.0–CS.11, CS.13, CS.14` and **not CS.12**, and that stays accurate: the new page is the
+> CSM's reading surface, not the whole of §19-CS.12.
+>
+> - **19-CS.12 — React UI and Navigation: partially built.** `/customer-success`
+>   (`apps/web/src/pages/CustomerSuccessPage.tsx`, sidebar entry `customerSuccess` in
+>   `apps/api/src/admin-panel/navigation-defaults.ts`, seven client calls in
+>   `apps/web/src/api/client.ts`) renders the portfolio aggregate, all twelve portfolio queues, and a profile
+>   drawer with health + coverage, the active plan and its goals, open risks, renewal and review dates, the
+>   last meaningful touch, the per-signal *why this score* explanation, and a recalculate action. What is
+>   **still missing**, and why the phase is not declared: creating or editing plans, goals and risks from
+>   this screen (they exist only on the generic entity record pages), playbook/onboarding views, scheduling
+>   a review, the health *history* chart, admin configuration pages for stages/scoring/playbook defaults
+>   beyond the existing settings tab, and bulk assign / playbook-start. The quick action it does offer
+>   (recalculate health) is shown to anyone who can read the profile, because the module publishes no
+>   capability endpoint to ask; the server refuses it without edit rights and the refusal is what the user
+>   sees. So "main CSM workflows complete through the SPA without manual API calls" is met for triage and
+>   reading, not for authoring.
+> - **19-CS.13 — dashlet: now wired.** The catalogue is consumed by the dashboard engine: `customerSuccess`
+>   is a dashlet kind (`apps/api/src/search/portal-shapes.ts:65`, migration
+>   `087_phase19_customer_success_dashlet.sql`), validated and run by
+>   `CustomerSuccessDashletService.assertConfig/run` through `DashboardService`, offered by the dashboards
+>   form and rendered by `DashletResult`. `apps/api/test/customer-success.test.ts` proves a queue and an
+>   aggregate run through the shared API and that an invented key, a plain-entity-list key, and extra config
+>   keys are all refused. Bulk work still covers `transitionLifecycleBulk` + `bulkRecalculateHealth` only.
 > Two health signals report unavailable (`apps/api/src/customer-success/customer-success-signals.ts:363,377`
 > — adoption and support), i.e. the 19-SD.16 adapter has not landed.
 > `docs/reference/alpha-status.md` has no Customer Success entry, and

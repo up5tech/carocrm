@@ -4,12 +4,13 @@
 > **Module:** `AIAgents` — registry key and route slug `ai-agents`, no `Ua` prefix.
 > **Status:** baseline was written in 19-AI.0; this document now covers the delivered phases
 > **19-AI.0–19-AI.13, 19-AI.18 (protocol half), 19-AI.19 and 19-AI.20** (19-AI.18's model-backed
-> retrieval stays deferred by design). **19-AI.14 is built but dormant, and 19-AI.15–19-AI.17 were never
-> delivered as scoped** — see their rows; this was corrected on 2026-11-03, when the header claimed all
+> retrieval stays deferred by design), **19-AI.14 is built, tested, and still switched off by default**
+> (see §5), and **19-AI.15–19-AI.17 were never delivered as scoped** — see their rows; this was corrected
+> on 2026-11-03, when the header claimed all
 > of 19-AI.0–19-AI.20. Every row that says *implemented* names the acceptance rule that was actually
-> tested in this project, **with the one exception §5 states**. Tests live in
-> `apps/api/test/ai-agents.test.ts`, `apps/api/test/ai-agent-runs.test.ts` and
-> `apps/api/test/ai-providers.test.ts`.
+> tested in this project. Tests live in
+> `apps/api/test/ai-agents.test.ts`, `apps/api/test/ai-agent-runs.test.ts`,
+> `apps/api/test/ai-providers.test.ts` and `apps/api/test/ai-agent-evaluations.test.ts`.
 
 ---
 
@@ -42,7 +43,7 @@ OpenAI-compatible chat-completions contract; no vendor SDK is vendored.
 | 19-AI.11 | Run console UI: definitions/list, run timeline, tool summaries, conversation thread, cancellation, retry for known-outcome runs; conversations are owner-scoped and cross-user access is refused (tested). |
 | 19-AI.12 | Memory modes (`none` default, conversation), retention sweep cron `aiAgents.retentionSweep` plus dry-run endpoint; expired conversations vanish from listing and are deleted by the sweep without touching other rows (tested). |
 | 19-AI.13 | Usage ledger (runs, provider requests), config-driven pricing snapshots labelled as estimates, budget policies (global/user/team/agent scopes, soft warnings, hard stops), per-run cost limit, atomic quota reservation with concurrency race coverage. Tested: estimate vs actual labelling, cost-budget stop, hard-quota stop, concurrent reservation race. |
-| 19-AI.14 | Evaluation suites/cases with deterministic graders (config schema, tool permissions, approval policy, budget bounds, provider policy) and review-labelled results that can never override a failed deterministic case; publication gate enforced on `publish` when required suites are configured. **Built, dormant, and untested — so this row is the exception §5 names.** `features.evaluations` defaults to `false` (`ai-agents-settings.service.ts:38`), so the gate never fires (`ai-agent-definitions.service.ts:572`); the `model_review` grader is documented as never running; a suite exists only once an operator posts `action/evaluations` by hand; and **no test file in `apps/api/test/` references the feature**. Treat it as shipped code awaiting its verification phase, not as a delivered capability. |
+| 19-AI.14 | Evaluation suites/cases with deterministic graders (config schema, tool permissions, approval policy, budget bounds, provider policy, memory policy, ownership, exact invariants) and review-labelled results that can never override a failed deterministic case; publication gate enforced on `publish` when required suites are configured. **Covered by `apps/api/test/ai-agent-evaluations.test.ts` (19 cases) since 2026-11-03** — every deterministic grader is exercised in both directions, the gate is shown blocking a publish and releasing it, and an edit after a pass is shown invalidating it because the gate matches the draft checksum. Because the built-in required suite carries a `human-review` case, a run of it ends `pending_review`: the test walks the operator's real path — blocked, approve the review, publish, edit the draft, re-run, reject the review, blocked again — and the Evaluations admin tab gained the Approve/Reject control that path needs. `features.evaluations` still defaults to `false`: switching it on changes what `publish` requires for every agent, and it asks a person to staff the review, so it stays an operator's decision — now a tested one. `model_review` remains advisory by design — it never gates and makes no provider call (§17.3). |
 | 19-AI.15–19-AI.17 | **Not delivered as scoped.** These phases named module-owned tools (`Sales`, `CustomerSuccess`/`ServiceDesk`/`Projects`, `MarketingAutomation`) plus event/schedule/integration triggers; none of the Sales, Projects or Marketing tools exist, and the trigger half is declared-not-implemented (`ai-agent-definitions.service.ts:506` warns `trigger-not-implemented`, and `eventTriggers`/`scheduledTriggers` default to `false`). What *is* true, and is what the module actually offers instead: domain reach is deliberately narrow — `crm_search_records`/`crm_read_record` only ever run inside the Entity Engine under the *initiating user's* current ACL, so Sales/CustomerSuccess/ServiceDesk/Projects/Marketing data is read through the same permissioned path instead of module-owned copies; three of the domain tools did land later, contributed by their own modules in 19-CHAT.23 (`crm_customer_health`, `crm_case_context`, `crm_lead_score`). Sales financial state is untouched (the only write tools are Task creation and a field update that must pass approval); there is no marketing send path in the module at all — consent/dispatch remain wholly MarketingAutomation's, and ServiceDesk internal-note visibility is enforced by the Stream module's own visibility rules. No circular import exists: `AIAgents` imports only kernel entity/metadata services. |
 | 19-AI.18 (protocol half) | MCP-compatible protocol adapter: `GET action/mcp/tools`, `POST action/mcp/call` — session-authenticated, `use` capability enforced, allowlisted registry lookup, strict schema validation, disabled tools refused, and (since Phase 22.13) a tool whose effect class demands a human decision is refused here because this door carries no run for an approval to attach to; model-backed retrieval stays deferred. |
 | 19-AI.19 | Threat-model re-review, kill switch (blocks new runs and high-impact tools), elapsed/token/cost/step budgets, worker-lease recovery that cannot duplicate tool effects, retention sweep, redaction of denied arguments and secrets from every ledger/trace (secret encryption verified write-only in `ai-providers.test.ts`). |
@@ -101,7 +102,12 @@ database, never truncate anything, use `AGENT_TEST_<runid>` markers cleaned by i
 deterministic fake provider — no billable model call, no customer-visible message, no marketing
 dispatch. Documentation of a behaviour is never evidence that it works.
 
-**The one exception, stated so nobody has to rediscover it: 19-AI.14 (evaluations).** Its graders, its
-gate and its three tables are real code, and no test exercises them — `grep -l evaluation
-apps/api/test/ai-*.test.ts` returns nothing. Every other *implemented* row in this document is covered by
-a test that was run.
+**19-AI.14 (evaluations) was the exception until 2026-11-03.** Its graders, its gate and its three tables
+were real code with no test behind them. `apps/api/test/ai-agent-evaluations.test.ts` (19 cases) now runs
+every deterministic grader in both directions, shows the publication gate blocking a publish and releasing
+it, and shows a draft edit after a pass invalidating the result. The gate's exit is tested too: the built-in
+required suite has a `human-review` case, so a run stops at `pending_review` until a person decides it, and
+the Evaluations admin tab is where that decision is recorded. The feature stays off by default
+(`features.evaluations = false`) because turning it on changes what `publish` requires for every agent —
+that remains an operator's decision, but it is now a tested one. `model_review` stays advisory: it neither
+gates nor makes a provider call.
