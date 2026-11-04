@@ -4,14 +4,15 @@
 > migrations `073`–`076`, `docs/implementation/lead-score-ls14..ls18-completion-report.md`, runbook
 > `docs/runbooks/lead-score-operations.md`). This header said "Planned" until a Phase 19 audit corrected
 > it on 2026-11-03.
-> **Two things the audit found still true:** (1) `LEAD_SCORE_MODULE.implementedPhases`
-> (`apps/api/src/lead-score/lead-score-module.ts:423`) declares only `LS.0–LS.13, LS.16, LS.17` — it
-> **omits LS.14, LS.15 and LS.18**, all three of which have shipped code and tests, so the module health
-> payload understates the module (fixing it also requires updating the exact-array assertion in
-> `apps/api/test/lead-score-module.test.ts:170`); (2) the deferrals in `docs/compatibility/lead-score.md`
-> remain open — activities cannot reference a Lead (so per-Lead engagement is unmeasurable, §U2), no
-> per-action rate limit (§U14), `scoreValue` sorting cannot use an index (§U10), and web-to-lead is out of
-> scope. There is also no `docs/modules/lead-score/` directory; the module documents itself through the
+> **What the audit found, and what is still open.** The declaration had lagged:
+> `LEADSCORE_MODULE.implementedPhases` (`apps/api/src/lead-score/lead-score-module.ts`) declared only
+> `LS.0–LS.13, LS.16, LS.17` while LS.14, LS.15 and LS.18 had shipped with code, tests and completion
+> reports. All three are declared now, and the array is pinned by both
+> `apps/api/test/lead-score-module.test.ts:170` and `apps/api/test/phase19-module-declarations.test.ts`.
+> **Still open:** the deferrals in `docs/compatibility/lead-score.md` — activities cannot reference a Lead
+> (so per-Lead engagement is unmeasurable, §U2), no per-action rate limit (§U14), `scoreValue` sorting
+> cannot use an index (§U10), and web-to-lead is out of scope. There is also no `docs/modules/lead-score/`
+> directory; the module documents itself through the
 > compatibility file and the runbook.  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Domains  
 > **Canonical module name:** `LeadScore`  

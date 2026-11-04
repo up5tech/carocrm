@@ -420,7 +420,7 @@ export const LEADSCORE_MODULE = {
    * reader that the card, the model workspace, the engagement read and the conversion contract did not exist.
    * The module-health view renders it, which makes it a claim rather than a changelog.
    */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16', '19-LS.17'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.14', '19-LS.15', '19-LS.16', '19-LS.17', '19-LS.18'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

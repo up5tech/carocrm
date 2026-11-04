@@ -236,7 +236,11 @@ export const VOICE_COMMUNICATIONS_MODULE = {
   /** Frontend slug (§3.3). */
   slug: "voice-communications",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-VC.0", "19-VC.1", "19-VC.2", "19-VC.3", "19-VC.4", "19-VC.5", "19-VC.6", "19-VC.7", "19-VC.8", "19-VC.9", "19-VC.10", "19-VC.11", "19-VC.12", "19-VC.13", "19-VC.14", "19-VC.15", "19-VC.16", "19-VC.17"],
+  // VC.18 — the administration screen (provider accounts, sender numbers, endpoints, the validated
+  // settings document) shipped as `apps/web/src/admin/tabs/VoiceCommunicationsSettingsTab.tsx`, is
+  // registered by `admin-panel.service.ts:80` and asserted by `navigation.test.ts:147`; it was simply
+  // never declared here. VC.19, VC.20 and VC.21 are genuinely not started and stay out of this list.
+  implementedPhases: ["19-VC.0", "19-VC.1", "19-VC.2", "19-VC.3", "19-VC.4", "19-VC.5", "19-VC.6", "19-VC.7", "19-VC.8", "19-VC.9", "19-VC.10", "19-VC.11", "19-VC.12", "19-VC.13", "19-VC.14", "19-VC.15", "19-VC.16", "19-VC.17", "19-VC.18"],
   /**
    * Metadata entities this module owns. Empty on purpose: the CRM records it links to are the
    * platform's (`Contact`, `Lead`, `Account`, `Call`, `Case`), and its own communication data lives

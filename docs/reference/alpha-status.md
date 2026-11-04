@@ -546,22 +546,29 @@ and the whole database-backed suite passes (257 files / 3 426 tests).
 
 | Module | State | What is still open |
 | --- | --- | --- |
-| `Sales` | S.0–S.16 + S.18 declared; **S.17 and S.19 delivered in code and tests but absent from `implementedPhases`** (`apps/api/src/sales/sales-module.ts:267`) | Tier 4 e-invoicing / export adapters; four §18 documents (`commercial-documents.md`, `subscriptions.md`, `operations-and-troubleshooting.md`, `docs/compatibility/sales-reference-matrix.md`) |
+| `Sales` | S.0–S.19 declared (S.17 and S.19 were delivered but unclaimed until 2026-11-03; the list is pinned by `phase19-module-declarations.test.ts`) | Tier 4 e-invoicing / export adapters; four §18 documents (`commercial-documents.md`, `subscriptions.md`, `operations-and-troubleshooting.md`, `docs/compatibility/sales-reference-matrix.md`) |
 | `ServiceDesk` | SD.0–SD.18 declared and evidenced in the plan's own verification section | Skills-based routing, automated KB scoring, a dedicated report pack, a kanban workspace, browser E2E — all self-deferred |
 | `ESignature` | ES.0–ES.22 declared (`esignature-module.ts:535`) | The DocuSign live demo-account smoke test has never been run; provider behaviour is proven against stub transport only |
-| `LeadScore` | LS.0–LS.18 shipped, but `implementedPhases` (`lead-score-module.ts:423`) omits LS.14, LS.15 and LS.18 | Per-Lead engagement (activities cannot reference a Lead), per-action rate limits, an index for `scoreValue` sorting, web-to-lead |
+| `LeadScore` | LS.0–LS.18 shipped and declared (LS.14, LS.15 and LS.18 were unclaimed until 2026-11-03) | Per-Lead engagement (activities cannot reference a Lead), per-action rate limits, an index for `scoreValue` sorting, web-to-lead |
 | `MarketingAutomation` | MA.0–MA.19 declared; the mail send path is real (kernel `MailTransport`), deliberately unconfigured by default | **The journey builder has no UI** — no journey screen exists in `apps/web/src`, though MA.12–14 require one; A/B tests and split/join fan-out are not built; retention is dry-run only |
 | `Omnichannel` | OM.0–OM.23 declared (`omnichannel-module.ts:201`) | No Fastify `form-urlencoded` parser, so a **live Twilio webhook cannot validate on the wire**; unlink has API/UI but no e2e case |
-| `VoiceCommunications` | VC.0–VC.17 declared; **VC.18's admin screen exists in code and is not declared anywhere** (`apps/web/src/admin/tabs/VoiceCommunicationsSettingsTab.tsx`) | VC.19 reporting, VC.20 hardening, VC.21 QA/release are not started; every vendor path is simulator-only, MMS/media/recording/transcript unimplemented |
+| `VoiceCommunications` | VC.0–VC.18 declared (VC.18's admin screen shipped unclaimed until 2026-11-03; `apps/web/src/admin/tabs/VoiceCommunicationsSettingsTab.tsx`) | VC.19 reporting, VC.20 hardening, VC.21 QA/release are not started — and the pin test asserts they stay undeclared; every vendor path is simulator-only, MMS/media/recording/transcript unimplemented |
 | `CustomerSuccess` | Backend CS.0–CS.11, CS.13, CS.14 declared; **CS.12 is genuinely not built** | No CSM screens (only the admin settings tab is wired), the dashlet catalogue is not consumed by the dashboard engine, adoption/support signals report unavailable |
 | `AIAgents` | AI.0–AI.13, AI.19, AI.20 delivered | AI.14 evaluations are built, switched off by default and **have no tests**; AI.15–AI.17's module-owned tools and the event/schedule/integration triggers were never delivered |
 | `AdvancedIntegrations` | INT.1–INT.27 declared (`advanced-integrations-health.service.ts:60`, the descriptor lives in the health service), nine connectors with real vendor endpoints | Live-vendor verification has never been exercised (the plan says so); tests stub `fetch` |
 | `CRMChat` | 19-CHAT.0 → 19-CHAT.24 shipped, module v1.2.0; the registry holds **21 tools** (20 Chat-facing) | The dev assistant now holds **15 of the 20** — every tool the eight suggestions advertise, so the chip row renders in full. Reaching that needed `MAX_TOOLS` raised 8 → 20. Not granted: `crm_actor_context`, `crm_log_activity`, `crm_customer_health`, `crm_case_context`, `crm_run_report`. Still unevaluated: whether a *model* picks the right tool among fifteen — the deterministic adapter pins the choice, so the suite proves the tool answers, not that the model routes to it |
 
 Two structural lessons, because both repeat: a `implementedPhases` array is a claim, not a measurement —
-three modules now under-state themselves and one over-states two phases; and a plan header that nobody
-re-reads becomes a false statement within weeks. The audit that produced this table found the stale
-headers by reading code, not by reading docs.
+three modules under-stated themselves (Sales S.17/S.19, LeadScore LS.14/LS.15/LS.18, Voice VC.18) while
+`AIAgents` over-stated two (AI.15–AI.17 declared, not delivered); and a plan header that nobody re-reads
+becomes a false statement within weeks. The audit that produced this table found the stale headers by
+reading code, not by reading docs.
+
+The first half is closed on 2026-11-03 for the three under-stating modules: the phases are declared, and
+`apps/api/test/phase19-module-declarations.test.ts` pins each list exactly — a database-free test in the
+scheduled CI gate, so a declaration can neither lag behind a shipped phase nor claim one that never
+landed. `AIAgents` is left as it is: raising a ceiling is easy, and un-declaring three phases that have
+shipped code behind them is a product decision about what those phases were meant to finish.
 
 ## Web UI theme (Carocrm)
 

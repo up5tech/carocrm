@@ -282,7 +282,13 @@ export const SALES_MODULE = {
     "19-S.14",
     "19-S.15",
     "19-S.16",
+    // S.17 (commercial documents: send, line editor, templates, settings, the per-entity layout and
+    // ACL audit) and S.19 (the two read contracts other modules call) shipped without ever being
+    // declared here, which is how a declaration stops being evidence. Both are asserted by
+    // `phase19-module-declarations.test.ts` now, so the list cannot silently lag again.
+    "19-S.17",
     "19-S.18",
+    "19-S.19",
   ],
 } as const;
 

@@ -6,16 +6,17 @@ of what **is not** built. The implemented surface is in
 [`docs/modules/sales/README.md`](../modules/sales/README.md); the published boundaries are in
 [`docs/integrations/sales-contracts.md`](../integrations/sales-contracts.md).
 
-Nothing below is represented as delivered anywhere in the repository: `SALES_MODULE.implementedPhases`
-(and therefore `GET /api/v1/Sales/action/health`) stops at `19-S.16` plus `19-S.18`. `19-S.17` is absent
-from that array, and so is `19-S.19` — **both are delivered in code and tests, and the declaration is
-what is missing, not the work.** §2 states the split exactly: the document work (editor, send, templates,
-settings, translations, the screen that drives every document command) *and* the review pass that an
-earlier draft of this report still called outstanding (per-entity layouts and the ACL audit, navigation
-enablement, the responsive/keyboard pass, import/export mappings) are all closed — each row in §2 names
-the test or the browser pass that closed it. Adding `19-S.17` and `19-S.19` to `implementedPhases` is a
-bookkeeping change this report deliberately does not make, because the array is asserted elsewhere and
-belongs with the code that changes it.
+Nothing below is represented as delivered anywhere in the repository. `SALES_MODULE.implementedPhases`
+(and therefore `GET /api/v1/Sales/action/health`) runs to `19-S.19`: `19-S.17` and `19-S.19` were added on
+2026-11-03, because both had shipped with code and tests while the declaration still stopped at `19-S.16`
+plus `19-S.18`. The list is pinned by `apps/api/test/phase19-module-declarations.test.ts`, so it cannot
+lag by forgetting a phase again. `19-S.20` — this report — is deliberately **not** declared, because the
+Tier 4 items below are still open.
+§2 states the split exactly: the document work (editor, send, templates, settings, translations, the
+screen that drives every document command) *and* the review pass that an earlier draft of this report
+still called outstanding (per-entity layouts and the ACL audit, navigation enablement, the
+responsive/keyboard pass, import/export mappings) are all closed — each row in §2 names the test or the
+browser pass that closed it.
 
 ---
 

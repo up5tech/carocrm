@@ -166,8 +166,10 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
     // 19-LS.7–19-LS.17 added themselves here when they shipped; the list is the descriptor's claim about
-    // what exists, so a phase that forgets it is a lie the health view repeats.
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16', '19-LS.17']);
+    // what exists, so a phase that forgets it is a lie the health view repeats. LS.14, LS.15 and LS.18
+    // shipped with their code, tests and completion reports but were never declared — corrected
+    // 2026-11-03, and pinned for every module by `phase19-module-declarations.test.ts`.
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.14', '19-LS.15', '19-LS.16', '19-LS.17', '19-LS.18']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
