@@ -348,7 +348,13 @@ export const AI_AGENTS_MODULE = {
   apiPrefix: '/api/v1/AIAgents',
   /** Frontend route of the human-facing surface. */
   frontendRoute: '/ai-agents',
-  /** Sub-phases delivered so far. */
+  /**
+   * Sub-phases whose code has landed and whose suites pass.
+   * 19-AI.14 is built and tested but switched off by default (`features.evaluations`).
+   * 19-AI.18 is the protocol half only (MCP adapter); model-backed retrieval stays deferred.
+   * 19-AI.15 (Sales), 19-AI.16 (Projects — the other two domains landed via 19-CHAT.23) and
+   * 19-AI.17 (MarketingAutomation + triggers) have not been delivered, so they are not declared.
+   */
   implementedPhases: [
     '19-AI.0',
     '19-AI.1',
@@ -365,9 +371,6 @@ export const AI_AGENTS_MODULE = {
     '19-AI.12',
     '19-AI.13',
     '19-AI.14',
-    '19-AI.15',
-    '19-AI.16',
-    '19-AI.17',
     '19-AI.18',
     '19-AI.19',
     '19-AI.20',

@@ -494,8 +494,8 @@ Usage metrics are logged with correlation IDs. Check application logs for:
 
 ## Test Coverage
 
-- **Repository total:** 145 test files, 1983 tests, all passing (`pnpm test`).
-- **CRMChat suites:** 7 files, 92 tests, all passing.
+- **Repository total:** 220 API test files (as of 2026-11-05).
+- **CRMChat suites:** 10 files, 159 tests, all passing (`pnpm test`), verified 2026-11-05.
 
 | Suite | Covers |
 | --- | --- |
@@ -506,6 +506,9 @@ Usage metrics are logged with correlation IDs. Check application logs for:
 | `crm-chat-ai-agents-integration.test.ts` | Turn submission, idempotency, the AIAgents boundary |
 | `crm-chat-evaluation.test.ts` | Language support and input validation |
 | `crm-chat-engagement.test.ts` | Templates, feedback, proposals, cross-module paths, usage |
+| `crm-chat-docs-help.test.ts` | Help retrieval over the handbook/knowledge articles |
+| `crm-chat-inline-execution.test.ts` | Inline execution path safety |
+| `crm-chat-intelligence-tools.test.ts` | Module intelligence tools (19-CHAT.23) |
 
 The suites run against the configured primary database. Each writes only rows carrying an
 `AGENT_TEST_` marker and removes exactly those rows by id; nothing is truncated or reset, no test

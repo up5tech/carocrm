@@ -100,7 +100,8 @@ suite. Choose an agent and suite, press **Run**, and the run shows the draft's c
 The deterministic cases inspect the draft offline: configuration and limits, tool grants, approval coverage,
 budgets, provider allowlist, memory policy and ownership. The suite does not call the model to grade answers.
 A model-review case is advisory and never runs automatically; a human-review case stays pending until a
-person decides. This screen cannot record that decision, so such a suite cannot reach "passed" from here.
+person decides. This screen records that decision: a pending human-review row shows **Approve** and
+**Reject** for anyone with the evaluation right, and the suite reaches "passed" only after an approval.
 
 The gate is real: while evaluations and a required suite are enabled, publishing an exact draft needs a
 passing run of that suite at the same checksum.
@@ -141,7 +142,7 @@ reviewing approvals, reading usage and managing evaluations are separate rights.
 | There is no Conversations tab | Module memory is off, or you lack the use right | Memory must be enabled and the agent configured for it |
 | There is no Approvals, Usage or Evaluations tab | Each is a separate right | Ask for the specific right you need |
 | Cost is zero and tagged no price data | No provider request has been priced; a price card may be missing | A policy administrator adds a price card |
-| Publishing says a suite has not passed this draft | The gate has no passing run at this draft's checksum | Run the required suite; a human-review case needs a decision |
+| Publishing says a suite has not passed this draft | The gate has no passing run at this draft's checksum | Run the required suite; a human-review case needs an Approve in the Evaluations tab |
 
 ## Where to go next
 

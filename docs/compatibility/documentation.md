@@ -34,7 +34,8 @@ it, and a Knowledge Base article is not a handbook page.
   required, orphans are reported) and the renderer already support them; what is missing is authored,
   reviewed imagery that will not rot on the next UI change. Phase 21.3's acceptance named this and the
   scope excluded it.
-- **`vi` covers the P0 set only** — 18 of 54 pages, 33% on the admin tab. The other 36 pages answer in
+- **`vi` covers the P0 set only** — 20 of 54 pages (`user/chat-and-voice` and `user/ai-agents` were
+  translated on 2026-11-05). The other 34 pages answer in
   English behind the fallback notice, which §4.7 prefers over a wrong translation.
 - **The Vietnamese prose has not been reviewed by a native speaker.** §4.7 requires a human pass before
   `vi` is treated as authoritative. The chrome (`web.docs.*`, `web.adminDocs.*`, `core.app.skipToContent`)

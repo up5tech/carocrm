@@ -322,6 +322,15 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
 | Knowledge Base | an entity for customer-facing articles, with categories and portal access | **unrelated to this surface** — `/docs` never reads it, and an article is not a handbook page | P1 | separate feature |
 | Documentation authoring model | in-product article editing | files in `content/docs/**`, reviewed like code; no editor UI by design (§4.4) | — | intentional deviation |
 | Search over documentation | not applicable | in-memory inverted index per locale, diacritic-insensitive, snippet ranges computed server-side, prefix fallback | P1 | implemented |
-| Translation model | upstream language packs cover the UI strings | `en` defines the tree, `vi` supplies translations; an untranslated page serves English behind a visible notice. Coverage 17/46 | P1 | partial, see `docs/compatibility/documentation.md` |
+| Translation model | upstream language packs cover the UI strings | `en` defines the tree, `vi` supplies translations; an untranslated page serves English behind a visible notice. Coverage 20/54 | P1 | partial, see `docs/compatibility/documentation.md` |
 | Screenshots in documentation | not applicable | none authored; parser, lint and renderer support `alt`-required images and orphan detection, and the asset directory does not exist yet | P1 | deferred |
 | Accessibility verification | not verified upstream | skip link, landmarks, `aria-current`, focus moves, live-region announcements, 390/1024/1440 and print — measured in Chromium and in `e2e/docs.spec.ts`; **still no automated axe audit** | P1 | implemented, no axe |
+
+## Phase 19 — AI layer (added 2026-11-05)
+
+| Capability | Espo baseline | This implementation | Priority | State |
+|---|---|---|---|---|
+| AI agents orchestration | no equivalent — upstream has no agent runtime | `apps/api/src/ai-agents` + `/ai-agents` workspace: definitions, immutable versions, durable runs, approvals, quotas, evaluations, kill switch. **New design, not a parity item** | P1 | implemented, deviations in `docs/compatibility/ai-agents.md`; 19-AI.15–17 not delivered, 19-AI.14 off by default |
+| Conversational CRM assistant | no equivalent | `CRMChat` at `/crm-chat` (+ header quick-chat panel): workspace over the AIAgents run engine; citations re-authorized at render; ACL-everywhere; plain-text rendering | P1 | implemented, `docs/compatibility/crm-chat.md`; feature flags ship off, see `docs/runbooks/crm-chat-first-run.md` |
+| MCP-compatible tool door | no equivalent | `GET/POST /api/v1/AIAgents/action/mcp/tools|call`; session-authenticated, allowlisted registry, approval-class writes refused at this door | P1 | implemented (protocol half); model-backed retrieval deferred |
+| Product help in answers | no equivalent | assistant answers "how do I" from the in-app handbook (`docs_search`/`docs_read_page`) with numbered source chips; ACL of the reader applies | P1 | implemented |

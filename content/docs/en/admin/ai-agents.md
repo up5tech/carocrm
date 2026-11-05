@@ -152,7 +152,7 @@ When `features.evaluations` is on and at least one enabled suite has **required 
 "Same checksum" is literal: SHA-256 over the canonical JSON of the draft configuration. The prompt, provider, model, fallbacks, data class, tools, limits, output schema, memory, triggers and approval list are all inside it. Any edit after a passing run produces a different checksum and the gate fails again. Evaluation always grades the current draft, so run it after the final edit.
 
 > [!WARNING]
-> The standard Publication gate suite contains a `human-review` case. A run with that case is `pending_review`, never `passed`, and the Evaluations screen has no control to record the human decision. The decision endpoint exists on the API and needs the `evaluation` capability, but no screen calls it. Enabling evaluations and creating the standard suite therefore blocks every publish until a decision is recorded outside the screen. For this build, leave evaluations off and do not create the standard suite. There is also no screen to disable the suite after it exists.
+> The standard Publication gate suite contains a `human-review` case. A run with that case is `pending_review`, never `passed`. The Evaluations tab records the decision: a pending `human_review` row shows **Approve** and **Reject** (with an optional note) for anyone holding the `evaluation` right, calling `POST /api/v1/AIAgents/action/agents/:id/evaluations/:runId/decide`. Enabling evaluations and creating the standard suite therefore blocks every publish until a human decides in the tab. There is still no screen to disable the suite once it exists.
 
 The deterministic cases inspect the draft offline: configuration, tool grants, approval coverage, budgets, provider allowlist, memory policy and ownership. No model is called to grade an answer. A `model_review` case is advisory and does not run in this release.
 
@@ -169,7 +169,7 @@ Budgets are policies with a day or month period and a global, user, team, agent 
 
 | Symptom | What to check |
 | --- | --- |
-| Publishing is refused for an evaluation | A required suite has no passed run at the current checksum. The standard suite contains the undecidable human-review case; keep evaluations off or record a decision outside the screen |
+| Publishing is refused for an evaluation | A required suite has no passed run at the current checksum. The standard suite contains a human-review case; record the decision in the Evaluations tab (Approve/Reject) or keep evaluations off |
 | Publishing is refused for the configuration | Missing provider or system prompt, a model or data class outside the connection, a disabled tool, a limit above a ceiling, an archived agent, or an identical version |
 | A run never starts | Execution is off or globally paused; you lack `use`; the concurrency ceiling or a hard budget is reached; the agent is not published; a non-manual trigger is refused because only manual runs are implemented. A created run that stays queued is waiting for the worker |
 | Cost is zero or shows no price data | No price card matches the provider and model, or no request was priced. Add a card, or a `*` card for the provider |

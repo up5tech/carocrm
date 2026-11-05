@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
+import { AI_AGENTS_MODULE } from '../src/ai-agents/ai-agents-module.js';
+import { CRM_CHAT_MODULE } from '../src/crm-chat/crm-chat-module.js';
 import { LEADSCORE_MODULE } from '../src/lead-score/lead-score-module.js';
 import { SALES_MODULE } from '../src/sales/sales-module.js';
 import { VOICE_COMMUNICATIONS_MODULE } from '../src/voice-communications/voice-communications-module.js';
@@ -13,8 +15,11 @@ import { VOICE_COMMUNICATIONS_MODULE } from '../src/voice-communications/voice-c
  * claim about the product rather than a note about the code. Three of them had drifted, in both
  * directions: Sales declared S.0–S.16 + S.18 while S.17 and S.19 had shipped; LeadScore declared
  * LS.0–LS.13 + LS.16 + LS.17 while LS.14, LS.15 and LS.18 had shipped; Voice declared through VC.17 while
- * the VC.18 administration screen had shipped. Nothing pinned any of the three, which is how a list can
- * lag for weeks without a single test noticing.
+ * the VC.18 administration screen had shipped. AIAgents had drifted the other way — it declared
+ * 19-AI.0 → 19-AI.20 while 19-AI.15, 19-AI.16 and 19-AI.17 were never delivered and 19-AI.14 is built but
+ * switched off by default; its list was corrected on 2026-11-05 to the phases whose code landed.
+ * CRMChat's declaration (19-CHAT.0 → 19-CHAT.24) was audited the same day and is accurate.
+ * Nothing pinned any of them, which is how a list can lag for weeks without a single test noticing.
  *
  * Runs with no database and no app boot — it reads the descriptors and the filesystem — so it belongs in
  * the scheduled CI gate (`vitest.ci.config.ts`).
@@ -22,6 +27,17 @@ import { VOICE_COMMUNICATIONS_MODULE } from '../src/voice-communications/voice-c
 
 /** The phases each module declares, in full, in order. Adding one is a deliberate act. */
 const DECLARED: Record<string, readonly string[]> = {
+  AIAgents: [
+    '19-AI.0', '19-AI.1', '19-AI.2', '19-AI.3', '19-AI.4', '19-AI.5', '19-AI.6', '19-AI.7', '19-AI.8',
+    '19-AI.9', '19-AI.10', '19-AI.11', '19-AI.12', '19-AI.13', '19-AI.14', '19-AI.18', '19-AI.19',
+    '19-AI.20',
+  ],
+  CRMChat: [
+    '19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4', '19-CHAT.5', '19-CHAT.6',
+    '19-CHAT.7', '19-CHAT.8', '19-CHAT.9', '19-CHAT.10', '19-CHAT.11', '19-CHAT.12', '19-CHAT.13',
+    '19-CHAT.14', '19-CHAT.15', '19-CHAT.16', '19-CHAT.17', '19-CHAT.18', '19-CHAT.19', '19-CHAT.20',
+    '19-CHAT.21', '19-CHAT.22', '19-CHAT.23', '19-CHAT.24',
+  ],
   Sales: [
     '19-S.0', '19-S.1', '19-S.2', '19-S.3', '19-S.4', '19-S.5', '19-S.6', '19-S.7', '19-S.8', '19-S.9',
     '19-S.10', '19-S.11', '19-S.12', '19-S.13', '19-S.14', '19-S.15', '19-S.16', '19-S.17', '19-S.18',
@@ -79,6 +95,8 @@ const NEWLY_CLAIMED_EVIDENCE: Record<string, readonly string[]> = {
 };
 
 const descriptors: readonly { readonly module: string; readonly phases: readonly string[] }[] = [
+  { module: 'AIAgents', phases: AI_AGENTS_MODULE.implementedPhases },
+  { module: 'CRMChat', phases: CRM_CHAT_MODULE.implementedPhases },
   { module: 'Sales', phases: SALES_MODULE.implementedPhases },
   { module: 'LeadScore', phases: LEADSCORE_MODULE.implementedPhases },
   { module: 'VoiceCommunications', phases: VOICE_COMMUNICATIONS_MODULE.implementedPhases },
@@ -104,6 +122,15 @@ describe('the Phase 19 module declarations (audited 2026-11-03)', () => {
       for (const artifact of artifacts) {
         expect(existsSync(artifact), `${phase} is declared, but ${artifact} does not exist`).toBe(true);
       }
+    }
+  });
+
+  it('does not claim the AI phases that were never delivered', () => {
+    // 19-AI.15 (Sales), 19-AI.16 (Projects — the other two domains landed via 19-CHAT.23, not this
+    // module) and 19-AI.17 (MarketingAutomation + triggers) have no code behind them. 19-AI.14 is
+    // declared because its code exists and is tested — but it is off by default (`features.evaluations`).
+    for (const phase of ['19-AI.15', '19-AI.16', '19-AI.17']) {
+      expect(AI_AGENTS_MODULE.implementedPhases).not.toContain(phase);
     }
   });
 
