@@ -1,10 +1,11 @@
 # plans/PLAN_Phase_19_AI_Agents.md — AI Agents Module
 
-> **Status:** AIAgents **v1.2.0** (2026-11-06) — 19-AI.0 → 19-AI.13, 19-AI.19, 19-AI.20 delivered and
-> green; **19-AI.14 is built and tested but switched off by default; 19-AI.15–17 shipped their read-side
-> tools (P1, 2026-11-05) and event triggers (2026-11-06); schedule/integration triggers remain unbuilt;
-> 19-AI.18 is half delivered.** This header was corrected
-> on 2026-11-03 during a Phase 19 audit and updated on 2026-11-06 after the event-trigger P1 slice; it previously read
+> **Status:** AIAgents **v1.3.0** (2026-11-06) — 19-AI.0 → 19-AI.13, 19-AI.17, 19-AI.19, 19-AI.20
+> delivered and green; **19-AI.14 is built and tested but switched off by default; 19-AI.15–17 shipped
+> their read-side tools (P1, 2026-11-05); all three trigger kinds are now delivered — event triggers
+> (2026-11-06 morning), schedule and integration triggers (2026-11-06); 19-AI.18 is half delivered.**
+> This header was corrected
+> on 2026-11-03 during a Phase 19 audit and updated on 2026-11-06 after the trigger P1 slices; it previously read
 > "Implementation plan" with no delivery
 > state at all. Per-phase reality, each verified against this checkout:
 >
@@ -21,8 +22,8 @@
 >   `human-review` case, so a run stops at `pending_review` until a person decides it — the Evaluations
 >   admin tab now carries that Approve/Reject control (`AIAgentsEvaluationsTab.tsx`), which is the gate's
 >   only exit. `model_review` remains advisory (§17.3).
-> - **19-AI.15–19-AI.17 — read side delivered (P1, 2026-11-05); event triggers delivered (2026-11-06);
->   schedule and integration triggers still not built.** No Sales write path exists (financial state
+> - **19-AI.15–19-AI.17 — read side delivered (P1, 2026-11-05); all trigger kinds delivered
+>   (2026-11-06).** No Sales write path exists (financial state
 >   untouched); `crm_commercial_summary` wraps the 19-S.19 `customerSummary` contract read-only.
 >   `crm_project_status` landed for Projects; `crm_customer_health` and `crm_case_context` landed in
 >   19-CHAT.23; LeadScore landed the same way. `crm_campaign_performance` wraps
@@ -33,18 +34,29 @@
 >   entity, and the run executes as the **publishing user** — never wider. Events produced inside a
 >   run carry `correlation_id = 'aiAgentRun:<id>'` and never re-enter the door; re-delivery is a
 >   no-op; fan-out is capped at five agents per event; `features.eventTriggers` defaults to `false`.
->   **Still missing:** schedule triggers (`scheduledTriggers` stays `false`) and integration
->   triggers (`triggers.integration` warns `trigger-not-implemented`). `AI_AGENTS_MODULE.version` is
->   `1.2.0` since 2026-11-06.
+>   **Schedule triggers (2026-11-06):** `triggers.schedule` now requires `scheduleCron` (5-field cron,
+>   publish-blocking when invalid) and `scheduleText` (the task each firing runs), and only a
+>   text-input agent may declare it. Publication reconciles a `scheduled_jobs` row
+>   (`aiAgentSchedule-<agentId>`, job `aiAgents.triggerSchedule`); pause/archive/restore disable it.
+>   The worker handler posts to `POST action/worker/trigger-schedule`; the run executes as the agent
+>   owner with `causation_id` = the schedule row id and idempotency `sched:<agent>:<boundary>`;
+>   `features.scheduledTriggers` defaults to `false`.
+>   **Integration triggers (2026-11-06):** the same worker subscriber forwards committed
+>   `integration.*` outbox events (AdvancedIntegrations) to `POST action/worker/trigger-integration`.
+>   An agent fires only with `triggers.integration` + a matching `triggers.integrationTypes`
+>   allowlist, and only as a record-context run for the `crmEntityType`/`crmEntityId` the payload
+>   names — the payload is untrusted external data and never becomes prompt text. Shares the
+>   `features.eventTriggers` flag; `causation_id` is the outbox event id.
+>   `AI_AGENTS_MODULE.version` is `1.3.0` since 2026-11-06.
 > - **19-AI.18 — optional, half delivered.** The MCP-compatible adapter (`action/mcp/tools`,
 >   `action/mcp/call`) ships; model-backed retrieval stays deferred by design.
 >
 > The registry now holds **25 tools** (17 owned by `AIAgents`, 8 contributed by `crm-chat`,
 > `customer-success`, `lead-score`, `service-desk`, `projects`, `sales`, `marketing-automation` and
 > `omnichannel`), asserted as one complete table in `apps/api/test/ai-agent-runs.test.ts`.
-> `AI_AGENTS_MODULE.implementedPhases` declares `19-AI.0` → `19-AI.20`, which overstates 14–17 for the
-> same reason the header used to: the descriptor records the phase that *landed code*, not the phase
-> that reached its exit criterion.
+> `AI_AGENTS_MODULE.implementedPhases` declares `19-AI.0` → `19-AI.14`, `19-AI.17` → `19-AI.20`:
+> the descriptor records the phase that *landed code*, not the phase that reached its exit
+> criterion, so 15/16 stay undeclared while their write paths are missing.
 > **Parent roadmap:** `plans/PLAN.md` — NestJS reimplementation of EspoCRM
 > **Phase identifier:** Phase 19 — `AIAgents`  
 > **Module name:** `AIAgents` (**do not add a `Ua` prefix**)  

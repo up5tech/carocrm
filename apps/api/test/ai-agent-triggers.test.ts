@@ -200,6 +200,9 @@ afterAll(async () => {
     .execute();
   if (testAgents.length > 0) {
     const ids = testAgents.map((agent) => agent.id);
+    const scheduleIds = ids.map((id) => `aiAgentSchedule-${id}`);
+    await db.deleteFrom('scheduled_jobs').where('id', 'in', scheduleIds).execute();
+    await db.deleteFrom('ai_agent_runs').where('causation_id', 'in', scheduleIds).execute();
     await db.deleteFrom('ai_agent_memory_items').where('agent_id', 'in', ids).execute();
     await db.deleteFrom('ai_agent_conversations').where('agent_id', 'in', ids).execute();
     await db.deleteFrom('ai_agent_tool_grants')
@@ -326,5 +329,292 @@ describe('the domain-event trigger door (19-AI.17)', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body['started']).toBe(0);
     expect(await countRuns(EVENT_CREATE)).toBe(before);
+  });
+});
+
+function textConfig(triggers: Record<string, unknown>): Record<string, unknown> {
+  return {
+    provider: { key: PROVIDER_KEY, model: 'fake-model', fallbackModels: [] },
+    dataClass: 'internal',
+    prompt: { system: 'You are a test agent. Follow the task and use tools carefully.' },
+    input: { mode: 'text' },
+    tools: [],
+    limits: {
+      maxSteps: 4,
+      maxModelCalls: 4,
+      maxToolCalls: 2,
+      maxTokens: 8_000,
+      maxCostUsd: 0.5,
+      maxElapsedSeconds: 60,
+      maxRetries: 0,
+      maxOutputTokens: 512,
+      temperature: 0,
+    },
+    output: { mode: 'text' },
+    memory: { mode: 'none' },
+    triggers: {
+      manual: true,
+      record: false,
+      event: false,
+      schedule: false,
+      integration: false,
+      eventTypes: [],
+      eventEntities: [],
+      integrationTypes: [],
+      ...triggers,
+    },
+    approval: { requireFor: ['material_write', 'high_impact'] },
+  };
+}
+
+async function publishAgent(key: string, name: string, config: Record<string, unknown>): Promise<string> {
+  const created = await call('POST', '/api/v1/AIAgents/action/agents', ctx.adminToken, {
+    key,
+    name,
+    visibility: 'organization',
+    config,
+  });
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  const agentId = String(created.body['id']);
+  const published = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/publish`, ctx.adminToken, {});
+  expect(published.status, JSON.stringify(published.body)).toBe(200);
+  return agentId;
+}
+
+describe('the schedule trigger door (19-AI.17)', () => {
+  const SCHEDULE_CRON = '0 9 * * 1-5';
+  let scheduleAgentId = '';
+  let scheduleId = '';
+
+  it('keeps the cron row in step with the published version', async () => {
+    scheduleAgentId = await publishAgent(
+      `agent-test-${runId}-schedule`,
+      `${MARKER} schedule agent`,
+      textConfig({
+        schedule: true,
+        scheduleCron: SCHEDULE_CRON,
+        scheduleText: `${MARKER} daily digest`,
+      }),
+    );
+    scheduleId = `aiAgentSchedule-${scheduleAgentId}`;
+    const row = await ctx.database.db
+      .selectFrom('scheduled_jobs')
+      .select(['id', 'job', 'scheduling', 'enabled'])
+      .where('id', '=', scheduleId)
+      .executeTakeFirst();
+    expect(row, 'publish did not create the scheduled_jobs row').toBeDefined();
+    expect(row?.job).toBe('aiAgents.triggerSchedule');
+    expect(row?.scheduling).toBe(SCHEDULE_CRON);
+    expect(row?.enabled).toBe(true);
+  });
+
+  it('refuses to publish a schedule without a cron, a task or a text input', async () => {
+    const key = `agent-test-${runId}-schedule-bad`;
+    const created = await call('POST', '/api/v1/AIAgents/action/agents', ctx.adminToken, {
+      key,
+      name: `${MARKER} bad schedule agent`,
+      visibility: 'organization',
+      config: textConfig({ schedule: true, scheduleCron: 'not a cron' }),
+    });
+    expect(created.status).toBe(201);
+    const agentId = String(created.body['id']);
+    const published = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/publish`, ctx.adminToken, {});
+    expect(published.status).toBe(422);
+    // A record-mode agent cannot be scheduled either.
+    const recordKey = `agent-test-${runId}-schedule-record`;
+    const recordCreated = await call('POST', '/api/v1/AIAgents/action/agents', ctx.adminToken, {
+      key: recordKey,
+      name: `${MARKER} record schedule agent`,
+      visibility: 'organization',
+      config: {
+        ...baseConfig([]),
+        triggers: {
+          manual: true,
+          record: false,
+          event: false,
+          schedule: true,
+          integration: false,
+          eventTypes: [],
+          eventEntities: [],
+          integrationTypes: [],
+          scheduleCron: SCHEDULE_CRON,
+          scheduleText: `${MARKER} task`,
+        },
+      },
+    });
+    expect(recordCreated.status).toBe(201);
+    const recordAgentId = String(recordCreated.body['id']);
+    const recordPublished = await call('POST', `/api/v1/AIAgents/action/agents/${recordAgentId}/publish`, ctx.adminToken, {});
+    expect(recordPublished.status).toBe(422);
+  });
+
+  it('is a quiet no-op while features.scheduledTriggers is off', async () => {
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-schedule', undefined, {
+      agentId: scheduleAgentId,
+      scheduledForMs: 1_700_000_000_000,
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body['disabled']).toBe(true);
+    expect(res.body['started']).toBe(0);
+  });
+
+  it('starts one run per firing, replay-safe, as the agent owner', async () => {
+    const enabled = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+      features: { scheduledTriggers: true },
+    });
+    expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
+
+    const first = await call('POST', '/api/v1/AIAgents/action/worker/trigger-schedule', undefined, {
+      agentId: scheduleAgentId,
+      scheduledForMs: 1_700_000_000_000,
+    }, TEST_SECRET);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body['started'], JSON.stringify(first.body)).toBe(1);
+
+    const row = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select(['id', 'trigger', 'initiated_by_user_id', 'service_principal', 'idempotency_key', 'causation_id', 'input'])
+      .where('causation_id', '=', scheduleId)
+      .executeTakeFirst();
+    expect(row, 'no run was started for the schedule firing').toBeDefined();
+    expect(row?.trigger).toBe('schedule');
+    expect(row?.initiated_by_user_id).toBe(adminUserId);
+    // The principal check allows only one of initiated_by/service_principal; the owner stays the
+    // initiator and the schedule row id is the provenance via causation_id.
+    expect(row?.service_principal).toBeNull();
+    expect(row?.causation_id).toBe(scheduleId);
+    expect(row?.idempotency_key).toBe(`sched:${scheduleAgentId}:1700000000000`);
+    const input = row?.input as Record<string, unknown>;
+    expect(input['text']).toBe(`${MARKER} daily digest`);
+    runIds.push(String(row?.id ?? ''));
+
+    // Same firing delivered twice is a no-op.
+    const replay = await call('POST', '/api/v1/AIAgents/action/worker/trigger-schedule', undefined, {
+      agentId: scheduleAgentId,
+      scheduledForMs: 1_700_000_000_000,
+    }, TEST_SECRET);
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+    expect(replay.body['runId']).toBe(first.body['runId']);
+    const count = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('causation_id', '=', scheduleId)
+      .executeTakeFirst();
+    expect(Number(count?.count ?? 0)).toBe(1);
+  });
+
+  it('disables the cron row when the agent is paused', async () => {
+    const paused = await call('POST', `/api/v1/AIAgents/action/agents/${scheduleAgentId}/pause`, ctx.adminToken, {});
+    expect(paused.status, JSON.stringify(paused.body)).toBe(200);
+    const row = await ctx.database.db
+      .selectFrom('scheduled_jobs')
+      .select('enabled')
+      .where('id', '=', scheduleId)
+      .executeTakeFirst();
+    expect(row?.enabled).toBe(false);
+
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-schedule', undefined, {
+      agentId: scheduleAgentId,
+      scheduledForMs: 1_700_000_060_000,
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body['started']).toBe(0);
+    expect(res.body['reason']).toBe('agent-not-published');
+  });
+});
+
+describe('the integration trigger door (19-AI.17)', () => {
+  const INT_EVENT = 'int-evt-test-triggers';
+
+  beforeAll(async () => {
+    eventIds.push(INT_EVENT);
+    const enabled = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+      features: { eventTriggers: true },
+    });
+    expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
+    await publishAgent(
+      `agent-test-${runId}-integration`,
+      `${MARKER} integration agent`,
+      {
+        ...baseConfig([]),
+        triggers: {
+          manual: true,
+          record: false,
+          event: false,
+          schedule: false,
+          integration: true,
+          eventTypes: [],
+          eventEntities: [],
+          integrationTypes: ['integration.record.imported'],
+        },
+      },
+    );
+  });
+
+  it('refuses the door without the worker capability', async () => {
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-integration', undefined, {
+      eventId: INT_EVENT,
+      eventType: 'integration.record.imported',
+      payload: { crmEntityType: 'Account', crmEntityId: accountId },
+    });
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it('starts one record-context run for a matching integration event, replay-safe', async () => {
+    const first = await call('POST', '/api/v1/AIAgents/action/worker/trigger-integration', undefined, {
+      eventId: INT_EVENT,
+      eventType: 'integration.record.imported',
+      payload: { connectionId: 'conn-test', crmEntityType: 'Account', crmEntityId: accountId },
+    }, TEST_SECRET);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body['started'], JSON.stringify(first.body)).toBe(1);
+    expect(first.body['matched'], JSON.stringify(first.body)).toBe(1);
+
+    const row = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select(['id', 'trigger', 'initiated_by_user_id', 'service_principal', 'causation_id', 'input'])
+      .where('causation_id', '=', INT_EVENT)
+      .executeTakeFirst();
+    expect(row, 'no run was started for the integration event').toBeDefined();
+    expect(row?.trigger).toBe('integration');
+    expect(row?.initiated_by_user_id).toBe(adminUserId);
+    expect(row?.service_principal).toBeNull();
+    expect(row?.causation_id).toBe(INT_EVENT);
+    const input = row?.input as Record<string, unknown>;
+    const record = input['record'] as Record<string, unknown> | undefined;
+    expect(record?.['entity']).toBe('Account');
+    expect(record?.['id']).toBe(accountId);
+    runIds.push(String(row?.id ?? ''));
+
+    const replay = await call('POST', '/api/v1/AIAgents/action/worker/trigger-integration', undefined, {
+      eventId: INT_EVENT,
+      eventType: 'integration.record.imported',
+      payload: { crmEntityType: 'Account', crmEntityId: accountId },
+    }, TEST_SECRET);
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+    expect(await countRuns(INT_EVENT)).toBe(1);
+  });
+
+  it('does not start the agent for an integration type outside its allowlist', async () => {
+    const before = await countRuns(INT_EVENT);
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-integration', undefined, {
+      eventId: 'int-evt-other',
+      eventType: 'integration.record.updated',
+      payload: { crmEntityType: 'Account', crmEntityId: accountId },
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body['started']).toBe(0);
+    expect(await countRuns(INT_EVENT)).toBe(before);
+  });
+
+  it('does not start any run when the payload names no record', async () => {
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-integration', undefined, {
+      eventId: 'int-evt-no-record',
+      eventType: 'integration.record.imported',
+      payload: { connectionId: 'conn-test' },
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body['matched']).toBe(0);
+    expect(res.body['started']).toBe(0);
   });
 });

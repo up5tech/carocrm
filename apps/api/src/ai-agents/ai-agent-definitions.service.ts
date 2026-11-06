@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { DuplicateRecordError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Updateable } from 'kysely';
 
@@ -8,6 +9,8 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { AIAgentsTable, AIAgentToolGrantsTable, AIAgentVersionsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { isValidCronExpression } from '../jobs/cron.js';
+import { JobsService } from '../jobs/jobs.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import {
@@ -20,7 +23,7 @@ import {
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import type { AIToolDefinition } from './ai-agent-tools.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
-import { AGENT_STATUSES, type AgentStatus } from './ai-agents-module.js';
+import { AGENT_STATUSES, type AgentStatus, AI_AGENT_SCHEDULE_JOB, aiAgentScheduleId } from './ai-agents-module.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
@@ -174,6 +177,7 @@ export class AIAgentDefinitionService {
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
     @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
+    @Inject(JobsService) private readonly jobs: JobsService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -512,8 +516,44 @@ export class AIAgentDefinitionService {
     if (config.triggers.schedule && !settings.features.scheduledTriggers) {
       warn('trigger-disabled', 'triggers.schedule', 'Scheduled triggers are enabled on the agent but the instance feature is off; those runs are refused.');
     }
-    if (config.triggers.integration) {
-      warn('trigger-not-implemented', 'triggers.integration', 'Integration triggers are declared but not implemented in this release.');
+    if (config.triggers.schedule) {
+      // A schedule without a cron, a task text or a text input can never produce a run, so these
+      // are blocking findings rather than warnings: the published version would be dead config.
+      if (config.triggers.scheduleCron === undefined || !isValidCronExpression(config.triggers.scheduleCron)) {
+        block(
+          'trigger-no-schedule',
+          'triggers.scheduleCron',
+          'Scheduled triggers need a valid 5-field cron expression in `triggers.scheduleCron` (e.g. "0 9 * * 1-5").',
+        );
+      }
+      if (config.input.mode === 'record') {
+        block(
+          'trigger-schedule-record',
+          'triggers.schedule',
+          'A scheduled firing has no record to read; scheduled triggers require a text-input agent.',
+        );
+      }
+      if (config.triggers.scheduleText === undefined || config.triggers.scheduleText.trim() === '') {
+        block(
+          'trigger-no-task',
+          'triggers.scheduleText',
+          'A scheduled run needs the task text it executes in `triggers.scheduleText`.',
+        );
+      }
+    }
+    if (config.triggers.integration && config.triggers.integrationTypes.length === 0) {
+      warn(
+        'trigger-no-integrations',
+        'triggers.integrationTypes',
+        'Integration triggers are enabled but `triggers.integrationTypes` is empty; the agent will never start from an integration event. List the `integration.*` event types it may answer.',
+      );
+    }
+    if (config.triggers.integration && config.input.mode !== 'record') {
+      warn(
+        'trigger-integration-record',
+        'triggers.integration',
+        'Integration triggers only feed record-context runs; this agent reads text input and is skipped when an integration event fires.',
+      );
     }
     const memoryEnabled = config.memory.mode !== 'none';
     if (memoryEnabled && !settings.features.memory) {
@@ -668,6 +708,9 @@ export class AIAgentDefinitionService {
       return newId;
     });
 
+    // The published version changed: the cron row must follow it (19-AI.17).
+    await this.reconcileSchedule(id);
+
     const versionRow = await this.database.db
       .selectFrom('ai_agent_versions')
       .selectAll()
@@ -703,6 +746,7 @@ export class AIAgentDefinitionService {
       .set({ status: 'published', modified_at: new Date(), modified_by_id: this.scope.userId ?? null })
       .where('id', '=', id)
       .execute();
+    await this.reconcileSchedule(id);
     return this.get(id);
   }
 
@@ -737,6 +781,7 @@ export class AIAgentDefinitionService {
       })
       .where('id', '=', id)
       .execute();
+    await this.reconcileSchedule(id);
     return this.get(id);
   }
 
@@ -763,7 +808,72 @@ export class AIAgentDefinitionService {
       .set({ status: to, modified_at: new Date(), modified_by_id: this.scope.userId ?? null })
       .where('id', '=', id)
       .execute();
+    await this.reconcileSchedule(id);
     return this.get(id);
+  }
+
+  /**
+   * 19-AI.17 — keep the agent's `scheduled_jobs` row in step with its published version.
+   *
+   * The kernel scheduler owns firing: this method only maintains the metadata row
+   * (`aiAgentSchedule-<agentId>`, job `aiAgents.triggerSchedule`, the configured cron). A published
+   * text-input agent whose published config declares a valid `triggers.schedule` gets an enabled
+   * row; every other state — draft, paused, archived, deleted, or a config that lost its cron —
+   * disables the row rather than deleting it, so the schedule's history survives and re-enabling is
+   * a flag flip, not a recreation. Failures are logged, never thrown: a schedule bookkeeping problem
+   * must not fail the publish or lifecycle call that triggered the reconciliation.
+   */
+  private async reconcileSchedule(agentId: string): Promise<void> {
+    const scheduleId = aiAgentScheduleId(agentId);
+    try {
+      const agent = await this.database.db
+        .selectFrom('ai_agents')
+        .select(['status', 'current_version', 'is_deleted'])
+        .where('id', '=', agentId)
+        .executeTakeFirst();
+      let cron: string | null = null;
+      if (agent !== undefined && !agent.is_deleted && agent.status === 'published' && agent.current_version !== null) {
+        const version = await this.database.db
+          .selectFrom('ai_agent_versions')
+          .select('config')
+          .where('agent_id', '=', agentId)
+          .where('version', '=', agent.current_version)
+          .executeTakeFirst();
+        const parsed = version === undefined ? undefined : parseAgentConfig(version.config);
+        if (parsed?.ok === true) {
+          const { triggers, input } = parsed.config;
+          const candidate = triggers.scheduleCron?.trim() ?? '';
+          if (
+            triggers.schedule &&
+            isValidCronExpression(candidate) &&
+            input.mode === 'text' &&
+            (triggers.scheduleText ?? '').trim() !== ''
+          ) {
+            cron = candidate;
+          }
+        }
+      }
+      if (cron === null) {
+        await this.database.db
+          .updateTable('scheduled_jobs')
+          .set({ enabled: false, modified_at: new Date() })
+          .where('id', '=', scheduleId)
+          .execute();
+        return;
+      }
+      await this.jobs.upsertSchedule({
+        id: scheduleId,
+        job: AI_AGENT_SCHEDULE_JOB,
+        scheduling: cron,
+        data: { agentId },
+        enabled: true,
+      });
+    } catch (error) {
+      log.warn(
+        { agentId, err: error instanceof Error ? error.message : String(error) },
+        'ai agent schedule reconciliation failed',
+      );
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -996,7 +1106,7 @@ export class AIAgentDefinitionService {
             },
             output: { mode: 'text' },
             memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
+            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
         },
@@ -1033,7 +1143,7 @@ export class AIAgentDefinitionService {
             },
             output: { mode: 'text' },
             memory: { mode: 'conversation', maxMessages: 12, retentionDays: 30 },
-            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
+            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
         },
@@ -1090,7 +1200,7 @@ function parsedFallbackConfig(): AgentConfig {
     },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }

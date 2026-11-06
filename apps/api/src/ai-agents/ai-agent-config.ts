@@ -225,6 +225,23 @@ export const AgentConfigSchema = z
         eventTypes: z.array(z.enum(['entity.created', 'entity.updated', 'entity.deleted', 'entity.restored'])).max(4).default([]),
         /** PascalCase entities that may start a run (P1, 19-AI.17). Empty means never. */
         eventEntities: z.array(z.string().regex(/^[A-Z][A-Za-z0-9]{1,49}$/)).max(20).default([]),
+        /**
+         * 19-AI.17 schedule triggers: the cron expression (5 fields) the instance scheduler fires.
+         * Meaningful only when `schedule` is true; publication refuses the combination without it.
+         */
+        scheduleCron: z.string().trim().min(9).max(120).optional(),
+        /** The task text every scheduled run receives; a run needs a task, so publication requires it. */
+        scheduleText: z.string().trim().min(1).max(4_000).optional(),
+        /**
+         * 19-AI.17 integration triggers: the `integration.*` event types (published by
+         * AdvancedIntegrations through the outbox) that may start a run. Empty means never. The
+         * pattern is deliberately open — an unknown type simply never matches — so this module
+         * does not import the producer's catalogue and stays DAG-clean.
+         */
+        integrationTypes: z
+          .array(z.string().regex(/^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/).max(60))
+          .max(20)
+          .default([]),
       })
       .strict()
       .prefault({}),
@@ -293,7 +310,7 @@ export function blankAgentConfig(): AgentConfig {
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }

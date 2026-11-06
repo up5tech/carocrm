@@ -19,8 +19,10 @@ import type { JobContext, JobHandler, JobRegistry } from '@carocrm/jobs';
 
 export const AI_AGENT_RUN_JOB = 'aiAgents.executeRun';
 export const AI_AGENT_RETENTION_JOB = 'aiAgents.retentionSweep';
+export const AI_AGENT_SCHEDULE_JOB = 'aiAgents.triggerSchedule';
 export const AI_AGENT_RUN_EXECUTE_PREFIX = '/api/v1/AIAgents/action/worker/runs';
 export const AI_AGENT_RETENTION_PATH = '/api/v1/AIAgents/action/worker/retention';
+export const AI_AGENT_SCHEDULE_PATH = '/api/v1/AIAgents/action/worker/trigger-schedule';
 
 export interface AIAgentJobDeps {
   readonly apiBaseUrl: string;
@@ -108,7 +110,59 @@ function retentionJob(deps: AIAgentJobDeps): JobHandler {
   };
 }
 
+/**
+ * 19-AI.17 — a cron firing of an agent's schedule. The `scheduled_jobs` row's `target` carries the
+ * agent id; the scheduler's `scheduledForMs` is forwarded so the API can deduplicate the firing.
+ * The handler owns no agent logic — the API re-checks the flag, the published config and the owner.
+ */
+function scheduleJob(deps: AIAgentJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    const data = (context.data ?? {}) as Record<string, unknown>;
+    const agentId = typeof data['agentId'] === 'string' ? data['agentId'] : '';
+    if (agentId === '') {
+      return { status: 'failed', message: 'The AI agent schedule job has no agent id.' };
+    }
+    if (deps.secret.trim() === '') {
+      return {
+        status: 'completed',
+        message: 'AI agent schedules are disabled: no worker capability is configured.',
+        result: { disabled: true },
+      };
+    }
+    if (await context.shouldStop()) {
+      return { status: 'completed', message: 'Stopped before firing the schedule.', result: { stopped: true } };
+    }
+    context.progress(20, 'firing agent schedule');
+    const fetcher = deps.fetcher ?? fetch;
+    const response = await fetcher(`${deps.apiBaseUrl.replace(/\/$/, '')}${AI_AGENT_SCHEDULE_PATH}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-worker-secret': deps.secret },
+      body: JSON.stringify({
+        agentId,
+        ...(context.scheduledForMs === undefined ? {} : { scheduledForMs: context.scheduledForMs }),
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Agent schedule firing failed with HTTP ${String(response.status)}.`);
+    }
+    const payload = (await response.json()) as Record<string, unknown>;
+    context.progress(100, 'schedule firing answered');
+    if (payload['disabled'] === true) {
+      return { status: 'completed', message: 'Scheduled triggers are disabled on the instance.', result: { disabled: true } };
+    }
+    const started = payload['started'] === 1;
+    deps.log.info({ agentId, started, reason: payload['reason'] ?? null }, 'ai agent schedule firing finished');
+    return {
+      status: 'completed',
+      message: started ? 'Scheduled agent run started.' : `No run started (${String(payload['reason'] ?? 'unknown')}).`,
+      result: { agentId, started, reason: payload['reason'] ?? null },
+    };
+  };
+}
+
 export function registerAIAgentJobs(registry: JobRegistry, deps: AIAgentJobDeps): void {
   registry.register(AI_AGENT_RUN_JOB, runJob(deps));
   registry.register(AI_AGENT_RETENTION_JOB, retentionJob(deps));
+  registry.register(AI_AGENT_SCHEDULE_JOB, scheduleJob(deps));
 }

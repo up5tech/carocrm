@@ -82,7 +82,10 @@ snapshot. The immutable snapshot lives in `ai_agent_versions` and is read by eve
   triggers: { manual: boolean, record: boolean, event: boolean, schedule: boolean,
               integration: boolean,
               eventTypes?: ('entity.created'|'entity.updated'|'entity.deleted'|'entity.restored')[],
-              eventEntities?: string[] },       // event triggers live (P1); schedule/integration do not
+              eventEntities?: string[],
+              scheduleCron?: string,          // required when schedule=true (publish-blocking)
+              scheduleText?: string,          // the task each firing runs (publish-blocking)
+              integrationTypes?: string[] },  // integration.* event allowlist; all three live (P1)
   limits: { maxSteps: 1..16, maxToolCalls: 0..32, maxModelCalls: 1..16,
             maxTokens: 1..100000, maxCostUsd: 0..100, maxElapsedSeconds: 1..600,
             maxRetries: 0..5, maxConcurrency: 1..10 },
@@ -229,7 +232,7 @@ Mappings are code-reviewed per tool. A tool's self-declared class is not trusted
 | Run origin | Principal | Rules |
 | --- | --- | --- |
 | Interactive / record / manual | the authenticated user | tools execute with that user's **current** ACL; no elevation |
-| Scheduled / event / integration | a dedicated service principal (`system` user or configured API user) | narrow roles, visible provenance; never reuse an admin's personal identity |
+| Scheduled / event / integration | the agent owner (event: the publishing user) | never wider than the owner; `causation_id` carries provenance (schedule row id / outbox event id); `service_principal` stays NULL because the principal check allows only one of the two |
 | Portal | the portal user | portal policy applies; internal/agent admin surfaces are invisible |
 
 Additional rules:

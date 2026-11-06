@@ -7,9 +7,10 @@ import { type DomainEventBus, type DomainEventMessage,SUBSCRIBE_ALL } from '../e
  * (`plans/PLAN_Phase_19_AI_Agents.md` §13.1, §13.8).
  *
  * A committed `entity.*` event may start a run for each agent that opted in with `triggers.event`
- * plus matching `eventTypes`/`eventEntities` allowlists — that decision belongs to the API, which
- * owns the run engine and the agent definitions. This subscriber only ferries committed events to
- * the API's worker-authorised door; it decides nothing.
+ * plus matching `eventTypes`/`eventEntities` allowlists, and a committed `integration.*` event may
+ * start one for agents opted in with `triggers.integration` + `integrationTypes` — both decisions
+ * belong to the API, which owns the run engine and the agent definitions. This subscriber only
+ * ferries committed events to the API's worker-authorised doors; it decides nothing.
  *
  * Two deliberate properties:
  *
@@ -23,6 +24,7 @@ import { type DomainEventBus, type DomainEventMessage,SUBSCRIBE_ALL } from '../e
 
 export const AI_AGENT_TRIGGER_SUBSCRIBER = 'ai-agents-event-trigger';
 export const AI_AGENT_TRIGGER_PATH = '/api/v1/AIAgents/action/worker/trigger-event';
+export const AI_AGENT_INTEGRATION_PATH = '/api/v1/AIAgents/action/worker/trigger-integration';
 
 const AGENT_RUN_CORRELATION = 'aiAgentRun:';
 
@@ -33,6 +35,13 @@ const TRIGGERABLE_EVENTS: ReadonlySet<string> = new Set([
   'entity.deleted',
   'entity.restored',
 ]);
+
+/**
+ * 19-AI.17 — `integration.*` events (published by AdvancedIntegrations through the outbox) take the
+ * sibling door: they carry no `entity` block, so they cannot reuse the entity path. The API matches
+ * them against `triggers.integration` + `integrationTypes` allowlists.
+ */
+const INTEGRATION_EVENT_PREFIX = 'integration.';
 
 export interface AIAgentTriggerDeps {
   readonly apiBaseUrl: string;
@@ -51,26 +60,35 @@ export function registerAIAgentDomainEvents(bus: DomainEventBus, deps: AIAgentTr
       const correlation = event.correlationId ?? '';
       // An agent's own output must never re-enter the trigger door.
       if (correlation.startsWith(AGENT_RUN_CORRELATION)) return;
-      if (!TRIGGERABLE_EVENTS.has(event.eventType)) return;
-      const entity = event.entity;
-      if (entity === undefined) return;
+      const isEntityEvent = TRIGGERABLE_EVENTS.has(event.eventType);
+      const isIntegrationEvent = event.eventType.startsWith(INTEGRATION_EVENT_PREFIX);
+      if (!isEntityEvent && !isIntegrationEvent) return;
+      if (isEntityEvent && event.entity === undefined) return;
       if (deps.secret.trim() === '') {
         deps.log.warn({ eventId: event.id, eventType: event.eventType }, 'agent event trigger inert: no worker capability configured');
         return;
       }
       const fetcher = deps.fetcher ?? fetch;
       const response = await fetcher(
-        `${deps.apiBaseUrl.replace(/\/$/, '')}${AI_AGENT_TRIGGER_PATH}`,
+        `${deps.apiBaseUrl.replace(/\/$/, '')}${isEntityEvent ? AI_AGENT_TRIGGER_PATH : AI_AGENT_INTEGRATION_PATH}`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-worker-secret': deps.secret },
-          body: JSON.stringify({
-            eventId: event.id,
-            eventType: event.eventType,
-            entityType: entity.entityType,
-            entityId: entity.entityId,
-            correlationId: correlation === '' ? null : correlation,
-          }),
+          body: JSON.stringify(
+            isEntityEvent
+              ? {
+                  eventId: event.id,
+                  eventType: event.eventType,
+                  entityType: event.entity?.entityType,
+                  entityId: event.entity?.entityId,
+                  correlationId: correlation === '' ? null : correlation,
+                }
+              : {
+                  eventId: event.id,
+                  eventType: event.eventType,
+                  payload: event.payload ?? {},
+                },
+          ),
           signal: AbortSignal.timeout(30_000),
         },
       );
@@ -83,7 +101,12 @@ export function registerAIAgentDomainEvents(bus: DomainEventBus, deps: AIAgentTr
         return;
       }
       deps.log.info(
-        { eventId: event.id, eventType: event.eventType, entityType: entity.entityType, started: body['started'] ?? 0 },
+        {
+          eventId: event.id,
+          eventType: event.eventType,
+          entityType: isEntityEvent ? event.entity?.entityType : undefined,
+          started: body['started'] ?? 0,
+        },
         'agent event trigger applied',
       );
     },

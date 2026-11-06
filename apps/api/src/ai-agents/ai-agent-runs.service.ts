@@ -16,6 +16,7 @@ import type {
 import { DatabaseService } from '../database/database.service.js';
 import type { EntityCrudService } from '../entity/entity.service.js';
 import { EntityCrudService as EntityService } from '../entity/entity.service.js';
+import { isValidCronExpression } from '../jobs/cron.js';
 import { JobsService } from '../jobs/jobs.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
@@ -34,7 +35,7 @@ import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from './ai-agent-tools.js';
 import { AIToolRegistry, expectedTargetVersionsOf } from './ai-agent-tools.js';
-import { type AgentStatus, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
+import { type AgentStatus, aiAgentScheduleId, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
@@ -730,6 +731,214 @@ export class AIAgentRunService {
               idempotencyKey: `evt:${input.eventId}:${agent.id}`,
               causationId: input.eventId,
               depth: 0,
+            }),
+          `aiAgentTrigger:${input.eventId}`,
+        );
+        started += 1;
+      } catch (error) {
+        const category =
+          error instanceof FeatureDisabledError
+            ? 'feature_disabled'
+            : error instanceof ValidationError
+              ? 'validation'
+              : error instanceof NotFoundError
+                ? 'not_found'
+                : 'internal_error';
+        errors.push({ agent: agent.agent_key, category });
+      }
+    }
+    return { matched: candidates.length, started, skipped, errors };
+  }
+
+  /**
+   * 19-AI.17 — the worker's door for one cron firing of an agent's schedule.
+   *
+   * The kernel scheduler already deduplicated the boundary (`scheduled_jobs.last_run_at` + the
+   * deterministic BullMQ job id); this method's own dedup is the run's idempotency key
+   * `sched:<agentId>:<scheduledForMs>`, so a retried delivery of the same firing is a no-op.
+   *
+   * Like an event trigger, the run executes as the **agent owner** — never wider. Provenance is
+   * the `trigger` column plus `causation_id` (the schedule row id): `service_principal` stays NULL
+   * because the schema's principal check allows only one of the two, and the owner must remain the
+   * initiator for quota, visibility and audit. A disabled feature
+   * or an agent that no longer qualifies is a quiet `{ started: 0 }`, not an error the scheduler
+   * would retry forever.
+   */
+  async triggerSchedule(input: {
+    readonly agentId: string;
+    readonly scheduledForMs?: number;
+  }): Promise<{
+    readonly disabled?: true;
+    readonly started: number;
+    readonly runId?: string;
+    readonly reason?: string;
+  }> {
+    const settings = await this.settings.settings();
+    if (!settings.features.scheduledTriggers) {
+      return { disabled: true, started: 0 };
+    }
+    const agent = await this.database.db
+      .selectFrom('ai_agents')
+      .selectAll()
+      .where('id', '=', input.agentId)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    if (agent === undefined || agent.status !== 'published' || agent.current_version === null) {
+      return { started: 0, reason: 'agent-not-published' };
+    }
+    const version = await this.database.db
+      .selectFrom('ai_agent_versions')
+      .select('config')
+      .where('agent_id', '=', agent.id)
+      .where('version', '=', agent.current_version)
+      .executeTakeFirst();
+    const parsed = version === undefined ? undefined : parseAgentConfig(version.config);
+    const config = parsed?.ok === true ? parsed.config : undefined;
+    const cron = config?.triggers.scheduleCron?.trim() ?? '';
+    const text = config?.triggers.scheduleText?.trim() ?? '';
+    if (
+      config === undefined ||
+      !config.triggers.schedule ||
+      !isValidCronExpression(cron) ||
+      config.input.mode !== 'text' ||
+      text === ''
+    ) {
+      return { started: 0, reason: 'schedule-not-configured' };
+    }
+    if (agent.owner_user_id === null) return { started: 0, reason: 'owner-missing' };
+    let principal;
+    try {
+      principal = await this.auth.principalFromUser(agent.owner_user_id);
+    } catch {
+      return { started: 0, reason: 'owner-inactive' };
+    }
+    const scheduledFor = input.scheduledForMs ?? Date.now();
+    const scheduleId = aiAgentScheduleId(agent.id);
+    try {
+      const view = await this.scope.runAs(
+        principal,
+        () =>
+          this.triggerRun({
+            agentId: agent.id,
+            trigger: 'schedule',
+            runInput: { text },
+            idempotencyKey: `sched:${agent.id}:${scheduledFor}`,
+            causationId: scheduleId,
+          }),
+        `aiAgentSchedule:${agent.id}`,
+      );
+      return { started: 1, runId: view.id };
+    } catch (error) {
+      const category =
+        error instanceof FeatureDisabledError
+          ? 'feature_disabled'
+          : error instanceof ValidationError
+            ? 'validation'
+            : 'internal_error';
+      if (category === 'internal_error') {
+        log.warn({ agentId: agent.id, err: error instanceof Error ? error.message : String(error) }, 'scheduled trigger run failed');
+      }
+      return { started: 0, reason: category };
+    }
+  }
+
+  /**
+   * 19-AI.17 — the worker's door for committed `integration.*` events.
+   *
+   * AdvancedIntegrations publishes its inbound-webhook and sync outcomes through the transactional
+   * outbox (`integration.record.imported`, `integration.conflict.opened`, …); the worker subscriber
+   * ferries them here. An agent fires only when it opted in with `triggers.integration` plus a
+   * matching `triggers.integrationTypes` allowlist, and only as a **record-context** run for the
+   * entity the payload names — the same rule event triggers follow, because the payload is
+   * untrusted external data and must never become prompt text.
+   *
+   * Integration triggers share the `features.eventTriggers` flag: both are "a committed event
+   * started this run". The run executes as the agent owner; `causation_id` is the outbox event id,
+   * which resolves back to the payload (and its event type). Recursion is already impossible
+   * because agent-produced events carry
+   * `correlation_id = 'aiAgentRun:<id>'` and never reach this door.
+   */
+  async triggerIntegrationEvent(input: {
+    readonly eventId: string;
+    readonly eventType: string;
+    readonly payload: Readonly<Record<string, unknown>>;
+  }): Promise<{
+    readonly disabled?: true;
+    readonly matched: number;
+    readonly started: number;
+    readonly skipped: readonly { readonly agent: string; readonly reason: string }[];
+    readonly errors: readonly { readonly agent: string; readonly category: string }[];
+  }> {
+    const settings = await this.settings.settings();
+    if (!settings.features.eventTriggers) {
+      return { disabled: true, matched: 0, started: 0, skipped: [], errors: [] };
+    }
+    if (!input.eventType.startsWith('integration.')) {
+      throw new ValidationError('Only integration.* events may enter through this door.');
+    }
+    const entityType = typeof input.payload['crmEntityType'] === 'string' ? input.payload['crmEntityType'] : '';
+    const entityId = typeof input.payload['crmEntityId'] === 'string' ? input.payload['crmEntityId'] : '';
+    if (!/^[A-Z][A-Za-z0-9]{1,49}$/.test(entityType) || entityId === '' || entityId.length > 120) {
+      // No record context: no agent input mode can consume the event safely.
+      return { matched: 0, started: 0, skipped: [], errors: [] };
+    }
+
+    const db = this.database.db;
+    const published = await db
+      .selectFrom('ai_agents')
+      .selectAll()
+      .where('status', '=', 'published')
+      .where('is_deleted', '=', false)
+      .orderBy('id', 'asc')
+      .limit(20)
+      .execute();
+
+    const candidates: { readonly agent: (typeof published)[number] }[] = [];
+    for (const agent of published) {
+      if (agent.current_version === null) continue;
+      const version = await db
+        .selectFrom('ai_agent_versions')
+        .selectAll()
+        .where('agent_id', '=', agent.id)
+        .where('version', '=', agent.current_version)
+        .executeTakeFirst();
+      if (!version) continue;
+      const parsed = parseAgentConfig(version.config);
+      if (!parsed.ok) continue;
+      const triggers = parsed.config.triggers;
+      if (!triggers.integration) continue;
+      if (!triggers.integrationTypes.includes(input.eventType)) continue;
+      // Same rule as event triggers: the payload can only feed a record-context agent for exactly
+      // this entity.
+      if (parsed.config.input.mode !== 'record' || parsed.config.input.entity !== entityType) continue;
+      candidates.push({ agent });
+    }
+
+    const skipped: { agent: string; reason: string }[] = [];
+    const errors: { agent: string; category: string }[] = [];
+    let started = 0;
+    for (const { agent } of candidates.slice(0, 5)) {
+      if (agent.owner_user_id === null) {
+        skipped.push({ agent: agent.agent_key, reason: 'owner-missing' });
+        continue;
+      }
+      let principal;
+      try {
+        principal = await this.auth.principalFromUser(agent.owner_user_id);
+      } catch {
+        skipped.push({ agent: agent.agent_key, reason: 'owner-inactive' });
+        continue;
+      }
+      try {
+        await this.scope.runAs(
+          principal,
+          () =>
+            this.triggerRun({
+              agentId: agent.id,
+              trigger: 'integration',
+              runInput: { record: { entity: entityType, id: entityId } },
+              idempotencyKey: `int:${input.eventId}:${agent.id}`,
+              causationId: input.eventId,
             }),
           `aiAgentTrigger:${input.eventId}`,
         );

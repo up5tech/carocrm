@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DomainEventBus } from '../events/domain-event-bus.js';
 import {
+  AI_AGENT_INTEGRATION_PATH,
   AI_AGENT_TRIGGER_PATH,
   AI_AGENT_TRIGGER_SUBSCRIBER,
   registerAIAgentDomainEvents,
@@ -109,5 +110,51 @@ describe('the AI agent event-trigger subscriber (19-AI.17)', () => {
     const bus = new DomainEventBus(logger());
     registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
     await expect(bus.publish(entityEvent('entity.created'))).rejects.toThrow('HTTP 500');
+  });
+});
+
+describe('the AI agent integration-trigger subscriber (19-AI.17)', () => {
+  function integrationEvent(overrides: Record<string, unknown> = {}): OutboxEvent {
+    return {
+      id: 'int-evt-test-ai17',
+      eventType: 'integration.record.imported',
+      payload: {
+        connectionId: 'conn-1',
+        crmEntityType: 'Account',
+        crmEntityId: 'acc-1',
+      },
+      correlationId: 'req-9',
+      ...overrides,
+    };
+  }
+
+  it('forwards an integration.* event to the integration door with its payload', async () => {
+    const fetcher = vi.fn(async () => json({ disabled: true, started: 0, matched: 0 }));
+    const bus = new DomainEventBus(logger());
+    registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
+    await bus.publish(integrationEvent());
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toBe(`${BASE}${AI_AGENT_INTEGRATION_PATH}`);
+    const body = JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>;
+    expect(body['eventId']).toBe('int-evt-test-ai17');
+    expect(body['eventType']).toBe('integration.record.imported');
+    expect((body['payload'] as Record<string, unknown>)['crmEntityId']).toBe('acc-1');
+  });
+
+  it('never calls the API for an agent-caused integration event (the recursion guard)', async () => {
+    const fetcher = vi.fn(async () => json({ started: 0 }));
+    const bus = new DomainEventBus(logger());
+    registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
+    await bus.publish({ ...integrationEvent(), correlationId: 'aiAgentRun:run-9' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('ignores event types outside entity.* and integration.*', async () => {
+    const fetcher = vi.fn(async () => json({ started: 0 }));
+    const bus = new DomainEventBus(logger());
+    registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
+    await bus.publish({ ...integrationEvent(), eventType: 'workflow.step.completed' });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

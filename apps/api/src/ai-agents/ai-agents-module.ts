@@ -155,6 +155,17 @@ export const TERMINAL_RUN_STATUSES: ReadonlySet<RunStatus> = new Set([
 export const RUN_TRIGGERS = ['manual', 'record', 'event', 'schedule', 'integration'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
+/** The worker job name a scheduled agent firing enqueues (19-AI.17). */
+export const AI_AGENT_SCHEDULE_JOB = 'aiAgents.triggerSchedule';
+
+/**
+ * The `scheduled_jobs` row id that fires one agent's schedule. Kept inside the schedule-id
+ * alphabet (`[A-Za-z0-9_-]`, ≤ 64 chars) so `JobsService` accepts it unchanged.
+ */
+export function aiAgentScheduleId(agentId: string): string {
+  return `aiAgentSchedule-${agentId}`;
+}
+
 /** Effect classes from §9.1. The class drives the default approval requirement. */
 export const EFFECT_CLASSES = ['read', 'low_write', 'material_write', 'high_impact'] as const;
 export type EffectClass = (typeof EFFECT_CLASSES)[number];
@@ -340,7 +351,7 @@ export const AI_AGENTS_TABLES = [
 export const AI_AGENTS_MODULE = {
   id: 'AIAgents',
   name: 'AI Agents',
-  version: '1.2.0',
+  version: '1.3.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; AI Agents runs after Marketing Automation (`380`). */
   loadOrder: 390,
@@ -352,8 +363,10 @@ export const AI_AGENTS_MODULE = {
    * Sub-phases whose code has landed and whose suites pass.
    * 19-AI.14 is built and tested but switched off by default (`features.evaluations`).
    * 19-AI.18 is the protocol half only (MCP adapter); model-backed retrieval stays deferred.
-   * 19-AI.15 (Sales), 19-AI.16 (Projects — the other two domains landed via 19-CHAT.23) and
-   * 19-AI.17 (MarketingAutomation + triggers) have not been delivered, so they are not declared.
+   * 19-AI.15 (Sales) and 19-AI.16 (CustomerSuccess/ServiceDesk/Projects) shipped their read-side
+   * tools but not their write paths, so they are not declared; 19-AI.17 is declared: the
+   * MarketingAutomation read tool, event triggers, schedule triggers and integration triggers
+   * have all landed.
    */
   implementedPhases: [
     '19-AI.0',
@@ -371,6 +384,7 @@ export const AI_AGENTS_MODULE = {
     '19-AI.12',
     '19-AI.13',
     '19-AI.14',
+    '19-AI.17',
     '19-AI.18',
     '19-AI.19',
     '19-AI.20',

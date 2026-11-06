@@ -568,6 +568,63 @@ export class AIAgentsController {
     });
   }
 
+  /**
+   * The worker's door for one cron firing of an agent's schedule (19-AI.17).
+   *
+   * The kernel scheduler owns the firing and its dedup; this door only names the agent and the
+   * boundary it fired for. `features.scheduledTriggers` off is a quiet `{ disabled: true }`.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/worker/trigger-schedule')
+  async triggerScheduleForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const raw = asRecord(body);
+    const agentId = typeof raw['agentId'] === 'string' ? raw['agentId'].trim() : '';
+    const scheduledForMs =
+      typeof raw['scheduledForMs'] === 'number' && Number.isFinite(raw['scheduledForMs'])
+        ? Math.trunc(raw['scheduledForMs'])
+        : undefined;
+    if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(agentId)) {
+      throw new ValidationError('The schedule payload is invalid.');
+    }
+    return this.runs.triggerSchedule({
+      agentId,
+      ...(scheduledForMs === undefined ? {} : { scheduledForMs }),
+    });
+  }
+
+  /**
+   * The worker's door for committed `integration.*` events (19-AI.17).
+   *
+   * AdvancedIntegrations publishes inbound-webhook and sync outcomes through the outbox; the
+   * worker subscriber ferries them here. The door refuses anything that is not an `integration.*`
+   * type, and the service only starts record-context runs for agents that opted in — the payload
+   * is untrusted external data and never becomes prompt text. Shares the `features.eventTriggers`
+   * flag with entity events.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/worker/trigger-integration')
+  async triggerIntegrationForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const raw = asRecord(body);
+    const eventId = typeof raw['eventId'] === 'string' ? raw['eventId'].trim() : '';
+    const eventType = typeof raw['eventType'] === 'string' ? raw['eventType'].trim() : '';
+    if (
+      eventId.length === 0 ||
+      eventId.length > 120 ||
+      !/^integration\.[a-z0-9_]+(\.[a-z0-9_]+){0,6}$/.test(eventType)
+    ) {
+      throw new ValidationError('The integration trigger payload is invalid.');
+    }
+    return this.runs.triggerIntegrationEvent({
+      eventId,
+      eventType,
+      payload: asRecord(raw['payload']),
+    });
+  }
+
   @Get('action/usage')
   async usage() {
     return this.runs.usage();
