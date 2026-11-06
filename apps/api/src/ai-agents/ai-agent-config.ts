@@ -35,8 +35,13 @@ export const MAX_CONFIG_BYTES = 32_768;
  * Twenty covers the Chat-facing catalogue exactly. The registry holds one more key,
  * `omnichannel.send_message`, so an agent that must both answer in Chat and send to a customer still has
  * to choose between them — which is the intended reading of a ceiling, not an oversight.
+ *
+ * Raised from 20 to 24 on 2026-11-05, when four tools landed with P1: `crm_project_status`,
+ * `crm_commercial_summary`, `crm_campaign_performance` (module-contributed, the 19-CHAT.23 pattern)
+ * and `crm_list_emails` (kernel, metadata only). Twenty-four again matches the Chat-facing catalogue
+ * exactly.
  */
-export const MAX_TOOLS = 20;
+export const MAX_TOOLS = 24;
 export const MAX_JSON_SCHEMA_DEPTH = 4;
 export const MAX_JSON_SCHEMA_NODES = 100;
 
@@ -216,6 +221,10 @@ export const AgentConfigSchema = z
         event: z.boolean().default(false),
         schedule: z.boolean().default(false),
         integration: z.boolean().default(false),
+        /** Event types that may start a run (P1, 19-AI.17). Empty means never. */
+        eventTypes: z.array(z.enum(['entity.created', 'entity.updated', 'entity.deleted', 'entity.restored'])).max(4).default([]),
+        /** PascalCase entities that may start a run (P1, 19-AI.17). Empty means never. */
+        eventEntities: z.array(z.string().regex(/^[A-Z][A-Za-z0-9]{1,49}$/)).max(20).default([]),
       })
       .strict()
       .prefault({}),
@@ -284,7 +293,7 @@ export function blankAgentConfig(): AgentConfig {
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }

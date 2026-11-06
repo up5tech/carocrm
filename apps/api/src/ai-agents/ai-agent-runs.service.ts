@@ -642,6 +642,113 @@ export class AIAgentRunService {
     return view;
   }
 
+  /**
+   * The worker's door for committed domain events (P1, 19-AI.17; `plans/PLAN_Phase_19_AI_Agents.md` §13.1, §13.8).
+   *
+   * An event-triggered run executes as the **publishing user**, never wider: the agent can only do
+   * what its owner could do by clicking Run themselves, the quota it spends is theirs, and the audit
+   * trail names them. There is no service principal with ambient authority — one was designed into
+   * the schema (`ai_agent_runs.service_principal`, always NULL) and deliberately never used.
+   *
+   * Recursion is stopped at the source: every event produced inside a run carries
+   * `correlation_id = 'aiAgentRun:<id>'`, and the worker subscriber never hands those back to this
+   * door. Depth stays 0 here, so the `depth > 3` ceiling in `triggerRun` never comes into play.
+   */
+  async triggerEvent(input: {
+    readonly eventId: string;
+    readonly eventType: 'entity.created' | 'entity.updated' | 'entity.deleted' | 'entity.restored';
+    readonly entityType: string;
+    readonly entityId: string;
+  }): Promise<{
+    readonly disabled?: true;
+    readonly matched: number;
+    readonly started: number;
+    readonly skipped: readonly { readonly agent: string; readonly reason: string }[];
+    readonly errors: readonly { readonly agent: string; readonly category: string }[];
+  }> {
+    const settings = await this.settings.settings();
+    if (!settings.features.eventTriggers) {
+      // A disabled feature is a quiet no-op, not a retry storm for the outbox poller.
+      return { disabled: true, matched: 0, started: 0, skipped: [], errors: [] };
+    }
+    const db = this.database.db;
+    const published = await db
+      .selectFrom('ai_agents')
+      .selectAll()
+      .where('status', '=', 'published')
+      .where('is_deleted', '=', false)
+      .orderBy('id', 'asc')
+      .limit(20)
+      .execute();
+
+    const candidates: { readonly agent: (typeof published)[number] }[] = [];
+    for (const agent of published) {
+      if (agent.current_version === null) continue;
+      const version = await db
+        .selectFrom('ai_agent_versions')
+        .selectAll()
+        .where('agent_id', '=', agent.id)
+        .where('version', '=', agent.current_version)
+        .executeTakeFirst();
+      if (!version) continue;
+      const parsed = parseAgentConfig(version.config);
+      if (!parsed.ok) continue;
+      const triggers = parsed.config.triggers;
+      if (!triggers.event) continue;
+      if (!triggers.eventTypes.includes(input.eventType)) continue;
+      if (!triggers.eventEntities.includes(input.entityType)) continue;
+      // A record-context agent is the only shape an event can feed; it names the entity it reads.
+      if (parsed.config.input.mode !== 'record' || parsed.config.input.entity !== input.entityType) continue;
+      candidates.push({ agent });
+    }
+
+    const skipped: { agent: string; reason: string }[] = [];
+    const errors: { agent: string; category: string }[] = [];
+    let started = 0;
+    // Fan-out cap: one busy record must not start the whole catalogue.
+    for (const { agent } of candidates.slice(0, 5)) {
+      if (agent.owner_user_id === null) {
+        skipped.push({ agent: agent.agent_key, reason: 'owner-missing' });
+        continue;
+      }
+      let principal;
+      try {
+        principal = await this.auth.principalFromUser(agent.owner_user_id);
+      } catch {
+        skipped.push({ agent: agent.agent_key, reason: 'owner-inactive' });
+        continue;
+      }
+      try {
+        await this.scope.runAs(
+          principal,
+          () =>
+            this.triggerRun({
+              agentId: agent.id,
+              trigger: 'event',
+              runInput: { record: { entity: input.entityType, id: input.entityId } },
+              // At-least-once delivery: re-delivering the event is a no-op for this agent.
+              idempotencyKey: `evt:${input.eventId}:${agent.id}`,
+              causationId: input.eventId,
+              depth: 0,
+            }),
+          `aiAgentTrigger:${input.eventId}`,
+        );
+        started += 1;
+      } catch (error) {
+        const category =
+          error instanceof FeatureDisabledError
+            ? 'feature_disabled'
+            : error instanceof ValidationError
+              ? 'validation'
+              : error instanceof NotFoundError
+                ? 'not_found'
+                : 'internal_error';
+        errors.push({ agent: agent.agent_key, category });
+      }
+    }
+    return { matched: candidates.length, started, skipped, errors };
+  }
+
   async retry(id: string, idempotencyKey?: string): Promise<AIAgentRunView> {
     await this.permissions.assert('use');
     const row = await this.visibleRun(id);

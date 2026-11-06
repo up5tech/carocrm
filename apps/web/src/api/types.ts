@@ -1694,7 +1694,15 @@ export interface AIAgentConfigShape {
   };
   readonly output: { mode: 'text' | 'json'; schema?: Record<string, unknown> };
   readonly memory: { mode: 'none' | 'conversation' | 'checkpoint'; maxMessages?: number; retentionDays?: number };
-  readonly triggers: { manual: boolean; record: boolean; event: boolean; schedule: boolean; integration: boolean };
+  readonly triggers: {
+    manual: boolean;
+    record: boolean;
+    event: boolean;
+    schedule: boolean;
+    integration: boolean;
+    eventTypes?: readonly ('entity.created' | 'entity.updated' | 'entity.deleted' | 'entity.restored')[];
+    eventEntities?: readonly string[];
+  };
   readonly approval: { requireFor: readonly string[] };
 }
 

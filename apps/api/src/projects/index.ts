@@ -13,6 +13,7 @@ import { ProjectRecords } from './project-records.js';
 import { ProjectTaskService } from './project-task.service.js';
 import { ProjectViewService } from './project-view.service.js';
 import { ProjectController, ProjectTaskController } from './projects.controller.js';
+import { ProjectsToolContribution } from './projects-tool-contribution.js';
 
 /**
  * Projects domain module barrel (plans/PLAN_Phase_19_Projects.md §6.1).
@@ -39,6 +40,7 @@ export const PROJECTS_PROVIDERS: Provider[] = [
   ProjectCloneService,
   ProjectViewService,
   ProjectDashletService,
+  ProjectsToolContribution,
   ProjectGuardService,
 ];
 
@@ -46,3 +48,4 @@ export { ProjectAccessService } from './project-access.service.js';
 export { ProjectDashletService } from './project-dashlet.service.js';
 export { ProjectGuardService } from './project-guard.service.js';
 export { ProjectController, ProjectTaskController } from './projects.controller.js';
+export { ProjectsToolContribution } from './projects-tool-contribution.js';

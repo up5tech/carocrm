@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Phiên bản** | 1.7.0 |
-| **Ngày** | 2026-11-03 |
+| **Phiên bản** | 1.9.0 |
+| **Ngày** | 2026-11-06 |
 | **Phạm vi** | Toàn hệ thống (as-built) + đặc tả tầng AI CRM v2 |
-| **Trạng thái** | §1–§7: đã triển khai. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (phase 19-CHAT.20, 19-CHAT.21, 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (phase 19-CHAT.23). §9.7 + §10.1: **đã triển khai 2026-11-03** (phase 19-CHAT.24). §10.2–§11: quy trình áp dụng cho mọi đợt. |
+| **Trạng thái** | §1–§7: đã triển khai. §7.2: **24 tool Chat-facing (registry 25)** kể từ P1 (2026-11-05). **Event triggers đã triển khai (2026-11-06):** worker `DomainEventBus` subscriber → cổng `POST action/worker/trigger-event`; agent opt-in bằng `triggers.event` + `eventTypes`/`eventEntities`; record-context only; principal = người publish agent; recursion chặn bằng `correlation_id = aiAgentRun:<id>`. **Schedule triggers và integration triggers vẫn chưa triển khai.** Module `CRMChat` v1.3.0, `AIAgents` v1.2.0. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (19-CHAT.20 → 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (19-CHAT.23). §9.7 + §10.1: **đã triển khai 2026-11-03** (19-CHAT.24). §10.2–§11: quy trình áp dụng cho mọi đợt. |
 | **Ngôn ngữ** | Prose tiếng Việt; định danh, khoá tool, đường dẫn, schema giữ nguyên tiếng Anh. |
 
 ---
@@ -181,7 +181,7 @@ Chiều cao khung là `calc(100vh - 235px)` = 70 header + 48 content padding + 4
 
 | Khái niệm | Giá trị |
 |---|---|
-| Version / loadOrder | `1.0.0` / `390` |
+| Version / loadOrder | `1.2.0` / `390` |
 | Vòng đời agent | `draft → published → paused → retired`; sửa cấu hình published = version mới bất biến |
 | Effect class | `read`, `low_write`, `material_write`, `high_impact` |
 | Ma trận duyệt mặc định | `read` không · `low_write` không · `material_write` **có** · `high_impact` **có** |
@@ -192,7 +192,7 @@ Chiều cao khung là `calc(100vh - 235px)` = 70 header + 48 content padding + 4
 
 Mỗi tool call chạy trong `scope.runAs(actorUserId)` — quyền của **người khởi chạy**, không phải quyền hệ thống.
 
-### 7.2 Tool registry — 20 tool hiện có
+### 7.2 Tool registry — 24 tool hiện có Chat-facing
 
 Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts`, cộng năm tool do module sở hữu tự đăng ký — `crm_cross_module` (`crm-chat`) và bốn tool của `19-CHAT.23` (`lead-score`, `customer-success`, `service-desk`, `ai-agents`) — theo §9.1 luật 6. Đăng ký bằng code tin cậy; model chỉ chọn **key** + **arguments**, không bao giờ chọn handler, URL, bảng, SQL hay luật quyền.
 
@@ -218,6 +218,10 @@ Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts`, cộng năm tool do 
 | 18 | `crm_case_context` | read | không | `Case` | 24 KiB / 10 s | 19-CHAT.23 |
 | 19 | `crm_stale_records` | read | không | — | 24 KiB / 10 s | 19-CHAT.23 |
 | 20 | `crm_run_report` | read | không | — | 32 KiB / 15 s | 19-CHAT.23 |
+| 21 | `crm_project_status` | read | không | `Project` | 16 KiB / 10 s | P1 (19-AI.16) |
+| 22 | `crm_commercial_summary` | read | không | `Account` | 24 KiB / 10 s | P1 (19-AI.15) |
+| 23 | `crm_campaign_performance` | read | không | `Campaign` | 16 KiB / 10 s | P1 (19-AI.17) |
+| 24 | `crm_list_emails` | read | không | `Email` | 24 KiB / 10 s | P1 |
 
 Ba tool đọc mới (`19-CHAT.21`) đóng đúng ba lỗ hổng của §8:
 
@@ -249,15 +253,19 @@ Năm tool trí tuệ module (`19-CHAT.23`) là wrapper mỏng — mỗi tool tr�
 | `crm_case_context` | "soạn trả lời ticket này" | `Case` + `CaseSLAClock` + `KnowledgeBaseService.suggestForCase()` + CSAT | Case đọc qua Entity Engine nên ACL bản ghi áp; CSAT `null` (không phải lỗi) khi người gọi là portal |
 | `crm_stale_records` | "account nào im lặng 30 ngày?" | `entity_records` + `NOT EXISTS` trên `stream_items` | **Một** câu SQL: database loại trừ bản ghi có hoạt động, và record predicate của người gọi được gấp vào cùng câu — bản ghi không đọc được không bao giờ lọt vào kết quả |
 | `crm_run_report` | "báo cáo đã lưu nói gì" | `ReportService.list()` / `run()` | `canSee` của service là cửa duy nhất: report của người khác không được liệt kê, cũng không chạy được |
+| `crm_project_status` | "dự án này thế nào, có gì trễ" | `ProjectViewService.statusSummary()` | Counts chỉ đếm task trong scope của người gọi (Entity Engine predicate); project đọc qua `entities.get` nên ACL bản ghi áp; tool không đổi trạng thái nào |
+| `crm_commercial_summary` | "khách này còn nợ bao nhiêu" | `SalesIntegrationService.customerSummary()` | Contract 19-S.19: `assertAccess` trên Invoice/CreditNote/Payment/Subscription + record predicate; tiền luôn nêu theo currency gốc, không quy đổi |
+| `crm_campaign_performance` | "chiến dịch này hiệu quả thế nào" | `MarketingCampaignLogService.stats()` | Cổng `assertCampaignReadable` (22.12) — không đọc được campaign thì không thấy số liệu; tool không thể gửi/đổi gì |
+| `crm_list_emails` | "đã gửi gì cho khách này" | Entity Engine `Email` với `select` metadata (subject/status/direction/addresses/date) | **Không bao giờ** trả về body/bodyHtml/headers; ACL bản ghi quyết định hàng nào lọt ra; `parentType`/`parentId` nối thẳng vào record |
 
 **10 entity đọc được:** `Account`, `Contact`, `Lead`, `Opportunity`, `Case`, `Task`, `Project`, `Campaign`, `CustomerSuccessProfile`, `Quote`.
 
 **6 entity ghi được** (chỉ `description`, và `status` trên Lead/Case/Task): `Account`, `Contact`, `Lead`, `Opportunity`, `Case`, `Task`.
 
-Hai sự thật as-built mà mọi thiết kế chip/agent phải tính tới (ghi nhận 19-CHAT.24):
+Hai sự thật as-built mà mọi thiết kế chip/agent phải tính tới (ghi nhận 19-CHAT.24; số liệu cập nhật 2026-11-05):
 
-- Registry còn mang **`omnichannel.send_message`** (material_write, `requiresApproval: true`) do module Omnichannel đăng ký — **21 mục** trong registry, 20 mục phía Chat. Bảng trên liệt kê 20; cả 21 đều được assert một lần nữa trong `apps/api/test/ai-agent-runs.test.ts`.
-- Một agent **không thể mang quá 20 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`). Con số 20 đúng bằng catalogue phía Chat, nên một assistant *có thể* cầm toàn bộ catalogue — trần này được nâng từ 8 lên 20 ngày 2026-11-03, vì 8 nằm dưới cỡ catalogue và khiến Chat không thể cấp đủ bộ tool mà các chip quảng bá. Cái giá phải trả không phải an toàn (mọi tool vẫn đăng ký bằng code, validate khi publish, ACL khi thực thi) mà là **chất lượng chọn tool**: model cầm 20 mô tả sẽ chọn sai thường hơn model cầm 6 (`§11`). Bộ lọc chip (§9.7) vẫn là cơ chế thường trực, vì grant vẫn là lựa chọn của operator và module có thể chưa cài — `assistant.tools` vẫn là tập con.
+- Registry còn mang **`omnichannel.send_message`** (material_write, `requiresApproval: true`) do module Omnichannel đăng ký — **25 mục** trong registry, 24 mục phía Chat. Bảng trên liệt kê 24; cả 25 đều được assert một lần nữa trong `apps/api/test/ai-agent-runs.test.ts`.
+- Một agent **không thể mang quá 24 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`, nâng từ 20 lên 24 ngày 2026-11-05 khi bốn tool P1 được thêm). Trần 24 đúng bằng catalogue phía Chat, nên một assistant *có thể* cầm toàn bộ catalogue — 8 → 20 nâng ngày 2026-11-03 vì 8 nằm dưới cỡ catalogue và khiến Chat không thể cấp đủ bộ tool mà các chip quảng bá; 20 → 24 nâng ngày 2026-11-05 theo đúng lý do đó. Cái giá phải trả không phải an toàn (mọi tool vẫn đăng ký bằng code, validate khi publish, ACL khi thực thi) mà là **chất lượng chọn tool**: model cầm 24 mô tả sẽ chọn sai thường hơn model cầm 6 (`§11`). Bộ lọc chip (§9.7) vẫn là cơ chế thường trực, vì grant vẫn là lựa chọn của operator và module có thể chưa cài — `assistant.tools` vẫn là tập con.
 
 ### 7.3 Agent template
 
@@ -326,9 +334,9 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 | Truy vấn & đọc bản ghi | Đã có | 4 tool đọc generic |
 | Tổng hợp, so sánh, dự báo | Đã có (19-CHAT.21) | `crm_aggregate` — `count/sum/avg/min/max` + một `groupBy`, kỳ hạn server-side. Chưa có dự báo (forecast) thật |
 | Bối cảnh "của tôi" | Đã có (§7.6 + 19-CHAT.21) | Prompt mang `id`/`teams`; `crm_actor_context` thêm múi giờ + "hôm nay" |
-| Hoạt động & timeline | Đã có một phần (19-CHAT.21) | `crm_list_activities` cho `Call`/`Meeting`/`Task`, `scope: mine \| record` (chỉ Account/Contact). `Email` và Stream vẫn ngoài registry |
+| Hoạt động & timeline | Đã có (19-CHAT.21 + P1) | `crm_list_activities` cho `Call`/`Meeting`/`Task`, `scope: mine \| record` (chỉ Account/Contact); P1 thêm `crm_list_emails` — metadata only, không trả body. Stream vẫn ngoài registry |
 | Ghi lại kết quả công việc | Đã có (19-CHAT.22) | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2 — mọi thứ tạo ra đều gắn được vào bản ghi cha |
-| Trí tuệ module (score/health/SLA) | **Chưa có** | Service có, tool không |
+| Trí tuệ module (score/health/SLA/commercial/campaigns/projects) | Đã có một phần (19-CHAT.23 + P1) | `crm_lead_score`, `crm_customer_health`, `crm_case_context` (19-CHAT.23) + P1: `crm_project_status`, `crm_commercial_summary`, `crm_campaign_performance`. Forecast (dự báo pipeline) và Marketing triggers vẫn chưa có |
 | Duyệt & kiểm toán | Đã có | `ai_agent_approvals`, audit, evaluation |
 
 ### 8.2 Bốn chip: cả bốn đã trả lời được (19-CHAT.23, 19-CHAT.24)
@@ -670,6 +678,8 @@ Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số 
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
+| 1.9.0 | 2026-11-06 | **Event triggers (P1).** Worker `DomainEventBus` subscriber (`ai-agent-trigger-handlers.ts`) → cổng `POST action/worker/trigger-event` (worker-authorised, `x-worker-secret`). Agent opt-in: `triggers.event` + `eventTypes` + `eventEntities` (cả hai mặc định rỗng = không bao giờ; publish cảnh báo nếu bật flag mà thiếu allowlist). Record-context only (`input.mode: "record"`, entity khớp event). Principal = người publish agent (`principalFromUser`), không có service principal đặc quyền; quota tính cho owner. Recursion chặn: event do run sinh ra mang `correlation_id = aiAgentRun:<id>`, subscriber bỏ qua — agent không thể tự kích hoạt. Event id → idempotency key `evt:<eventId>:<agentId>` (at-least-once an toàn); fan-out ≤ 5 agent/event; `features.eventTriggers` mặc định off và door trả `{ disabled: true }` khi tắt. `toDomainEventMessage` giờ giữ `correlationId` (bug thật: nó bị rơi). Suite `ai-agent-triggers.test.ts` (5 case) + `ai-agent-trigger-handlers.test.ts` (7 case worker). Module `AIAgents` v1.2.0. **Schedule triggers và integration triggers vẫn chưa triển khai.** |
+| 1.8.0 | 2026-11-05 | P1 release. §7.2 lên **24 tool Chat-facing (registry 25)**: `crm_project_status` (Projects, qua `ProjectViewService.statusSummary()` — counts chỉ trên task người gọi đọc được), `crm_commercial_summary` (Sales, qua contract 19-S.19 `customerSummary` — ACL trên Invoice/CreditNote/Payment/Subscription, tiền theo currency gốc), `crm_campaign_performance` (MarketingAutomation, qua `MarketingCampaignLogService.stats()` — cổng `assertCampaignReadable`), `crm_list_emails` (kernel — metadata only, không bao giờ trả body). `MAX_TOOLS` 20 → **24**; module `CRMChat` v1.3.0, `AIAgents` v1.1.0. Suite mới `ai-domain-tools.test.ts` (5 case, gồm denial path cho caller không quyền); `crm-chat-evaluation.test.ts` lên 70 case (thêm 4 tool × vi/en, 24 case / 3 assistants); catalogue table lên 25 entry. 19-AI.15–17 giờ **tròn một phần**: 4 tool đọc đã giao; **triggers (nửa sau của 19-AI.17) vẫn chưa triển khai**; 19-AI.15 không có Sales write path nào. |
 | 1.0.0 | 2026-11-02 | Bản đầu. Chốt đặc tả as-built §1–§7; thêm phân tích khoảng trống §8 và đặc tả AI CRM tool catalogue v2 §9–§11. |
 | 1.1.0 | 2026-11-02 | Triển khai §9.6: `ai-agent-actor.ts` (khối "Acting user" + `promptSafe`), `AIAgentRunService.actorContext()`, seam `__FAKE_ECHO_ACTOR__`. Thêm `ai-agent-actor.test.ts` (10 case thuần) và 1 case end-to-end trong `ai-agent-runs.test.ts`. Cập nhật §7.6, §8.1, §8.2. Số entity chính xác: 115. |
 | 1.2.0 | 2026-11-02 | Nối SPEC với plan: §9.2–§9.7 giờ trỏ tới phase 19-CHAT.21–24 trong `PLAN_Phase_19_CRM_Chat.md` §17, và dòng trạng thái ở đầu ghi rõ phần nào đã thành phase. Không đổi nội dung kỹ thuật. |

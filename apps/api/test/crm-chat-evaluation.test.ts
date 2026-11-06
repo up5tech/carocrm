@@ -297,6 +297,11 @@ beforeAll(async () => {
       Call: { read: 'all', create: 'all', edit: 'all', delete: 'all' },
       Meeting: { read: 'all', create: 'all', edit: 'all', delete: 'all' },
       Email: { read: 'all', create: 'all', edit: 'all', delete: 'all' },
+      Invoice: { read: 'all' },
+      CreditNote: { read: 'all' },
+      Payment: { read: 'all' },
+      Subscription: { read: 'all' },
+      ProjectTask: { read: 'all' },
       Post: { read: 'all', create: 'all', delete: 'all' },
       Project: { read: 'all' },
       Quote: { read: 'all' },
@@ -394,6 +399,29 @@ async function buildFixtures(): Promise<void> {
   expect(report.status, JSON.stringify(report.body)).toBe(201);
   fx.reportId = String(report.body['id']);
   entityIds.push(fx.reportId);
+
+  // A campaign with no events yet: the stats service still answers, with zeros — a real reading, not a stub.
+  fx.campaignId = await createRecord('Campaign', { name: `${MARKER} campaign` }, ctx.adminToken);
+  // Project needs a board; the board only needs a name.
+  const board = await call('POST', '/api/v1/ProjectBoard', ctx.adminToken, { name: `${MARKER} board` });
+  expect(board.status, JSON.stringify(board.body)).toBe(201);
+  const boardId = String(board.body['id']);
+  entityIds.push(boardId);
+  fx.projectId = await createRecord('Project', { name: `${MARKER} project`, boardId }, ctx.adminToken);
+  fx.emailId = await createRecord(
+    'Email',
+    {
+      name: `${MARKER} outbound update`,
+      status: 'Sent',
+      direction: 'Outbound',
+      dateSent: new Date().toISOString(),
+      parentType: 'Account',
+      parentId: fx.accountId,
+      fromAddress: 'sales@example.com',
+      toAddressList: 'buyer@example.com',
+    },
+    toolToken,
+  );
 }
 
 
@@ -868,11 +896,35 @@ const TOOL_EVAL_CASES: readonly ToolEvalCase[] = [
     en: 'What does my saved report say?',
     args: () => ({ reportId: fx.reportId, maxRows: 10 }),
   },
+  {
+    tool: 'crm_project_status',
+    vi: 'Dự án này đang tiến triển thế nào?',
+    en: 'Where does this project stand?',
+    args: () => ({ projectId: fx.projectId }),
+  },
+  {
+    tool: 'crm_commercial_summary',
+    vi: 'Khách hàng này còn nợ bao nhiêu tiền?',
+    en: 'How much does this customer still owe us?',
+    args: () => ({ accountId: fx.accountId }),
+  },
+  {
+    tool: 'crm_campaign_performance',
+    vi: 'Chiến dịch email này hiệu quả thế nào?',
+    en: 'How did this email campaign perform?',
+    args: () => ({ campaignId: fx.campaignId }),
+  },
+  {
+    tool: 'crm_list_emails',
+    vi: 'Những email nào đã gửi cho tài khoản này?',
+    en: 'Which emails went out to this account?',
+    args: () => ({ scope: 'record', record: { entity: 'Account', id: fx.accountId }, maxSize: 5 }),
+  },
 ];
 
 /**
  * How many grants one evaluation assistant holds. A test-local choice, not the product ceiling:
- * `MAX_TOOLS` was eight when this suite was written and is twenty now, so one assistant could carry the
+ * `MAX_TOOLS` was eight when this suite was written, is twenty-four now, so one assistant could carry the
  * whole catalogue. Grouping stays, because it keeps each published version small and because it proves
  * the suite does not depend on a single agent holding everything — which is the state a real deployment
  * is still in when its assistant is granted a subset.

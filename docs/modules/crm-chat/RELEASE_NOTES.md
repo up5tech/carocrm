@@ -1,9 +1,36 @@
-# CRM Chat Module — Release Notes v1.2
+# CRM Chat Module — Release Notes v1.3
 
-**Release Date:** 2026-11-03
+**Release Date:** 2026-11-05
 **Module:** CRMChat (`crm-chat`)
-**Version:** 1.2.0
-**Contract Version:** 1.2.0
+**Version:** 1.3.0
+**Contract Version:** 1.2.0 (unchanged)
+
+---
+
+## v1.3.0 — Domain tools for the assistant (P1) (2026-11-05)
+
+Four read-only tools, contributed by the module that owns the service (the 19-CHAT.23 pattern),
+plus one kernel tool. No migration, no contract change, no route change.
+
+| Tool | Owner | Answers |
+| --- | --- | --- |
+| `crm_project_status` | `Projects` | One project's status: record, task counts by status, overdue and unassigned, milestones. Counts cover only what the caller may read. |
+| `crm_commercial_summary` | `Sales` | One account's commercial position: open issued receivables by currency, oldest unsettled due date, unapplied credit, confirmed payments, active subscriptions. Money stays in its own currency; nothing is re-rated. |
+| `crm_campaign_performance` | `MarketingAutomation` | One campaign's delivery/engagement counts and distinct recipients, through the campaign readability gate. It cannot send, schedule or change anything. |
+| `crm_list_emails` | `AIAgents` (kernel) | Email **metadata** only (subject, status, direction, addresses, date, parent link) — bodies and headers never cross the tool boundary. |
+
+**`MAX_TOOLS` 20 → 24** (`ai-agent-config.ts`) — one assistant can again hold the entire Chat-facing
+catalogue. The registry holds **25** entries including `omnichannel.send_message`.
+
+**Verification**
+- `apps/api/test/ai-domain-tools.test.ts` — new, 5 cases: catalogue/ownership, happy paths for all
+  four tools, metadata-only assertion for emails, and a denial case per tool for a caller with no
+  rights.
+- `apps/api/test/crm-chat-evaluation.test.ts` — 62 → **70** cases (4 tools × vi/en).
+- `apps/api/test/ai-agent-runs.test.ts` — catalogue table now asserts all 25 entries.
+
+**Not in this release:** event/schedule triggers (the other half of 19-AI.17) remain unimplemented;
+no Sales or Marketing write path was added; forecast/pipeline prediction still does not exist.
 
 ---
 
@@ -494,8 +521,10 @@ Usage metrics are logged with correlation IDs. Check application logs for:
 
 ## Test Coverage
 
-- **Repository total:** 220 API test files (as of 2026-11-05).
+- **Repository total:** 221 API test files (as of 2026-11-05).
 - **CRMChat suites:** 10 files, 159 tests, all passing (`pnpm test`), verified 2026-11-05.
+- **`ai-domain-tools.test.ts` (P1, 2026-11-05):** 5 cases — registry/ownership of the four domain tools,
+  happy paths, metadata-only emails, and a denial case per tool for a caller with no rights.
 
 | Suite | Covers |
 | --- | --- |

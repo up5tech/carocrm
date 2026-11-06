@@ -1,7 +1,7 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
-> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03 (module v1.2.0)  
-> **Plan version:** 1.7.0 (2026-11-03)  
+> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03; P1 domain tools (`crm_project_status`, `crm_commercial_summary`, `crm_campaign_performance`, `crm_list_emails`) shipped 2026-11-05 (module v1.3.0, contract unchanged)  
+> **Plan version:** 1.8.0 (2026-11-05)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
@@ -1601,6 +1601,7 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 
 | Version | Date | Change |
 |---|---|---|
+| 1.8.0 | 2026-11-05 | P1 release: four domain tools shipped — `crm_project_status` (Projects), `crm_commercial_summary` (Sales, over the 19-S.19 `customerSummary` contract), `crm_campaign_performance` (MarketingAutomation, behind the campaign readability gate), `crm_list_emails` (kernel, metadata only). `MAX_TOOLS` 20 → 24; catalogue asserted as 25 entries; new suite `ai-domain-tools.test.ts` (5 cases, happy + denial paths); `crm-chat-evaluation.test.ts` 62 → 70 cases; module v1.3.0, contract unchanged. §8 items for Projects/Sales/Marketing and Email now closed on the read side only — triggers remain unimplemented. |
 | 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
 | 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
 | 1.7.0 | 2026-11-03 | Gap closure following 19-CHAT.24: **G38** `features.readTools` is now enforced on `POST action/turns` and `action/query/execute` and reported through `actions.canStartTurn` (deployment-visible — a flag-off installation stops answering until an operator switches it on); **G39** a turn's `result.sources` is re-authorized with the citation rule; **G37** the Case guard accepts the record API's own `own`/`team` create stamp instead of refusing it, and the IDOR test that had been passing on a failed create now asserts the create; **G63** `/admin/*` routes are guarded by the server's own `GET /AdminPanel` answer rather than a hand-written capability map. `MAX_TOOLS` raised 8 → 20 so one assistant can hold the Chat-facing catalogue; §17 phase 24's as-built row reworded accordingly. |

@@ -18,6 +18,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 import { z } from 'zod';
 
+import { KNOWN_DOMAIN_EVENTS } from '@carocrm/core/domain-events/index.js';
 import { Public } from '../auth/auth.guard.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
@@ -524,6 +525,47 @@ export class AIAgentsController {
     parse(EmptyBodySchema, body);
     this.assertWorkerSecret(secret);
     return this.memory.sweep();
+  }
+
+  /**
+   * The worker's door for committed domain events (P1, 19-AI.17).
+   *
+   * The worker has no session and the ACL of the person who caused the record change is not
+   * knowable from here, so this door starts nothing by itself: it names the event, and the
+   * service starts a run for each agent that (a) is currently published, (b) opts in with
+   * `triggers.event` + matching `eventTypes`/`eventEntities` allowlists, and (c) is a
+   * record-context agent for exactly this entity. Each run executes as the **publishing user**,
+   * never wider; recursion is stopped because events produced inside a run carry
+   * `correlation_id = 'aiAgentRun:<id>'` and never re-enter this door.
+   *
+   * `features.eventTriggers` off is a quiet `{ disabled: true }`, never a retry storm.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/worker/trigger-event')
+  async triggerEventForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const raw = asRecord(body);
+    const eventId = typeof raw['eventId'] === 'string' ? raw['eventId'].trim() : '';
+    const eventType = typeof raw['eventType'] === 'string' ? raw['eventType'].trim() : '';
+    const entityType = typeof raw['entityType'] === 'string' ? raw['entityType'].trim() : '';
+    const entityId = typeof raw['entityId'] === 'string' ? raw['entityId'].trim() : '';
+    if (
+      eventId.length === 0 ||
+      eventId.length > 120 ||
+      entityId.length === 0 ||
+      entityId.length > 120 ||
+      !KNOWN_DOMAIN_EVENTS.includes(eventType) ||
+      !/^[A-Z][A-Za-z0-9]{1,49}$/.test(entityType)
+    ) {
+      throw new ValidationError('The trigger payload is invalid.');
+    }
+    return this.runs.triggerEvent({
+      eventId,
+      eventType: eventType as 'entity.created' | 'entity.updated' | 'entity.deleted' | 'entity.restored',
+      entityType,
+      entityId,
+    });
   }
 
   @Get('action/usage')

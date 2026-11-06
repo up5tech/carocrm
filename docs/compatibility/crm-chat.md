@@ -4,7 +4,8 @@
 > the product contract is `docs/architecture/crm-chat-contract.md`, the audit is
 > `docs/modules/crm-chat/repository-audit.md`.
 > **Module:** `CRMChat` — registry key and route slug `crm-chat`, SPA route `/crm-chat`, no `Ua` prefix.
-> **Status:** 19-CHAT.0 → 19-CHAT.24 delivered; module v1.2.0, contract v1.2.0 (as audited 2026-11-05).
+> **Status:** 19-CHAT.0 → 19-CHAT.24 delivered (module v1.2.0, contract v1.2.0); P1 domain tools
+> delivered (module v1.3.0, contract unchanged) — as audited 2026-11-05.
 
 ---
 
@@ -34,6 +35,7 @@ workspace, quick-chat panel, citations, feedback, saved prompts and settings —
 | 19-CHAT.11–14 | Cross-module analysis (curated paths, `crm_cross_module`); action proposals confirmed through AI Agents approvals (never a parallel approval store); admin settings with guardrails; conversation search (`conversationSearch` flag); saved prompts (data only); feedback (audited, inert). |
 | 19-CHAT.15–19 | Security hardening (injection boundaries, cross-user isolation); usage tracking and safe observability; evaluation suite; release readiness and operational handover (v1.1.0). |
 | 19-CHAT.20–24 | AI CRM tool catalogue v2: acting user in the system prompt; `crm_actor_context`, `crm_aggregate`, `crm_list_activities` (+ `crm_cross_module` in the registry); the write loop (`crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2, `crm_update_record_fields` v2); module intelligence tools (`crm_lead_score`, `crm_customer_health`, `crm_case_context`, `crm_stale_records`, `crm_run_report`); tool-aware suggestions and the 20-tool catalogue assertion (v1.2.0). |
+| P1 — domain tools (2026-11-05, module v1.3.0) | `crm_project_status` (Projects, over `ProjectViewService.statusSummary()`), `crm_commercial_summary` (Sales, over the 19-S.19 `customerSummary` contract), `crm_campaign_performance` (MarketingAutomation, over `stats()` behind the campaign readability gate), `crm_list_emails` (AIAgents kernel; metadata only — bodies never cross the tool boundary). `MAX_TOOLS` 20 → 24; catalogue asserted as 25 entries. Triggers remain unimplemented. |
 
 `CRM_CHAT_MODULE.implementedPhases` declares `19-CHAT.0` → `19-CHAT.24` and is pinned by
 `apps/api/test/phase19-module-declarations.test.ts` (added 2026-11-05).
@@ -92,6 +94,7 @@ workspace, quick-chat panel, citations, feedback, saved prompts and settings —
 | Surface | Status |
 | --- | --- |
 | `/api/v1/CRMChat/action/*` (conversations, turns, events SSE, query, help, prompts, feedback, actions, cross-module, usage, citations, settings, health, capabilities) | available; **no generated OpenAPI** (G1 deferred to Phase 22.22) — routes are pinned by `crm-chat-contract.test.ts` and the contract catalog |
+| Module version | `CRMChat` v1.3.0 (P1, 2026-11-05) / `AIAgents` v1.1.0; contract unchanged at v1.2.0 |
 | Navigation key `crmChat`, route `/crm-chat`, quick-chat panel in the app header | available; gated by `CRMChatConversation:read` (`/crm-chat`) |
 | `crmChat` settings row in `app_settings` | available; strict Zod validation; unknown keys refused |
 | `crm_chat_citations` / `crm_chat_feedback` / `crm_chat_prompts` (migration `062`) | available, additive only |
@@ -108,9 +111,9 @@ Behaviour rows say *implemented* only when a test in this checkout proves the ac
 the configured primary database (`AGENTS.md` §3). The suites never create a second database, never
 truncate anything, use `AGENT_TEST_<runid>` markers cleaned by id, and call no provider — the
 deterministic fake covers the model boundary. As of 2026-11-05: **10 suites, 159 tests** pass
-(`crm-chat*.test.ts`), plus `docs/compatibility` companion checks and
-`phase19-module-declarations.test.ts` pinning the phase list. The e2e spec writes nothing and
-changes no setting.
+(`crm-chat*.test.ts`), plus `ai-domain-tools.test.ts` (5 cases, P1 domain tools, incl. per-tool
+denial paths) and `phase19-module-declarations.test.ts` pinning the phase list. The e2e spec writes
+nothing and changes no setting.
 
 ---
 

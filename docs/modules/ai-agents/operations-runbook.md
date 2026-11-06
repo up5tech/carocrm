@@ -1,5 +1,26 @@
 # AI Agents — Operations Runbook
 
+## Event triggers (P1, 2026-11-05)
+
+A committed `entity.*` event can start a run for each agent that opted in. Nothing starts until an
+operator enables both switches, and an agent opts in itself:
+
+1. `AIAgents` → **Settings** → `features.eventTriggers: true` (off by default; the door answers a
+   quiet `{ disabled: true }` without it — never a retry storm).
+2. The published version carries `triggers.event: true` **and** both allowlists:
+   `triggers.eventTypes` (e.g. `["entity.created"]`) and `triggers.eventEntities`
+   (e.g. `["Case"]`). Empty either way means never; publication warns when the flag is on with
+   empty allowlists.
+3. The agent must be **record-context** (`input.mode: "record"` with `input.entity` equal to the
+   event's entity). Text-mode agents cannot be fed by events.
+4. Each run executes as the **publishing user** — the agent can do nothing wider than its owner
+   could by clicking Run. If the owner is deleted or deactivated, the trigger skips the agent and
+   logs `owner-inactive`; it never falls back to a wider principal.
+5. **Agents never trigger agents.** Every event produced inside a run carries
+   `correlation_id = 'aiAgentRun:<runId>'`; the worker subscriber never forwards those.
+6. Re-delivering the same event starts no second run (idempotency key `evt:<eventId>:<agentId>`).
+7. Fan-out is capped at 5 agents per event.
+
 ## Provider outage / rate limit
 
 - Runs fail with a normalized provider error and enter `retry_wait` within retry budget.

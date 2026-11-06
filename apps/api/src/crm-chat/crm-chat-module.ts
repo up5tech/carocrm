@@ -280,8 +280,8 @@ export type AssistantStateKey =
 export const CRM_CHAT_MODULE = {
   id: 'CRMChat',
   name: 'CRM Chat',
-  /** Delivered sub-phases; 19-CHAT.5+ add the turn endpoints and streaming. */
-  version: '1.2.0',
+  /** Delivered sub-phases; 19-CHAT.5+ add the turn endpoints and streaming. `1.3.0` adds the P1 domain tools. */
+  version: '1.3.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; Chat runs after AI Agents (`390`). */
   loadOrder: 395,

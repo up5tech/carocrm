@@ -8,6 +8,7 @@ import { MarketingAutomationNavigationService } from "./marketing-automation-nav
 import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
 import { MarketingAutomationRecords } from "./marketing-automation-records.js";
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
+import { MarketingAutomationToolContribution } from "./marketing-automation-tool-contribution.js";
 import { MarketingAutomationWriteGuardService } from "./marketing-automation-write-guard.service.js";
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
 import { MarketingCampaignLogService } from "./marketing-campaign-log.service.js";
@@ -93,6 +94,8 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingAutomationModuleHealthService,
   MarketingAutomationNavigationService,
   MarketingAutomationWriteGuardService,
+  MarketingAutomationToolContribution,
 ];
 
 export { MARKETING_AUTOMATION_MODULE } from "./marketing-automation-module.js";
+export { MarketingAutomationToolContribution } from "./marketing-automation-tool-contribution.js";

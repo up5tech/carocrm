@@ -16,7 +16,10 @@ produces a new version on publish.
   maxRetries, maxOutputTokens, temperature
 - `output.mode`: `text` | `json` (with optional schema)
 - `memory`: `{ mode, maxMessages, retentionDays }`
-- `triggers`: `{ manual, record, event, schedule, integration }`
+- `triggers`: `{ manual, record, event, schedule, integration, eventTypes, eventEntities }` —
+  `eventTypes` is a subset of `entity.created | entity.updated | entity.deleted | entity.restored`,
+  `eventEntities` PascalCase entity names. Both default to `[]`, which means **never** — the
+  runtime only starts a run when every allowlist matches.
 - `approval`: `{ requireFor: EffectClass[] }`
 
 ## Publication validation

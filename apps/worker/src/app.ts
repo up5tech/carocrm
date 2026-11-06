@@ -13,6 +13,7 @@ import {
   registerAdvancedIntegrationsJobs,
 } from './handlers/advanced-integrations-handlers.js';
 import { registerAIAgentJobs } from './handlers/ai-agent-handlers.js';
+import { registerAIAgentDomainEvents } from './handlers/ai-agent-trigger-handlers.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerESignatureJobs } from './handlers/esignature-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
@@ -170,6 +171,14 @@ export class WorkerApplication {
     // Phase 19-LS.6: a committed Lead change hands off to the API, which decides whether it can move a score
     // and whether a job is already waiting for this Lead. The subscriber owns no scoring rule.
     registerLeadScoreDomainEvents(this.domainEvents, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-AI.17: a committed entity event may start an opted-in agent run (record-context
+    // only, per-agent event allowlists, owner-on-behalf principal, recursion stopped by the
+    // aiAgentRun correlation marker). Inert without a worker capability.
+    registerAIAgentDomainEvents(this.domainEvents, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

@@ -103,14 +103,39 @@ portal user cannot list internal agent runs.
 *Threat:* a retry, duplicate event or worker crash repeats an email, payment or record write.
 
 **Controls**
-- Run creation accepts an idempotency key; event triggers use the event id.
+- Run creation accepts an idempotency key; event triggers use `evt:<eventId>:<agentId>`.
 - Each write tool call has a unique idempotency key derived from run + step + call identity.
 - Before retrying, the executor checks whether the first attempt committed and returns its outcome.
 - External effects that cannot be reconciled are marked `outcome_unknown`, never "succeeded".
 - Event-triggered runs carry causation ids and are de-duplicated; recursion depth is bounded.
+- Events produced inside a run carry `correlation_id = 'aiAgentRun:<runId>'`; the worker subscriber
+  never re-submits those, so an agent's output can never start another run (or itself again).
 
 **Tests:** duplicate dispatch of the same job creates one effect; a crash after the effect does not
-send twice; a replay returns the stored outcome.
+send twice; a replay returns the stored outcome; a re-delivered event starts no second run.
+
+### T5a — Non-interactive trigger authority (event triggers, P1)
+
+*Threat:* a background trigger fires an agent with a wider identity than any human authorised, or
+an agent fires on events nobody intended.
+
+**Controls**
+- An event-triggered run executes as the **publishing user** (`principalFromUser`), never a
+  service principal with ambient authority; every ACL decision is the owner's own. If the owner is
+  inactive or missing, the agent is skipped (`owner-missing` / `owner-inactive`), never widened.
+- An agent fires only when **all** of these match the event: `triggers.event` is true, the event
+  type is in the published version's `triggers.eventTypes` allowlist, the entity is in
+  `triggers.eventEntities`, and the agent is record-context for exactly this entity. Empty
+  allowlists mean never.
+- Per-event fan-out is capped at five agents; oversized batches are truncated, not queued forever.
+- The trigger is inert while `features.eventTriggers` is off: the worker door answers
+  `{ disabled: true }` and the outbox is not retried into a dead-letter storm.
+- The trigger is worker-authorised (`x-worker-secret`, constant-time compare) like the other
+  worker doors; a duplicated dispatch is idempotent.
+
+**Tests:** a disabled flag starts nothing; an agent with no allowlist starts nothing; a wrong
+event type or entity starts nothing; re-delivery starts no second run; the run's
+`initiated_by_user_id` is the owner's; an agent-caused event never re-enters the door.
 
 ### T6 — Runaway cost and loops
 

@@ -93,7 +93,14 @@ function toDomainEventMessage(event: OutboxEvent, log: Logger): DomainEventMessa
   if (KNOWN_DOMAIN_EVENTS.includes(event.eventType) && entity === undefined) {
     log.warn({ eventId: event.id, eventType: event.eventType }, 'domain event payload is not a record mutation');
   }
-  const message: DomainEventMessage = { id: event.id, eventType: event.eventType, payload: event.payload };
+  const message: DomainEventMessage = {
+    id: event.id,
+    eventType: event.eventType,
+    payload: event.payload,
+    // Additive: subscribers need the correlation id to tell an agent's own output from a
+    // user's edit (the recursion guard for AI agents depends on it).
+    ...(event.correlationId === undefined ? {} : { correlationId: event.correlationId }),
+  };
   return entity === undefined ? message : { ...message, entity };
 }
 

@@ -26,6 +26,7 @@ import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesNavigationService } from "./sales-navigation.service.js";
 import { SalesRecords } from "./sales-records.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
+import { SalesToolContribution } from "./sales-tool-contribution.js";
 import { SalesWriteGuardService } from "./sales-write-guard.service.js";
 import { SubscriptionService } from "./subscriptions/subscription.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
@@ -72,6 +73,7 @@ export const SALES_PROVIDERS: Provider[] = [
   SalesDashletCatalogService,
   SalesJobMonitorService,
   SalesIntegrationService,
+  SalesToolContribution,
 ];
 
 export { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
@@ -163,6 +165,7 @@ export {
   DEFAULT_SALES_SETTINGS,
   SalesSettingsService,
 } from "./sales-settings.service.js";
+export { SalesToolContribution } from "./sales-tool-contribution.js";
 export {
   BILLABLE_SUBSCRIPTION_STATUSES,
   BILLING_INTERVALS,

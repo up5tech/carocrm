@@ -499,6 +499,16 @@ export class AIAgentDefinitionService {
     if (config.triggers.event && !settings.features.eventTriggers) {
       warn('trigger-disabled', 'triggers.event', 'Event triggers are enabled on the agent but the instance feature is off; those runs are refused.');
     }
+    if (
+      config.triggers.event &&
+      (config.triggers.eventTypes.length === 0 || config.triggers.eventEntities.length === 0)
+    ) {
+      warn(
+        'trigger-no-events',
+        'triggers',
+        'Event triggers are enabled but `triggers.eventTypes` or `triggers.eventEntities` is empty; the agent will never start from an event. Set both allowlists before relying on it.',
+      );
+    }
     if (config.triggers.schedule && !settings.features.scheduledTriggers) {
       warn('trigger-disabled', 'triggers.schedule', 'Scheduled triggers are enabled on the agent but the instance feature is off; those runs are refused.');
     }
@@ -986,7 +996,7 @@ export class AIAgentDefinitionService {
             },
             output: { mode: 'text' },
             memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-            triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
+            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
         },
@@ -1023,7 +1033,7 @@ export class AIAgentDefinitionService {
             },
             output: { mode: 'text' },
             memory: { mode: 'conversation', maxMessages: 12, retentionDays: 30 },
-            triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
+            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
         },
@@ -1080,7 +1090,7 @@ function parsedFallbackConfig(): AgentConfig {
     },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }

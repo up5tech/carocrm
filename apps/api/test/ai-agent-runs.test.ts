@@ -329,10 +329,10 @@ const CRM_READ_SCOPE = [
  * (`plans/PLAN_Phase_19_CRM_Chat.md` §17 `19-CHAT.24`; `plans/SPEC.md` §7.2).
  *
  * This is the assertion that makes each tool *owned*: unregister one, rename its effect class, widen
- * its entity scope or drop its approval gate, and this test names the tool and the field. The twenty
- * CRM and handbook tools are the Chat-facing catalogue; `omnichannel.send_message` is the one
- * module-owned tool outside it, and it is listed here because it shares the registry and the same
- * approval rule.
+ * its entity scope or drop its approval gate, and this test names the tool and the field. The
+ * twenty-four CRM and handbook tools are the Chat-facing catalogue; `omnichannel.send_message` is
+ * the one module-owned tool outside it, and it is listed here because it shares the registry and the
+ * same approval rule.
  */
 const EXPECTED_CATALOGUE: readonly {
   readonly key: string;
@@ -362,6 +362,10 @@ const EXPECTED_CATALOGUE: readonly {
   { key: 'crm_case_context', owningModule: 'ServiceDesk', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Case'] },
   { key: 'crm_stale_records', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
   { key: 'crm_run_report', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  { key: 'crm_project_status', owningModule: 'Projects', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Project'] },
+  { key: 'crm_commercial_summary', owningModule: 'Sales', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Account'] },
+  { key: 'crm_campaign_performance', owningModule: 'MarketingAutomation', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Campaign'] },
+  { key: 'crm_list_emails', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Email'] },
   { key: 'omnichannel.send_message', owningModule: 'Omnichannel', version: '1', effectClass: 'material_write', requiresApproval: true, entityScopes: [] },
 ];
 

@@ -49,6 +49,28 @@ export interface GanttProjection {
   truncated: boolean;
 }
 
+/** The compact status answer the `crm_project_status` AI tool returns. */
+export interface ProjectStatusSummary {
+  project: {
+    id: string;
+    name: string | null;
+    status: string | null;
+    dateStart: string | null;
+    dateEnd: string | null;
+    progress: number | null;
+  };
+  tasks: {
+    total: number;
+    truncated: boolean;
+    byStatus: Record<string, number>;
+    /** dateEnd in the past and the task is not Completed or Canceled. */
+    overdue: number;
+    unassigned: number;
+  };
+  /** Up to ten milestones (taskType `Milestone`), name/dateEnd/status only. */
+  milestones: { name: string | null; dateEnd: string | null; status: string | null }[];
+}
+
 /** One list page; the query engine clamps `maxSize` to 500, so a wide project is paged (§13). */
 const PAGE = 500;
 const MAX_PAGES = 4;
@@ -185,6 +207,56 @@ export class ProjectViewService {
   }
 
   /**
+   * The compact status summary behind the `crm_project_status` AI tool.
+   *
+   * Bounded by construction: the task walk is the same paged, ACL-filtered list the views use
+   * (at most 4 × 500 rows, and the caller only sees what they may read), and only counts plus
+   * up-to-ten milestones leave the process. The project itself is read through the Entity
+   * Engine, so record-level ACL and field masking apply exactly as they do in the UI.
+   */
+  async statusSummary(projectId: string): Promise<ProjectStatusSummary> {
+    await this.access.requireProject(projectId);
+    const [projectRow, tasks] = await Promise.all([this.projectView(projectId), this.tasks(projectId)]);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const byStatus: Record<string, number> = {};
+    let overdue = 0;
+    let unassigned = 0;
+    const milestones: ProjectStatusSummary['milestones'] = [];
+    for (const task of tasks.list) {
+      const key = task.status ?? 'unknown';
+      byStatus[key] = (byStatus[key] ?? 0) + 1;
+      if (
+        task.dateEnd !== null &&
+        task.dateEnd < today &&
+        task.status !== 'Completed' &&
+        task.status !== 'Canceled'
+      ) {
+        overdue += 1;
+      }
+      if (task.assigneeUserId === null || task.assigneeUserId === '') unassigned += 1;
+      if (task.taskType === 'Milestone' && milestones.length < 10) {
+        milestones.push({ name: task.name, dateEnd: task.dateEnd, status: task.status });
+      }
+    }
+
+    const project: ProjectStatusSummary['project'] = {
+      id: text(projectRow['id']) ?? projectId,
+      name: text(projectRow['name']) ?? null,
+      status: text(projectRow['status']) ?? null,
+      dateStart: text(projectRow['dateStart']) ?? null,
+      dateEnd: text(projectRow['dateEnd']) ?? null,
+      progress: progressOf(projectRow['progress']),
+    };
+
+    return {
+      project,
+      tasks: { total: tasks.list.length, truncated: tasks.truncated, byStatus, overdue, unassigned },
+      milestones,
+    };
+  }
+
+  /**
    * Task rows through the generic list, so the ACL predicate is the one place that decides. Ordered
    * by `sortOrder`; the caller's group or stage ordering is applied on top.
    */
@@ -216,6 +288,15 @@ export class ProjectViewService {
     });
     return { list: result.list, truncated: result.list.length >= PAGE };
   }
+}
+
+function progressOf(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string') {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function toProjection(record: Record<string, unknown>): TaskProjection {

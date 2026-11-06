@@ -80,7 +80,9 @@ snapshot. The immutable snapshot lives in `ai_agent_versions` and is read by eve
   tools: [{ toolKey: string, effectClass: 'read'|'low_write'|'material_write'|'high_impact',
             constraints: { entities?: string[], fields?: string[], maxRecords?: number } }],
   triggers: { manual: boolean, record: boolean, event: boolean, schedule: boolean,
-              integration: boolean },           // only manual may be true in the first release
+              integration: boolean,
+              eventTypes?: ('entity.created'|'entity.updated'|'entity.deleted'|'entity.restored')[],
+              eventEntities?: string[] },       // event triggers live (P1); schedule/integration do not
   limits: { maxSteps: 1..16, maxToolCalls: 0..32, maxModelCalls: 1..16,
             maxTokens: 1..100000, maxCostUsd: 0..100, maxElapsedSeconds: 1..600,
             maxRetries: 0..5, maxConcurrency: 1..10 },
