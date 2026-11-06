@@ -1,6 +1,6 @@
 import type { Logger } from '@carocrm/core/logger/index.js';
 
-import { SUBSCRIBE_ALL, type DomainEventBus, type DomainEventMessage } from '../events/domain-event-bus.js';
+import { type DomainEventBus, type DomainEventMessage,SUBSCRIBE_ALL } from '../events/domain-event-bus.js';
 
 /**
  * Phase 19-AI.17 — the domain-event door for agent triggers (P1)

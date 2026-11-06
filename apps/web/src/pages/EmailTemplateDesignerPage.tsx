@@ -21,7 +21,7 @@
  * Saving stays generic entity CRUD (`POST`/`PATCH /EmailTemplate`): the screen adds no
  * storage and no second source of truth for a template record.
  */
-import { EyeOutlined } from '@ant-design/icons';
+import { CustomerServiceOutlined, EyeOutlined } from '@ant-design/icons';
 import { Alert, App as AntApp, Button, Card, Collapse, Drawer, Form, Input, Segmented, Select, Space, Spin, Tooltip, Typography } from 'antd';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -400,6 +400,16 @@ export function EmailTemplateDesignerPage() {
               {t('web.emailTemplate.preview')}
             </Button>
           ) : null}
+          {/* P2 inline AI on email: draft template copy in Chat, then come back. Nothing
+              is written into the template by AI — the user copies what they approve. */}
+          <Button
+            icon={<CustomerServiceOutlined />}
+            onClick={() =>
+              navigate(`/crm-chat?ask=${encodeURIComponent(t('web.ai.inline.draftEmailTemplate'))}`)
+            }
+          >
+            {t('web.ai.inline.draftWithAi')}
+          </Button>
           <Button onClick={() => navigate(id ? `/EmailTemplate/${id}` : '/EmailTemplate')}>{t('web.edit.cancel')}</Button>
           <Button type="primary" htmlType="submit" form="carocrm-etpl-form" loading={saving}>{t('web.edit.save')}</Button>
         </Space>

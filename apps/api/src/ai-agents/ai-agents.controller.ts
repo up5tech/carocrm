@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 
+import { KNOWN_DOMAIN_EVENTS } from '@carocrm/core/domain-events/index.js';
 import { AuthenticationFailedError, InvalidQueryError, ValidationError } from '@carocrm/core/errors/index.js';
 import {
   Body,
@@ -18,7 +19,6 @@ import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 import { z } from 'zod';
 
-import { KNOWN_DOMAIN_EVENTS } from '@carocrm/core/domain-events/index.js';
 import { Public } from '../auth/auth.guard.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';

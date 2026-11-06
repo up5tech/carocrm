@@ -3038,5 +3038,30 @@
     "sourceDenied": "The template source is not readable for your role.",
     "desktop": "Desktop",
     "mobile": "Mobile"
+  },
+  "ai": {
+    "inline": {
+      "askAboutRecord": "Ask AI about this record",
+      "recordContext": "About the {entity} \"{name}\":",
+      "summarizeRecord": "Summarize this record.",
+      "nextStepRecord": "What should I do next on this record?",
+      "draftFollowUpRecord": "Draft a follow-up email for this record.",
+      "askAboutSelection": "Ask AI about selection",
+      "selectionContext": "About the selected {count} {entity} records:",
+      "summarizeSelection": "Summarize these selected records.",
+      "prioritizeSelection": "Which of these selected records should I work on first, and why?",
+      "draftWithAi": "Draft with AI",
+      "draftEmailTemplate": "Draft an email template: give me subject options and body copy I can paste into the template designer. Do not write anything to the CRM."
+    },
+    "briefing": {
+      "title": "Today's briefing",
+      "clear": "Nothing is asking for your attention right now.",
+      "overdue": "{count} overdue tasks for you",
+      "today": "{count} things on today",
+      "dueSoon": "{count} tasks coming due",
+      "approvals": "{count} approvals waiting for a decision",
+      "ask": "Prioritize my day: which task should I do first and why?",
+      "askAction": "Ask AI to prioritize"
+    }
   }
 }

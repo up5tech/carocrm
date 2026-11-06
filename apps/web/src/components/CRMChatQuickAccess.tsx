@@ -32,7 +32,23 @@ const CHAT_ROUTE = '/crm-chat';
  * The panel deliberately does **not** decide what a write proposal means. A turn that asks for a
  * confirmation is announced and the user is sent to the full workspace, which owns the decision.
  */
-export function CRMChatQuickAccess({ compact = false }: { readonly compact?: boolean }) {
+export function CRMChatQuickAccess({
+  compact = false,
+  contextPrefix,
+  suggestions,
+  triggerLabel,
+}: {
+  readonly compact?: boolean;
+  /**
+   * P2 inline AI: context prepended to every prompt sent from this instance, so an answer
+   * about the record/list the user is looking at does not need to be re-typed. Purely a
+   * presentation convenience — authorization is still enforced by the turn API.
+   */
+  readonly contextPrefix?: string | undefined;
+  /** Inline suggestion chips shown in the empty state; clicking one prefills the composer. */
+  readonly suggestions?: readonly string[] | undefined;
+  readonly triggerLabel?: string | undefined;
+}) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
@@ -202,7 +218,7 @@ export function CRMChatQuickAccess({ compact = false }: { readonly compact?: boo
     ]);
     void api
       .crmChatSubmitTurn({
-        prompt: text,
+        prompt: contextPrefix === undefined ? text : `${contextPrefix} ${text}`,
         conversationId: conversationRef.current ?? undefined,
         idempotencyKey: `quick-${stamp}-${Math.random().toString(36).slice(2, 10)}`,
       })
@@ -255,9 +271,20 @@ export function CRMChatQuickAccess({ compact = false }: { readonly compact?: boo
 
       <div className="carocrm-quick-chat-thread" ref={threadRef} role="log" aria-live="polite">
         {messages.length === 0 ? (
-          <Typography.Text type="secondary" className="carocrm-quick-chat-empty">
-            {t('web.crmChat.quickEmpty')}
-          </Typography.Text>
+          <>
+            <Typography.Text type="secondary" className="carocrm-quick-chat-empty">
+              {t('web.crmChat.quickEmpty')}
+            </Typography.Text>
+            {suggestions !== undefined && suggestions.length > 0 ? (
+              <div className="carocrm-quick-chat-suggestions">
+                {suggestions.map((suggestion) => (
+                  <Button key={suggestion} size="small" type="text" onClick={() => setPrompt(suggestion)}>
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+          </>
         ) : (
           messages.map((message) => (
             <div key={message.id} className={`carocrm-quick-chat-line carocrm-quick-chat-line--${message.role}`}>
@@ -342,10 +369,10 @@ export function CRMChatQuickAccess({ compact = false }: { readonly compact?: boo
         type="text"
         className="carocrm-quick-chat-trigger"
         icon={<CustomerServiceOutlined />}
-        aria-label={t('web.crmChat.quickAccess')}
-        title={t('web.crmChat.quickAccess')}
+        aria-label={triggerLabel ?? t('web.crmChat.quickAccess')}
+        title={triggerLabel ?? t('web.crmChat.quickAccess')}
       >
-        {compact ? null : t('web.crmChat.quickAccess')}
+        {compact ? null : (triggerLabel ?? t('web.crmChat.quickAccess'))}
       </Button>
     </Popover>
   );

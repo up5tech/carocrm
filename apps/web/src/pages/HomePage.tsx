@@ -1,6 +1,7 @@
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { useSession } from '../state/session.js';
 import { ActivityFeed } from './home/ActivityFeed.js';
+import { AIBriefingCard } from './home/AIBriefingCard.js';
 import { FocusStrip } from './home/FocusStrip.js';
 import { HomeHero } from './home/HomeHero.js';
 import { PulseStrip } from './home/PulseStrip.js';
@@ -28,6 +29,7 @@ export function HomePage() {
         <TodayAgenda />
         <div className="carocrm-home-side">
           <PulseStrip />
+          <AIBriefingCard />
           <ActivityFeed />
         </div>
       </div>

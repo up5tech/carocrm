@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Descriptions, Divider, Drawer, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client.js';
 import type { CRMChatMessageView } from '../api/types.js';
@@ -80,6 +81,18 @@ export function CRMChatPage() {
   const [search, setSearch] = useState('');
   const [composerReset, setComposerReset] = useState(0);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | undefined>(undefined);
+
+  // P2 inline entry points (record/email/briefing) land here as `?ask=…`: prefill the composer
+  // once, then drop the param so a refresh does not re-prefill. Sending still needs one click.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const ask = searchParams.get('ask');
+    if (ask === null || ask.trim() === '') return;
+    setPrefill({ text: ask, nonce: Date.now() });
+    const next = new URLSearchParams(searchParams);
+    next.delete('ask');
+    setSearchParams(next, { replace: true });
+  }, []);
 
   const capabilities = useQuery({
     queryKey: ['crmChat', 'capabilities'],

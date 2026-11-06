@@ -8,6 +8,7 @@ import { api, ApiError, type SavedFilterRow, type WhereClause } from '../api/cli
 import type { RowActions } from '../api/types.js';
 import { BulkEditModal } from '../components/BulkEditModal.js';
 import { ColumnManager } from '../components/ColumnManager.js';
+import { CRMChatQuickAccess } from '../components/CRMChatQuickAccess.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
@@ -965,6 +966,20 @@ export function EntityListPage() {
               <Button danger size="small">{t('web.list.deleteSelected')}</Button>
             </Popconfirm>
           ) : null}
+          {/* P2 inline AI on list bulk: ask about the current selection. Only the count and
+              entity are sent as context; the model reads records through the ACL-checked tools. */}
+          <CRMChatQuickAccess
+            compact
+            contextPrefix={t('web.ai.inline.selectionContext', {
+              entity: entityName ?? '',
+              count: selected.length,
+            })}
+            suggestions={[
+              t('web.ai.inline.summarizeSelection'),
+              t('web.ai.inline.prioritizeSelection'),
+            ]}
+            triggerLabel={t('web.ai.inline.askAboutSelection')}
+          />
           <Button size="small" onClick={() => setSelected([])}>{t('core.common.cancel')}</Button>
         </div>
       ) : null}

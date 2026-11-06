@@ -43,8 +43,6 @@ const PROVIDER_KEY = `agent-test-triggers-${runId}`;
 const EVENT_CREATE = 'evt-create-test-triggers';
 
 let ctx: ApiContext;
-let toolToken = '';
-let toolUserId = '';
 let accountId = '';
 let adminUserId = '';
 const createdUserIds: string[] = [];
@@ -141,8 +139,6 @@ beforeAll(async () => {
     },
   });
   const toolsUser = await createTestUser(ctx, { userName: USER_TOOLS, roleIds: [ROLE_TOOLS] });
-  toolToken = toolsUser.token;
-  toolUserId = toolsUser.id;
   createdUserIds.push(toolsUser.id);
 
   const provider = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {

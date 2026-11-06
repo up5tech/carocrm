@@ -149,3 +149,61 @@ export function authorInitials(author: { firstName: string | null; lastName: str
   const initials = `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
   return initials === '' ? '?' : initials;
 }
+
+/**
+ * P2 proactive briefing signals — deterministic, no model involved.
+ *
+ * The card only re-states what the user already sees in the focus strip (tasks the server
+ * assigned to them, today's calendar, running approvals), ordered by urgency. The LLM
+ * only ever enters through the "ask AI" deep link; nothing here calls a provider and
+ * nothing here can leak what the ACL already hid, because every source is the same
+ * ACL-checked query the focus strip uses.
+ */
+export interface BriefingSignal {
+  readonly key: string;
+  readonly count: number;
+  /** Task names / event names worth naming; empty when there is nothing to name. */
+  readonly examples: string[];
+}
+
+export interface BriefingInput {
+  readonly tasks: readonly ProcessTaskView[];
+  readonly todayEvents: readonly CalendarEvent[];
+  readonly approvals: number;
+  readonly now: Date;
+}
+
+export function briefingSignals(input: BriefingInput): BriefingSignal[] {
+  const openTasks = input.tasks.filter((task) => task.status === 'open' || task.status === 'escalated');
+  const overdue = openTasks.filter((task) => isTaskOverdue(task, input.now));
+  const dueSoon = nearestDue(
+    openTasks.filter((task) => !isTaskOverdue(task, input.now)),
+    2,
+  );
+  const signals: BriefingSignal[] = [];
+  if (overdue.length > 0) {
+    signals.push({
+      key: 'overdue',
+      count: overdue.length,
+      examples: nearestDue(overdue, 2).map((task) => task.name),
+    });
+  }
+  if (input.todayEvents.length > 0) {
+    signals.push({
+      key: 'today',
+      count: input.todayEvents.length,
+      examples: input.todayEvents.slice(0, 2).map((event) => event.name ?? event.activityType),
+    });
+  }
+  if (dueSoon.length > 0) {
+    signals.push({
+      key: 'dueSoon',
+      count: dueSoon.length,
+      examples: dueSoon.map((task) => task.name),
+    });
+  }
+  if (input.approvals > 0) {
+    signals.push({ key: 'approvals', count: input.approvals, examples: [] });
+  }
+  return signals;
+}

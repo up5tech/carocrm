@@ -7,6 +7,7 @@ import { api } from '../api/client.js';
 import type { EntityDefinition, RowActions } from '../api/types.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
+import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
 import { FieldValue, linkLabelsOf } from './fields.js';
 import { usePageTitle } from './PageHeader.js';
 
@@ -186,6 +187,20 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
         ) : null}
       </div>
       <Space className="carocrm-record-header-actions" wrap>
+        {/* P2 inline AI: ask about this exact record without leaving the page. The turn
+            API still enforces ACL; this is only context + suggestions. */}
+        <CRMChatQuickAccess
+          contextPrefix={t('web.ai.inline.recordContext', {
+            entity: definition?.label ?? entity,
+            name,
+          })}
+          suggestions={[
+            t('web.ai.inline.summarizeRecord'),
+            t('web.ai.inline.nextStepRecord'),
+            t('web.ai.inline.draftFollowUpRecord'),
+          ]}
+          triggerLabel={t('web.ai.inline.askAboutRecord')}
+        />
         {actions?.edit === true ? (
           <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
             {t('web.detail.edit')}

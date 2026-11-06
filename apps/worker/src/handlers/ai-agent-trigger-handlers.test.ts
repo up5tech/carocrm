@@ -1,5 +1,5 @@
-import type { OutboxEvent } from '@carocrm/jobs';
 import type { Logger } from '@carocrm/core/logger/index.js';
+import type { OutboxEvent } from '@carocrm/jobs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DomainEventBus } from '../events/domain-event-bus.js';
@@ -87,7 +87,7 @@ describe('the AI agent event-trigger subscriber (19-AI.17)', () => {
     registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
     await bus.publish(entityEvent('entity.created'));
     expect(fetcher).toHaveBeenCalledTimes(1);
-    const [url, init] = fetcher.mock.calls[0]!;
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(String(url)).toBe(`${BASE}${AI_AGENT_TRIGGER_PATH}`);
     expect((init as RequestInit).method).toBe('POST');
     expect((init as { headers: Record<string, string> }).headers['x-worker-secret']).toBe(SECRET);

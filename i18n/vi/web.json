@@ -3038,5 +3038,30 @@
     "sourceDenied": "Vai trò của bạn không được đọc nội dung template.",
     "desktop": "Máy tính",
     "mobile": "Điện thoại"
+  },
+  "ai": {
+    "inline": {
+      "askAboutRecord": "Hỏi AI về bản ghi này",
+      "recordContext": "Về {entity} \"{name}\":",
+      "summarizeRecord": "Tóm tắt bản ghi này.",
+      "nextStepRecord": "Tôi nên làm gì tiếp theo với bản ghi này?",
+      "draftFollowUpRecord": "Soạn email theo dõi cho bản ghi này.",
+      "askAboutSelection": "Hỏi AI về các mục đã chọn",
+      "selectionContext": "Về {count} bản ghi {entity} đã chọn:",
+      "summarizeSelection": "Tóm tắt các bản ghi đã chọn này.",
+      "prioritizeSelection": "Tôi nên xử lý bản ghi nào trong các mục đã chọn trước, và vì sao?",
+      "draftWithAi": "Soạn bằng AI",
+      "draftEmailTemplate": "Soạn một mẫu email: cho tôi các lựa chọn tiêu đề và nội dung để dán vào trình thiết kế mẫu. Không ghi gì vào CRM."
+    },
+    "briefing": {
+      "title": "Tóm tắt hôm nay",
+      "clear": "Hiện không có gì cần bạn chú ý.",
+      "overdue": "{count} tác vụ quá hạn của bạn",
+      "today": "{count} việc hôm nay",
+      "dueSoon": "{count} tác vụ sắp đến hạn",
+      "approvals": "{count} phê duyệt đang chờ quyết định",
+      "ask": "Hãy ưu tiên ngày của tôi: tôi nên làm tác vụ nào trước và vì sao?",
+      "askAction": "Nhờ AI ưu tiên"
+    }
   }
 }
