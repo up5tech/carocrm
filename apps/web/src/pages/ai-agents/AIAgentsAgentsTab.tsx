@@ -391,7 +391,9 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
         destroyOnClose={false}
       >
         <Form<AgentFormValues> form={form} layout="vertical" onFinish={(values) => save.mutate(values)} requiredMark="optional">
-          <Row gutter={12}>
+          {/* align="bottom": labels wrap to different heights (e.g. "Số lần gọi công cụ tối đa"
+              is 3 lines), so without it the inputs in a row sit at different heights. */}
+          <Row gutter={12} align="bottom">
             <Col xs={24} sm={12}>
               <Form.Item name="key" label={t('web.aiAgents.key')} rules={[{ required: true, pattern: /^[a-z][a-z0-9-]{1,63}$/, message: t('web.aiAgents.keyRule') }]}>
                 <Input disabled={editing !== undefined} placeholder="account-briefing" />
@@ -406,7 +408,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
           <Form.Item name="description" label={t('web.aiAgents.description')}>
             <Input.TextArea rows={2} maxLength={1_000} showCount />
           </Form.Item>
-          <Row gutter={12}>
+          <Row gutter={12} align="bottom">
             <Col xs={24} sm={12}>
               <Form.Item name="visibility" label={t('web.aiAgents.visibility')} initialValue="team">
                 <Select
@@ -473,7 +475,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
           <Divider orientation="left" style={{ marginTop: 0 }}>
             {t('web.aiAgents.limits')}
           </Divider>
-          <Row gutter={12}>
+          <Row gutter={12} align="bottom">
             <Col xs={12} sm={6}>
               <Form.Item name="maxSteps" label={t('web.aiAgents.maxSteps')}>
                 <InputNumber min={1} max={16} style={{ width: '100%' }} />

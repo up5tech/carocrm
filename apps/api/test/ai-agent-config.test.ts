@@ -49,3 +49,22 @@ describe('parseAgentConfig legacy shape', () => {
     expect(parsed.ok).toBe(false);
   });
 });
+
+describe('parseAgentConfig tool ceiling', () => {
+  const grant = (n: number) => ({ tools: Array.from({ length: n }, (_, i) => ({ key: `tool_${String(i)}` })) });
+
+  it('accepts the full 25-key catalogue (24 chat tools + omnichannel.send_message)', () => {
+    expect(parseAgentConfig(grant(25)).ok).toBe(true);
+  });
+
+  it('accepts up to the raised ceiling of 32', () => {
+    expect(parseAgentConfig(grant(32)).ok).toBe(true);
+  });
+
+  it('rejects more than the ceiling', () => {
+    const parsed = parseAgentConfig(grant(33));
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.issues.some((issue) => issue.path === 'tools')).toBe(true);
+  });
+});

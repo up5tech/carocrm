@@ -40,8 +40,14 @@ export const MAX_CONFIG_BYTES = 32_768;
  * `crm_commercial_summary`, `crm_campaign_performance` (module-contributed, the 19-CHAT.23 pattern)
  * and `crm_list_emails` (kernel, metadata only). Twenty-four again matches the Chat-facing catalogue
  * exactly.
+ *
+ * Raised from 24 to 32 on 2026-11-07: the registry now holds 25 keys (the 24 above plus
+ * `omnichannel.send_message`), so an agent that needed every tool could not be saved at all —
+ * the editor hit "tools: Too big: expected array to have <=24 items" on save. 32 covers the full
+ * catalogue with headroom for the next few module-contributed tools; the selection-quality
+ * tradeoff above still applies, and granting every tool remains an operator's choice.
  */
-export const MAX_TOOLS = 24;
+export const MAX_TOOLS = 32;
 export const MAX_JSON_SCHEMA_DEPTH = 4;
 export const MAX_JSON_SCHEMA_NODES = 100;
 
