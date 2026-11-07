@@ -49,5 +49,7 @@
   "LEADSCORE_INSIGHT_UNAVAILABLE": "AI agent hiện không thể trả lời nên chưa tạo được gợi ý.",
   "LEADSCORE_INSIGHT_AGENT_UNSUITABLE": "AI agent đã chọn phải chỉ đọc và nhận tác vụ văn bản. Hãy chọn agent phù hợp.",
   "LEADSCORE_INSIGHT_NOT_SCORED": "Lead này chưa có điểm hiện tại nên chưa có gì để AI giải thích.",
-  "LEADSCORE_INSIGHT_UNUSABLE": "Lần chạy AI kết thúc nhưng không có nội dung giải thích dùng được."
+  "LEADSCORE_INSIGHT_UNUSABLE": "Lần chạy AI kết thúc nhưng không có nội dung giải thích dùng được.",
+  "AI_APPROVAL_SELF_APPROVAL_FORBIDDEN": "Bạn không thể tự phê duyệt đề xuất của chính mình. Cần người phê duyệt khác xem xét.",
+  "AI_APPROVAL_SECOND_APPROVER_REQUIRED": "Phê duyệt của bạn đã được ghi nhận, nhưng hành động này vẫn cần người phê duyệt thứ hai trước khi thực thi."
 }

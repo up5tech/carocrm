@@ -1626,6 +1626,8 @@ export interface AIAgentsSettings {
   readonly approval: {
     readonly requireFor: readonly string[];
     readonly ttlMinutes: number;
+    /** Phase 19-AI.21: `forbidden` (default) or `permitted_with_audit`. */
+    readonly selfApprovalPolicy: string;
   };
   readonly retention: {
     readonly runEventsDays: number;
@@ -1867,6 +1869,8 @@ export interface AIAgentApprovalView {
   readonly expiresAt: string;
   readonly createdAt: string;
   readonly selfApproval: boolean;
+  /** Phase 19-AI.21: the requester signed it and a second approver is still required. */
+  readonly awaitingSecondApproval: boolean;
 }
 
 export interface AIAgentApprovalListResult {

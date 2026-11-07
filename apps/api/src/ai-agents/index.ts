@@ -29,6 +29,7 @@ export type { AgentVersionDetail, AgentView } from './ai-agent-definitions.servi
 export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 export type { AIAgentActorProfile } from './ai-agent-directory.service.js';
 export { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
+export { AIAgentError, aiApprovalSecondApproverRequiredError, aiApprovalSelfApprovalForbiddenError } from './ai-agent-errors.js';
 export { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 export { AIAgentReportToolContribution, AIAgentStaleRecordsToolContribution } from './ai-agent-intelligence-tools.contribution.js';
 export { AI_AGENT_RETENTION_JOB, AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
@@ -42,7 +43,8 @@ export { AIAgentRunService } from './ai-agent-runs.service.js';
 export type { AIToolContext, AIToolDefinition, AIToolProposal, AIToolResult } from './ai-agent-tools.js';
 export { AIToolRegistry } from './ai-agent-tools.js';
 export type { EffectClass, RunStatus, RunTrigger } from './ai-agents-module.js';
-export { EFFECT_CLASSES, RUN_STATUSES, RUN_TRIGGERS } from './ai-agents-module.js';
+export type { AIAgentErrorCode } from './ai-agents-module.js';
+export { AI_AGENTS_ERROR_CODES, EFFECT_CLASSES, RUN_STATUSES, RUN_TRIGGERS } from './ai-agents-module.js';
 export { AI_AGENTS_MODULE } from './ai-agents-module.js';
 export { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 export { AIAgentsPolicyService } from './ai-agents-policy.service.js';

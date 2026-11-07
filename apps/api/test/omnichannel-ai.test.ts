@@ -5,7 +5,7 @@ import { AIAgentsSettingsService, AIToolRegistry, RUN_STATUSES, RUN_TRIGGERS } f
 import { OMNICHANNEL_AI_TASKS,OmnichannelSettingsService } from '../src/omnichannel/index.js';
 import { VoiceCommunicationsSettingsService, VoiceMessagingService } from '../src/voice-communications/index.js';
 import type { ApiContext } from './support/boot-api.js';
-import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
+import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.19 — AI assistance as typed tasks, with the send tool behind the approval matrix
@@ -27,18 +27,27 @@ const RUN = Date.now().toString(36);
 const ACCOUNT_KEY = `agent_test_om19_${RUN}`;
 const PHONE = '+14155550519';
 const PROVIDER_KEY = `agent-test-om19-${RUN}`;
+const ROLE_APPROVE = `agent_test_om19_approve_${RUN}`;
+const USER_APPROVE = `agent_test_om19_approve_user_${RUN}`;
 
 let ctx: ApiContext;
 let conversationId = '';
 let priorVoice: string | null = null;
 let priorOmnichannel: string | null = null;
 let priorAiAgents: unknown = null;
+let approveToken = '';
 const agentKeys: string[] = [];
 const runIds: string[] = [];
+const createdUserIds: string[] = [];
 type Body = Record<string, unknown>;
 
-async function call(method: 'GET' | 'POST', url: string, payload?: unknown): Promise<{ status: number; body: Body }> {
-  const res = await ctx.app.inject({ method, url, headers: { ...authHeader(ctx.adminToken), 'content-type': 'application/json' }, ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }) });
+async function call(
+  method: 'GET' | 'POST',
+  url: string,
+  payload?: unknown,
+  token: string = ctx.adminToken,
+): Promise<{ status: number; body: Body }> {
+  const res = await ctx.app.inject({ method, url, headers: { ...authHeader(token), 'content-type': 'application/json' }, ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }) });
   let body: Body = {};
   try {
     body = res.json() as Body;
@@ -92,6 +101,17 @@ beforeAll(async () => {
   });
   conversationId = String((await sql<{ conversation_id: string }>`select conversation_id from voice_messages where id = ${ingested.messageId}`.execute(ctx.database.db)).rows[0]?.conversation_id ?? '');
   expect(conversationId).not.toBe('');
+
+  // 19-AI.21: the run is started by the admin, and the self-approval policy (default `forbidden`)
+  // refuses the requester — so the send is approved by a **second** person.
+  await createTestRole(ctx, {
+    id: ROLE_APPROVE,
+    name: `AGENT_TEST ${RUN} om19 approve`,
+    permissions: { AIAgent: { read: 'yes' }, AIAgentApproval: { edit: 'yes' } },
+  });
+  const approver = await createTestUser(ctx, { userName: USER_APPROVE, roleIds: [ROLE_APPROVE] });
+  approveToken = approver.token;
+  createdUserIds.push(approver.id);
 }, 240_000);
 
 afterAll(async () => {
@@ -130,6 +150,8 @@ afterAll(async () => {
   else await db.updateTable('app_settings').set({ data: JSON.parse(priorOmnichannel) as Body, modified_at: new Date() }).where('name', '=', 'omnichannel').execute().catch(() => undefined);
   ctx.app.get(VoiceCommunicationsSettingsService, { strict: false }).invalidate();
   ctx.app.get(OmnichannelSettingsService, { strict: false }).invalidate();
+  if (createdUserIds.length > 0) await db.deleteFrom('users').where('id', 'in', createdUserIds).execute().catch(() => undefined);
+  await db.deleteFrom('roles').where('id', '=', ROLE_APPROVE).execute().catch(() => undefined);
   await shutdownApi();
 });
 
@@ -287,7 +309,7 @@ describe('AI assistance (19-OM.19)', () => {
     expect(approval?.actionClass).toBe('material_write');
     if (approval === undefined) throw new Error('approval not found');
 
-    const approved = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, { note: 'Reviewed the proposed reply.' });
+    const approved = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, { note: 'Reviewed the proposed reply.' }, approveToken);
     expect(approved.status, JSON.stringify(approved.body)).toBe(200);
     expect((approved.body['approval'] as { status: string }).status).toBe('approved');
 

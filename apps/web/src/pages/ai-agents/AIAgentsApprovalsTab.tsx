@@ -71,7 +71,12 @@ export function AIAgentsApprovalsTab({ capabilities }: ApprovalsTabProps) {
       setNote('');
       invalidate();
     },
-    onError: (error: Error) => void message.error(error.message),
+    onError: (error: Error) => {
+      void message.error(error.message);
+      // A refused self-approval may still have been recorded (19-AI.21 permissive mode): the inbox
+      // now says the proposal waits for a second approver, so it must not stay stale on screen.
+      invalidate();
+    },
   });
 
   if (!canApprove) {
@@ -177,6 +182,11 @@ export function AIAgentsApprovalsTab({ capabilities }: ApprovalsTabProps) {
               </Descriptions.Item>
               <Descriptions.Item label={t('web.aiAgents.run')}>{selected.runId.slice(0, 8)}</Descriptions.Item>
               <Descriptions.Item label={t('web.aiAgents.status')}>{selected.status}</Descriptions.Item>
+              {selected.awaitingSecondApproval ? (
+                <Descriptions.Item label={t('web.aiAgents.awaitingSecondApproval')}>
+                  {t('web.aiAgents.awaitingSecondApprovalHint')}
+                </Descriptions.Item>
+              ) : null}
               {selected.decidedAt === null ? null : (
                 <Descriptions.Item label={t('web.aiAgents.decided')}>
                   {formatTimestamp(selected.decidedAt)} · {selected.decidedByUserId ?? '—'}

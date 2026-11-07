@@ -49,5 +49,7 @@
   "LEADSCORE_INSIGHT_UNAVAILABLE": "The AI agent cannot answer right now, so no insight was generated.",
   "LEADSCORE_INSIGHT_AGENT_UNSUITABLE": "The configured AI agent may only read, and it must accept a text task. Choose a suitable agent.",
   "LEADSCORE_INSIGHT_NOT_SCORED": "This Lead has no current score, so there is nothing for an AI explanation to describe.",
-  "LEADSCORE_INSIGHT_UNUSABLE": "The AI run finished without a usable explanation."
+  "LEADSCORE_INSIGHT_UNUSABLE": "The AI run finished without a usable explanation.",
+  "AI_APPROVAL_SELF_APPROVAL_FORBIDDEN": "You cannot approve your own proposal. Another approver has to review it.",
+  "AI_APPROVAL_SECOND_APPROVER_REQUIRED": "Your approval was recorded, but this action still needs a second approver before it can execute."
 }

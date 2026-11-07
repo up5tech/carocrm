@@ -7,10 +7,12 @@ import type { AIAgentApprovalsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { PostgresRecordStore } from '../entity/entity-record.store.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
+import { aiApprovalSecondApproverRequiredError, aiApprovalSelfApprovalForbiddenError } from './ai-agent-errors.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
 import { AIToolRegistry, expectedTargetVersionsOf } from './ai-agent-tools.js';
 import { type RunStatus,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
+import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 
 /**
  * Phase 19-AI.10 — approval inbox and decisions
@@ -24,7 +26,27 @@ import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
  *
  * The inbox is capability-gated (`approval`) on the server. The timeline records the decision with
  * the approver's identity, so a run can explain who allowed the action and when.
+ *
+ * Phase 19-AI.21 (§24) adds the **self-approval policy**: the person a proposal was requested from
+ * may not complete it alone. The decision, the codes and the rollback are documented in
+ * `docs/modules/ai-agents/security-and-threat-model.md`.
  */
+
+/**
+ * Effect classes a self-approval may not complete on its own (19-AI.21).
+ *
+ * A `read` or `low_write` approval is a formality — there is no business write behind it — so the
+ * requester may still decide it and the decision is audited. A `material_write` or `high_impact`
+ * proposal is the case the policy exists for.
+ */
+const SELF_APPROVAL_GATED_CLASSES: ReadonlySet<string> = new Set(['material_write', 'high_impact']);
+
+/** The pending first signature of a permissive-mode self-approval (19-AI.21). */
+interface FirstApproval {
+  readonly by: string;
+  readonly at: string;
+  readonly note: string | null;
+}
 
 export type ApprovalStatusFilter =
   | 'pending'
@@ -66,6 +88,8 @@ export interface ApprovalView {
   readonly expiresAt: string;
   readonly createdAt: string;
   readonly selfApproval: boolean;
+  /** Phase 19-AI.21: the requester signed it and a second approver is still required. */
+  readonly awaitingSecondApproval: boolean;
 }
 
 @Injectable()
@@ -76,6 +100,7 @@ export class AIAgentApprovalService {
     @Inject(AIAgentsPermissionService) private readonly permissions: AIAgentsPermissionService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
+    @Inject(AIAgentsSettingsService) private readonly settings: AIAgentsSettingsService,
     @Inject(ENTITY_STORE) private readonly store: PostgresRecordStore,
   ) {}
 
@@ -180,8 +205,8 @@ export class AIAgentApprovalService {
     }
 
     const now = new Date();
-    const selfApproval = this.scope.userId !== null && this.scope.userId === approval.requested_by_user_id;
     const decidedBy = this.scope.userId ?? null;
+    const selfApproval = decidedBy !== null && decidedBy === approval.requested_by_user_id;
     if (decision === 'approved') {
       const invalid = await this.revalidationFailure(approval);
       if (invalid !== null) {
@@ -189,7 +214,12 @@ export class AIAgentApprovalService {
         await this.runs.settleFromApproval(approval.run_id, 'blocked_by_policy', 'approval_invalidated', invalid);
         throw new ValidationError(`The proposal can no longer be executed: ${invalid}`);
       }
+      // 19-AI.21: separation of duties on the decision itself. A stale proposal is already dead
+      // above; a live one still has to pass the self-approval policy before anybody signs it.
+      if (selfApproval) await this.assertSelfApprovalPolicy(approval, note);
     }
+
+    const firstApproval = readFirstApproval(approval.revalidation);
 
     await this.database.db.transaction().execute(async (trx) => {
       await trx
@@ -203,6 +233,9 @@ export class AIAgentApprovalService {
             ok: decision === 'approved',
             checkedAt: now.toISOString(),
             selfApproval,
+            // The second signature of a permissive-mode proposal (§24, 19-AI.21). Kept here so the
+            // approval row explains why it needed two people, even after the decision is final.
+            ...(firstApproval === null ? {} : { secondApproval: true, firstApproval }),
           }),
           modified_at: now,
         })
@@ -266,6 +299,80 @@ export class AIAgentApprovalService {
       .executeTakeFirstOrThrow();
     const names = await this.agentNames([fresh.agent_id]);
     return { approval: this.toView(fresh, names.get(fresh.agent_id) ?? ''), resumed };
+  }
+
+  /**
+   * Phase 19-AI.21 — the self-approval policy (§24).
+   *
+   * `forbidden` (the default): a `material_write` or `high_impact` proposal cannot be approved by the
+   * person it was requested from. The refusal is a 403 with a stable code and changes nothing — the
+   * proposal stays pending, so another approver may still decide it.
+   *
+   * `permitted_with_audit`: the requester's own decision is **recorded** — on the approval row and in
+   * the run timeline — but it does not make the action executable. A second approver has to sign, and
+   * only then does the run leave `waiting_for_approval`.
+   *
+   * The check is deliberately not an admin bypass: an administrator who started the run needs a second
+   * approver just like anybody else. Rejecting one's own proposal stays allowed — refusing an action is
+   * the safe direction.
+   */
+  private async assertSelfApprovalPolicy(
+    approval: AIAgentApprovalsTable,
+    note?: string,
+  ): Promise<void> {
+    if (!SELF_APPROVAL_GATED_CLASSES.has(approval.action_class)) return;
+    const policy = (await this.settings.settings()).approval.selfApprovalPolicy;
+    if (policy === 'forbidden') {
+      throw aiApprovalSelfApprovalForbiddenError({
+        approvalId: approval.id,
+        actionClass: approval.action_class,
+        policy,
+      });
+    }
+    await this.recordFirstSignature(approval, note);
+    throw aiApprovalSecondApproverRequiredError({
+      approvalId: approval.id,
+      actionClass: approval.action_class,
+      policy,
+    });
+  }
+
+  /**
+   * Keep the requester's first signature (19-AI.21, permissive mode).
+   *
+   * The signature lives in two places: the approval row, so the inbox can say the proposal is waiting
+   * for a second approver, and the run timeline, which is the durable audit trail — the row's
+   * `revalidation` payload is overwritten again when the action executes. A repeated attempt by the
+   * same person is not recorded twice.
+   */
+  private async recordFirstSignature(approval: AIAgentApprovalsTable, note?: string): Promise<void> {
+    const decidedBy = this.scope.userId ?? null;
+    if (decidedBy === null) return;
+    if (readFirstApproval(approval.revalidation) !== null) return;
+    const at = new Date().toISOString();
+    const first: FirstApproval = { by: decidedBy, at, note: note?.slice(0, 1_000) ?? null };
+    await this.database.db
+      .updateTable('ai_agent_approvals')
+      .set({
+        revalidation: JSON.stringify({
+          ok: false,
+          checkedAt: at,
+          selfApproval: true,
+          secondApprovalRequired: true,
+          firstApproval: first,
+        }),
+        modified_at: new Date(),
+      })
+      .where('id', '=', approval.id)
+      .where('status', '=', 'pending')
+      .execute();
+    await this.runs.note(
+      approval.run_id,
+      'approval',
+      'approval.self_signed',
+      'The requester signed their own proposal; a second approver is required before it can execute.',
+      { approvalId: approval.id, actionClass: approval.action_class, by: decidedBy },
+    );
   }
 
   /** Expire every pending approval whose deadline passed; returns the count. */
@@ -419,11 +526,38 @@ export class AIAgentApprovalService {
         row.requested_by_user_id !== null &&
         row.decided_by_user_id !== null &&
         row.requested_by_user_id === row.decided_by_user_id,
+      awaitingSecondApproval: row.status === 'pending' && isAwaitingSecondApproval(row.revalidation),
     };
   }
 }
 
+/** The first (self) signature of a permissive-mode proposal, if one was recorded (19-AI.21). */
+function readFirstApproval(value: unknown): FirstApproval | null {
+  const first = asRecord(asRecord(value)['firstApproval']);
+  const by = first['by'];
+  if (typeof by !== 'string' || by === '') return null;
+  const at = first['at'];
+  const note = first['note'];
+  return {
+    by,
+    at: typeof at === 'string' ? at : '',
+    note: typeof note === 'string' ? note : null,
+  };
+}
+
+/** True while a proposal carries a first signature and still waits for a second one (19-AI.21). */
+function isAwaitingSecondApproval(value: unknown): boolean {
+  return asRecord(value)['secondApprovalRequired'] === true;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === 'string') {
+    try {
+      return asRecord(JSON.parse(value) as unknown);
+    } catch {
+      return {};
+    }
+  }
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};

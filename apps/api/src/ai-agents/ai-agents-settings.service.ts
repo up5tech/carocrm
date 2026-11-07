@@ -73,6 +73,20 @@ export const AIAgentsSettingsSchema = z
         requireFor: z.array(EffectClassSchema).default(['material_write', 'high_impact']),
         /** How long a pending approval stays actionable; an expired request cannot execute. */
         ttlMinutes: z.number().int().min(1).max(1_440).default(60),
+        /**
+         * Phase 19-AI.21 — the self-approval policy (§24, `19-AI.21`).
+         *
+         * `forbidden` (the default): the requester of a proposal may not approve it. A `material_write`
+         * or `high_impact` proposal waits for somebody else. `read` and `low_write` proposals are not
+         * gated by this rule — an approval for them is a formality, and the decision is still audited.
+         *
+         * `permitted_with_audit`: the requester's own decision is accepted and recorded, but a
+         * `material_write` or `high_impact` proposal still needs a **second** approver before it can
+         * execute. The first signature stays in the audit trail; the second one completes it.
+         */
+        selfApprovalPolicy: z
+          .enum(['forbidden', 'permitted_with_audit'])
+          .default('forbidden'),
       })
       .strict()
       .prefault({}),

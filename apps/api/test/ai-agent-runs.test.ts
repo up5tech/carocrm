@@ -35,10 +35,12 @@ const ROLE_USE = `AGENT_TEST-ai5-use-${runId}`;
 const ROLE_EDIT = `AGENT_TEST-ai5-edit-${runId}`;
 const ROLE_DENY = `AGENT_TEST-ai5-deny-${runId}`;
 const ROLE_TOOLS = `AGENT_TEST-ai5-tools-${runId}`;
+const ROLE_APPROVE = `AGENT_TEST-ai5-approve-${runId}`;
 const USER_USE = `AGENT_TEST-ai5-use-user-${runId}`;
 const USER_EDIT = `AGENT_TEST-ai5-edit-user-${runId}`;
 const USER_DENY = `AGENT_TEST-ai5-deny-user-${runId}`;
 const USER_TOOLS = `AGENT_TEST-ai5-tools-user-${runId}`;
+const USER_APPROVE = `AGENT_TEST-ai5-approve-user-${runId}`;
 const PROVIDER_KEY = `agent-test-ai5-${runId}`;
 
 let ctx: ApiContext;
@@ -48,6 +50,7 @@ let editToken = '';
 let denyToken = '';
 let toolsToken = '';
 let toolsUserId = '';
+let approveToken = '';
 let adminUserId = '';
 let baselineSettings: unknown = null;
 const createdUserIds: string[] = [];
@@ -217,6 +220,19 @@ beforeAll(async () => {
   toolsUserId = toolsUser.id;
   createdUserIds.push(toolsUser.id);
 
+  // 19-AI.21: the approver is a **second person**. The runs in this suite are started by the admin,
+  // and the self-approval policy (default `forbidden`) refuses the requester — so the decisions
+  // below are signed by somebody else. The role needs the approval capability and nothing else: the
+  // write itself still runs as the user who started the run.
+  await createTestRole(ctx, {
+    id: ROLE_APPROVE,
+    name: `${MARKER} AI approve`,
+    permissions: { AIAgent: { read: 'yes' }, AIAgentApproval: { edit: 'yes' } },
+  });
+  const approveUser = await createTestUser(ctx, { userName: USER_APPROVE, roleIds: [ROLE_APPROVE] });
+  approveToken = approveUser.token;
+  createdUserIds.push(approveUser.id);
+
   const provider = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {
     kind: 'fake',
     key: PROVIDER_KEY,
@@ -306,7 +322,7 @@ afterAll(async () => {
     .where(sql`data->'settings'->'provider'->>'defaultKey'`, '=', PROVIDER_KEY)
     .execute();
   if (createdUserIds.length > 0) await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
-  await db.deleteFrom('roles').where('id', 'in', [ROLE_USE, ROLE_EDIT, ROLE_DENY]).execute();
+  await db.deleteFrom('roles').where('id', 'in', [ROLE_USE, ROLE_EDIT, ROLE_DENY, ROLE_APPROVE]).execute();
   await shutdownApi();
 });
 
@@ -956,7 +972,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     const approved = await call(
       'POST',
       `/api/v1/AIAgents/action/approvals/${approval.id}/approve`,
-      ctx.adminToken,
+      approveToken,
       { note: 'Reviewed the proposed task description.' },
     );
     expect(approved.status).toBe(200);
@@ -975,7 +991,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     expect((after.body['revalidation'] as { ok: boolean }).ok).toBe(true);
 
     // A replay cannot decide twice or execute twice.
-    expect((await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {})).status).toBe(422);
+    expect((await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, approveToken, {})).status).toBe(422);
     const replay = await executeRun(idRun);
     expect((replay.body['run'] as { status: string }).status).toBe('succeeded');
 
@@ -1006,7 +1022,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     const edited = await call('PATCH', `/api/v1/Task/${targetId}`, ctx.adminToken, { description: `${MARKER} human edit` });
     expect(edited.status, JSON.stringify(edited.body)).toBe(200);
 
-    const refused = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {});
+    const refused = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, approveToken, {});
     expect(refused.status, JSON.stringify(refused.body)).toBe(422);
     expect(JSON.stringify(refused.body)).toContain('changed after the proposal');
 
@@ -1035,7 +1051,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     const inbox = await call('GET', '/api/v1/AIAgents/action/approvals?status=pending', ctx.adminToken);
     const approval = (inbox.body['list'] as { id: string; runId: string }[]).find((entry) => entry.runId === idRun);
     if (approval === undefined) throw new Error('approval not found');
-    expect((await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {})).status).toBe(200);
+    expect((await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, approveToken, {})).status).toBe(200);
 
     // The record moves between the approval and the execution.
     await call('PATCH', `/api/v1/Task/${targetId}`, ctx.adminToken, { description: `${MARKER} later human edit` });
@@ -1067,7 +1083,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     const approval = (inbox.body['list'] as { id: string; runId: string }[]).find((entry) => entry.runId === idRun);
     if (approval === undefined) throw new Error('approval not found');
 
-    const rejected = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/reject`, ctx.adminToken, {
+    const rejected = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/reject`, approveToken, {
       note: 'No.',
     });
     expect(rejected.status).toBe(200);
@@ -1104,7 +1120,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
       .where('id', '=', approval.id)
       .execute();
 
-    const late = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {});
+    const late = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, approveToken, {});
     expect(late.status, JSON.stringify(late.body)).toBe(422);
     expect(JSON.stringify(late.body)).toContain('expired');
 
@@ -1140,7 +1156,7 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
 
     // Remove the target after the proposal was made, then approve and try to execute.
     await call('DELETE', `/api/v1/Task/${otherTaskId}`, ctx.adminToken);
-    const approved = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {});
+    const approved = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, approveToken, {});
     expect(approved.status, JSON.stringify(approved.body)).toBe(200);
     const executed = await executeRun(idRun);
     expect(executed.status, JSON.stringify(executed.body)).toBe(200);
@@ -1891,7 +1907,7 @@ describe('write tool family: notes, activities, drafts, tasks (19-CHAT.22)', () 
     expect(JSON.stringify(detail.body)).toContain('Price Negotiation');
 
     expect(
-      (await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, { note: 'ok' })).status,
+      (await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, approveToken, { note: 'ok' })).status,
     ).toBe(200);
     expect((await executeRun(idRun)).body['run']).toMatchObject({ status: 'succeeded' });
 

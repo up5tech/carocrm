@@ -18,7 +18,8 @@ import { VOICE_COMMUNICATIONS_MODULE } from '../src/voice-communications/voice-c
  * the VC.18 administration screen had shipped. AIAgents had drifted the other way — it declared
  * 19-AI.0 → 19-AI.20 while 19-AI.15 and 19-AI.16 were never delivered and 19-AI.14 is built but
  * switched off by default; its list was corrected on 2026-11-05 to the phases whose code landed,
- * and 19-AI.17 joined it on 2026-11-06 when the trigger slice completed.
+ * and 19-AI.17 joined it on 2026-11-06 when the trigger slice completed. The post-release hardening
+ * slice joined it on 2026-11-07: 19-AI.21 (the self-approval policy) shipped with its own suite.
  * CRMChat's declaration (19-CHAT.0 → 19-CHAT.24) was audited the same day and is accurate.
  * Nothing pinned any of them, which is how a list can lag for weeks without a single test noticing.
  *
@@ -31,7 +32,7 @@ const DECLARED: Record<string, readonly string[]> = {
   AIAgents: [
     '19-AI.0', '19-AI.1', '19-AI.2', '19-AI.3', '19-AI.4', '19-AI.5', '19-AI.6', '19-AI.7', '19-AI.8',
     '19-AI.9', '19-AI.10', '19-AI.11', '19-AI.12', '19-AI.13', '19-AI.14', '19-AI.17', '19-AI.18',
-    '19-AI.19', '19-AI.20',
+    '19-AI.19', '19-AI.20', '19-AI.21',
   ],
   CRMChat: [
     '19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4', '19-CHAT.5', '19-CHAT.6',
@@ -100,6 +101,13 @@ const NEWLY_CLAIMED_EVIDENCE: Record<string, readonly string[]> = {
     'apps/worker/src/handlers/ai-agent-handlers.ts',
     'apps/api/test/ai-agent-triggers.test.ts',
     'apps/worker/src/handlers/ai-agent-handlers.test.ts',
+  ],
+  '19-AI.21': [
+    'apps/api/src/ai-agents/ai-agent-approvals.service.ts',
+    'apps/api/src/ai-agents/ai-agent-errors.ts',
+    'apps/api/src/ai-agents/ai-agents-settings.service.ts',
+    'apps/api/test/ai-agent-self-approval.test.ts',
+    'docs/modules/ai-agents/security-and-threat-model.md',
   ],
 };
 

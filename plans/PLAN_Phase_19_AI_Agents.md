@@ -1,9 +1,15 @@
 # plans/PLAN_Phase_19_AI_Agents.md — AI Agents Module
 
-> **Status:** AIAgents **v1.3.0** (2026-11-06) — 19-AI.0 → 19-AI.13, 19-AI.17, 19-AI.19, 19-AI.20
-> delivered and green; **19-AI.14 is built and tested but switched off by default; 19-AI.15–17 shipped
+> **Status:** AIAgents **v1.4.0** (2026-11-07) — 19-AI.0 → 19-AI.13, 19-AI.17, 19-AI.19, 19-AI.20
+> and **19-AI.21** delivered and green; **19-AI.14 is built and tested but switched off by default;
+> 19-AI.15–17 shipped
 > their read-side tools (P1, 2026-11-05); all three trigger kinds are now delivered — event triggers
 > (2026-11-06 morning), schedule and integration triggers (2026-11-06); 19-AI.18 is half delivered.**
+> **Post-release hardening 19-AI.21 → 19-AI.28 (audit 2026-11-07, §24 below; findings corrected the
+> same day after a source-level review): 19-AI.21 shipped 2026-11-07; 19-AI.22 → 19-AI.28 are
+> planned, not yet implemented.**
+> **Plan revision:** 2026-11-07 — §24 added, then corrected (see "Audit corrections" in §24), then
+> 19-AI.21 delivered (see the phase entry).
 > This header was corrected
 > on 2026-11-03 during a Phase 19 audit and updated on 2026-11-06 after the trigger P1 slices; it previously read
 > "Implementation plan" with no delivery
@@ -47,14 +53,24 @@
 >   allowlist, and only as a record-context run for the `crmEntityType`/`crmEntityId` the payload
 >   names — the payload is untrusted external data and never becomes prompt text. Shares the
 >   `features.eventTriggers` flag; `causation_id` is the outbox event id.
->   `AI_AGENTS_MODULE.version` is `1.3.0` since 2026-11-06.
+>   `AI_AGENTS_MODULE.version` was `1.3.0` from 2026-11-06 and is `1.4.0` since 2026-11-07 (19-AI.21).
 > - **19-AI.18 — optional, half delivered.** The MCP-compatible adapter (`action/mcp/tools`,
 >   `action/mcp/call`) ships; model-backed retrieval stays deferred by design.
+> - **19-AI.21 — Approval integrity: the self-approval policy (2026-11-07).** The audit found no
+>   broken §9.2 rule — it found an *unwritten* one. The module now decides it: a `material_write` or
+>   `high_impact` proposal may not be approved by the person it was requested from.
+>   `approval.selfApprovalPolicy` is `forbidden` (default) or `permitted_with_audit`; the decision
+>   path refuses with the stable codes `AI_APPROVAL_SELF_APPROVAL_FORBIDDEN` / 403 and
+>   `AI_APPROVAL_SECOND_APPROVER_REQUIRED` / 403. Permissive mode records the requester's signature
+>   (`awaitingSecondApproval`, timeline event `approval.self_signed`) and still needs a second
+>   approver. Rejecting one's own proposal stays allowed; a stale proposal is still invalidated
+>   first. Service code, no migration, rollback is a settings write.
+>   `AI_AGENTS_MODULE.version` is `1.4.0` since 2026-11-07.
 >
 > The registry now holds **25 tools** (17 owned by `AIAgents`, 8 contributed by `crm-chat`,
 > `customer-success`, `lead-score`, `service-desk`, `projects`, `sales`, `marketing-automation` and
 > `omnichannel`), asserted as one complete table in `apps/api/test/ai-agent-runs.test.ts`.
-> `AI_AGENTS_MODULE.implementedPhases` declares `19-AI.0` → `19-AI.14`, `19-AI.17` → `19-AI.20`:
+> `AI_AGENTS_MODULE.implementedPhases` declares `19-AI.0` → `19-AI.14`, `19-AI.17` → `19-AI.21`:
 > the descriptor records the phase that *landed code*, not the phase that reached its exit
 > criterion, so 15/16 stay undeclared while their write paths are missing.
 > **Parent roadmap:** `plans/PLAN.md` — NestJS reimplementation of EspoCRM
@@ -1500,6 +1516,7 @@ The module is complete only when all applicable criteria below are met.
 - Quotas, run limits, kill switch, and operational alerts are implemented or explicitly deferred with a documented non-production release boundary.
 - Memory is explicit, permission-aware, provenance-aware, and governed by retention controls.
 - Provider data handling and logging behavior are documented and configurable where supported.
+- **(Post-release hardening §24 — applies to those phases only)** The self-approval policy is decided, documented and enforced for material writes (19-AI.21); per-user run admission is bounded even with no admin-configured budgets (19-AI.22); MCP direct-call replays cannot duplicate a write (19-AI.23); ledger-write failures are operator-visible and usage never reports a known `0` (19-AI.24); the existing SSRF/prompt-injection suites stay green and are consolidated with frontend tab coverage (19-AI.27); the multi-reference run input is backward compatible and ACL-checked per ref (19-AI.28).
 
 ### Integrations
 
@@ -1521,7 +1538,7 @@ The module is complete only when all applicable criteria below are met.
 
 ## 23. Final Instructions to the Coding Agent
 
-1. Start with **Phase 19-AI.0 only**. Do not begin implementing the entire module immediately.
+1. Phases 19-AI.0 → 19-AI.21 are the delivered set (see the header for exceptions); do not re-implement them and do not extend them in place. Start with the next open phase in §24 (currently **19-AI.22**) and implement **one phase at a time**; do not begin the whole hardening backlog at once.
 2. Read `plans/PLAN.md` and `AGENTS.MD`; their repository conventions and database-safety rules are mandatory.
 3. Inspect the actual codebase and provide the repository audit, dependency map, feature gaps, migration proposal, and safe verification commands.
 4. Use the exact module name `AIAgents`; do not introduce a `Ua` prefix.
@@ -1531,4 +1548,224 @@ The module is complete only when all applicable criteria below are met.
 8. Never log or expose secrets, full database URLs, unrestricted prompts, private model traces, or unauthorized CRM data.
 9. Do not weaken ACL, approval, quota, validation, or assertions merely to make a test pass.
 10. At the end of each sub-phase, report changed files, migrations, actual checks run, results, limitations, and the next sub-phase. Do not claim completion without evidence.
+
+---
+
+## 24. Post-Release Hardening (Audit 2026-11-07; corrected 2026-11-07)
+
+> **Source:** Direct audit of `apps/api/src/ai-agents/`, `apps/web/src/pages/ai-agents/`, migrations
+> `045–050,061`, and the `ai-agent*` / `phase22-journey*` suites at HEAD `2bce1e8`, followed by a
+> line-by-line source check of every finding.
+> **Scope rule (stated here, not borrowed from another plan):** Phases 19-AI.0 → 19-AI.20 are the
+> delivered set, with the exceptions recorded in the header (14 off by default, 15–17 read side
+> only, 18 half delivered). This section does **not** extend any of them in place. Each item below
+> is a new phase with its own acceptance evidence and **one capability per phase** — the first draft
+> bundled unrelated capabilities into four phases; they are now eight single-capability phases
+> (19-AI.21 → 19-AI.28),
+> the last of which is the cross-module integration contract required by 19-CHAT.26.
+> Until a hardening phase ships, the shipped behaviour described in the header remains the fact.
+> **Prioritisation:** P1 = a correctness defect in behaviour already shipped; P2 = next maintenance
+> slice; P3 = opportunistic refactor. Write tools are **already** shipped (`low_write` and
+> `material_write` are in the 25-key catalogue), so §11.2's "adversarial tests before enabling write
+> tools" gate is retrospective: the existing SSRF/injection suites satisfy it and must be kept green.
+> **Verified baseline:** `MAX_TOOLS = 32` (`ai-agent-config.ts:50`); the registry has **25** keys,
+> asserted in `ai-agent-runs.test.ts:345-369`; no `high_impact` tool is registered (the class is
+> reserved, not a gap); global rate limiting is 600/min (`bootstrap.ts:212-224`),
+> `limits.maxConcurrency` defaults to **2** (`ai-agents-settings.service.ts:65`), and
+> `quotas.assertRunAllowed` re-checks atomically with `FOR UPDATE` inside the insert transaction.
+> **Strengths to preserve:** durable run engine with lease-based claim and `outcome_unknown` guard,
+> three provider adapters behind one gateway, and server-side ACL via `EntityCrudService` on every
+> tool call.
+
+### 24.1 Audit corrections — do not re-open these as findings
+
+The first draft of this section was checked against the code and several findings were disproved.
+They stay recorded so a later reader does not implement a fix for a bug that does not exist:
+
+- **"Run creation is unbounded" — false.** See the verified baseline above. 19-AI.22 is about
+  per-user fairness and a per-minute creation cap, not about an absent limit.
+- **"`crm_read_record` can return `Email.body`" — false.** `READABLE_ENTITIES` excludes `Email`
+  (`ai-agent-tools.ts:109-120`) and its Zod enum rejects it; `crm_list_emails` is already
+  metadata-only by explicit `select`. No field-denial phase is needed.
+- **"No MCP-call assertion / no SSRF or injection coverage" — false.**
+  `phase22-journey-ai-controlled-actions.test.ts:855-877` calls `action/mcp/call` four times;
+  `ai-providers.test.ts:161-181` covers the SSRF allowlist; `ai-agent-runs.test.ts:710` and
+  `crm-chat-evaluation.test.ts:661` cover prompt injection. 19-AI.27 consolidates and extends.
+- **"Ledger write is silently dropped; the estimate lives in the gateway" — false.**
+  `ai-provider-gateway.service.ts:37-39,309-316` documents a **deliberate** best-effort write with a
+  correlation `log.error`; estimates come from `pricing.estimate()`
+  (`ai-agent-pricing.service.ts:164-193`) and the quota service only aggregates. 19-AI.24 must argue
+  against that documented decision, not describe it as an accident.
+- **"Only `failSafe`, no fallback" — `failSafe` does not exist in this repository.** The real gap is
+  that `fallbackModels` is validated and persisted (`ai-agent-config.ts:176`) but never consumed.
+- **§9.2's "An agent cannot approve its own action" concerns the agent**, not a human requester
+  approving their own proposal. 19-AI.21 is an unwritten policy decision, not a spec violation.
+
+### Phase 19-AI.21 — Approval Integrity: Decide the Self-Approval Policy (P1) — **Shipped 2026-11-07**
+
+**Finding:** `ai-agent-approvals.service.ts:153-269` records a `selfApproval` flag at decision time but does not reject `decidedById === requestedById` when the requester holds the `approval` capability. Capability, record authority and revalidation on target version are all already enforced. What is missing is a **written product policy** on whether a human may approve their own proposal — not a broken §9.2 rule (see §24.1).
+
+**Tasks**
+- Decide and document the rule in `docs/modules/ai-agents/security-and-threat-model.md`: forbidden, or permitted-with-audit. Default to **forbidden for `material_write` and above**; if an installation chooses the permissive mode, require a second approver for those classes.
+- Enforce it in the `decide()` path with a stable, documented error code in the `/api/v1` error shape (not a generic 500). Keep the `selfApproval` audit flag and `revalidationFailure` semantics unchanged.
+- Audit existing `ai_agent_approvals` rows for self-decisions before enabling the rule; add a CHECK constraint only if a hard database rule is chosen (otherwise service code, no migration).
+- Test: requester holds `approval` and submits their own proposal → denied with the documented code; a second user with `approval` succeeds; an approval still cannot execute after its target version changed.
+
+**Acceptance criteria**
+- The chosen policy is documented, enforced and covered by a dedicated test.
+- Existing approval suites (`ai-agent-runs.test.ts` and the approvals cases) stay green.
+- Rollback is a settings flag or service-code revert; no destructive migration.
+
+**What shipped (2026-11-07)**
+
+- **The decision:** `approval.selfApprovalPolicy` = `forbidden` (default) or `permitted_with_audit`,
+  in `ai-agents-settings.service.ts`; documented as **T9a** in
+  `docs/modules/ai-agents/security-and-threat-model.md` and in the operations runbook.
+- **Enforcement:** `ai-agent-approvals.service.ts` → `assertSelfApprovalPolicy()`, in the `decide()`
+  path, after the revalidation check. `forbidden` → `403` +
+  `AI_APPROVAL_SELF_APPROVAL_FORBIDDEN`; `permitted_with_audit` → the requester's signature is
+  recorded (`revalidation.secondApprovalRequired`, `awaitingSecondApproval` in the view, timeline
+  event `approval.self_signed`) and the caller gets `403` +
+  `AI_APPROVAL_SECOND_APPROVER_REQUIRED` until a second approver signs. Both codes are part of
+  `AI_AGENTS_ERROR_CODES` and resolve per locale from `errors.<CODE>` (en/vi).
+  Rejecting one's own proposal stays allowed; `read`/`low_write` proposals are not gated.
+- **No migration:** service code plus one additive settings field; rollback is a settings write.
+- **Audit (read-only, configured primary database, 2026-11-07):** 3 approvals in the existing
+  history were decided by their own requester (1 `material_write` executed, 1 rejected, 1
+  invalidated, all from 2026-10-24). The rule applies to new decisions; nothing was rewritten.
+  The report is repeatable: `scripts/audit-ai-self-approvals.ts` (one SELECT, no writes).
+- **Tests:** `apps/api/test/ai-agent-self-approval.test.ts` (5 cases: refusal with the documented
+  code and a pending proposal, a second approver and exactly one write, permissive mode with the
+  recorded first signature and a refused second request, a permitted self-rejection, and the stale
+  target still refused before the second signature). The existing approval cases in
+  `ai-agent-runs.test.ts` and the Omnichannel send case now decide with a **second** approver,
+  because the requester may no longer complete their own proposal.
+
+---
+
+### Phase 19-AI.22 — Per-User Run Admission Fairness (P2)
+
+**Finding (corrected):** Run creation is **not** unbounded — global rate limiting (600/min), the `limits.maxConcurrency` default of 2 (`ai-agent-runs.service.ts:451-460`) and the atomic quota re-check already bound it. The real gap is **per-user fairness**: one principal can consume the whole instance allowance, and there is no per-minute run-creation cap on the three trigger doors.
+
+**Tasks**
+- Decide whether a per-user / per-minute creation cap is needed beyond the existing global bounds; if so, source safe defaults from `ai-agents-settings.service.ts` and enforce them on `POST action/agents/:id/runs` **and** the event, schedule and integration doors.
+- Reuse `quotas.assertRunAllowed` (atomic `FOR UPDATE` inside the insert transaction) rather than adding a second counter; add a new counter only for a genuinely distinct policy dimension.
+- Use the existing `429` envelope: `bootstrap.ts:212-224` already converts Fastify rate-limit errors through `errorResponseBuilder` to `RateLimitError`. Do not introduce a second 429 shape or a plain `Error` that the exception filter would turn into a 500.
+- Test: a burst from one principal is throttled while another principal is unaffected; a trigger storm respects the same cap.
+
+**Acceptance criteria**
+- Bounds exist with **no** admin-configured budgets; the existing concurrency and quota guarantees are unchanged and covered.
+- Rollback is a settings change; no migration. `pnpm lint:arch` and `pnpm typecheck` clean.
+
+---
+
+### Phase 19-AI.23 — MCP Direct-Call Idempotency (P1)
+
+**Finding:** `ai-agents.controller.ts:444` builds `idempotencyKey: mcp-${Date.now()}` with `runId: 'mcp-direct'`. The run pipeline deduplicates on `ai_agent_runs.idempotency_key` and `ai_agent_tool_calls(run_id, idempotency_key)`, but the MCP path inserts **neither** row, so retrying a `low_write` tool duplicates the effect. Approval-gated (`material_write` / `high_impact`) tools are already refused on this path (`:430-436`).
+
+**Decision (the first draft contradicted itself):** returning "the original tool-call id" requires persistence, and `ai_agent_tool_calls.run_id` has an FK to `ai_agent_runs` (`045_phase19_ai_agents.sql:229`) — a `mcp-direct` sentinel cannot be inserted there. Persist a **dedicated direct-call receipt** instead; do not claim a no-schema-change fix can return an original id.
+
+**Tasks**
+- Add an additive migration `database/migrations/<NNN>_phase19_ai_agents_mcp_idempotency.sql` (next available number) for a receipt keyed by `(principal_id, idempotency_key)`, holding the tool-call id and the serialized result. Follow the repository's additive-migration discipline; no destructive change.
+- Require a client-supplied `idempotencyKey` for write-capable tools; on replay return the stored tool-call id and result without re-executing. Read-only tools may keep a generated key, documented.
+- Keep the approval gate on `material_write` / `high_impact` unchanged.
+- Test: a replayed write call with the same key creates exactly one effect and returns the same id; a different key executes once more; a read-only call without a key still works.
+
+**Acceptance criteria**
+- Replayed MCP calls cannot duplicate a `low_write` effect; material writes remain impossible through the direct path.
+- Exactly one additive migration; no change to the run state machine or the provider-request ledger.
+- Existing trigger tests and the four MCP cases in `phase22-journey-ai-controlled-actions.test.ts` stay green.
+
+---
+
+### Phase 19-AI.24 — Ledger Failure Observability (P2)
+
+**Finding (corrected):** `ai-provider-gateway.service.ts:37-39` deliberately makes the `ai_agent_provider_requests` write best-effort — failing the caller after tokens were consumed would invite a duplicate retry — and `:309-316` logs the failure with a correlation id. The estimate is not duplicated in the gateway: it calls `pricing.estimate()` from `ai-agent-pricing.service.ts`, while `ai-agent-quota.service.ts` only aggregates. The real gap is that **a log line is not an operator-visible signal**: a dropped ledger write can leave usage reporting with a plausible `0`.
+
+**Tasks**
+- Decide and document the failure policy in `docs/modules/ai-agents/provider-configuration.md`, explicitly weighing the existing anti-duplicate-retry rationale. Do **not** turn a successful provider call into an error response.
+- Emit a metric/alert on every dropped ledger write and mark the affected run's usage as `cost_unknown` (or equivalent), so `0` is never reported as a known cost. Do not add a competing ledger or a new `CostingService`: `ai-agent-pricing.service.ts` already owns snapshot → estimate.
+- Test: inject a ledger-write failure and assert usage reports `cost_unknown`, the metric fires, and the provider result still reaches the run.
+
+**Acceptance criteria**
+- Ledger failures are observable (metric + unknown-cost marker) and never silently collapse to `0`.
+- One costing code path remains; usage-quota tests, `pnpm typecheck` and `pnpm lint:arch` clean.
+- No migration; rollback is a settings flag or service-code revert.
+
+---
+
+### Phase 19-AI.25 — Decompose the Run Service and Tool Registry (P3)
+
+**Finding:** `ai-agent-runs.service.ts` is 2,850 lines (create + execute loop + lease claim + retry/cancel/input/resume + three trigger doors + usage + budget check) and `ai-agent-tools.ts` is 1,912 (registry + 15 handlers + inline Zod schemas). Pure size/maintainability debt; no behaviour change intended.
+
+**Tasks**
+- Split into `runs-executor` (step loop + lease claim), `runs-lifecycle` (create/retry/cancel/input/resume) and `runs-triggers` (event/schedule/integration doors). Update `apps/api/src/ai-agents/index.ts` wiring **and** the `*_PROVIDERS` barrel — the kernel does not auto-discover providers. No API, schema or state-machine change.
+- Split tool handlers by category (`tools/read.ts`, `tools/write.ts`, shared schemas) while keeping the single `AIToolRegistry` and the boot-time duplicate-key failure. Contributed tools stay in their owning modules (§9.1 rule 6). Contributions inside `ai-agents` must import `./ai-agent-tools.js` directly, never the barrel.
+
+**Acceptance criteria**
+- No file under `apps/api/src/ai-agents/**` exceeds ~1,500 lines after the split. **This bound is scoped to this module**: other modules already have service files over 2,000 lines and are out of scope. `pnpm lint:arch` and `pnpm typecheck` clean.
+- The 25-tool catalogue assertion in `ai-agent-runs.test.ts` is unchanged and still fails if any tool is removed.
+- Pure refactor, no migration; rollback is a revert.
+
+---
+
+### Phase 19-AI.26 — Provider Fallback (P2)
+
+**Finding:** §6.3 allows a published agent to declare fallback models. `fallbackModels` is validated and persisted (`ai-agent-config.ts:176`, `ai-agent-definitions.service.ts:439-442,666`) but the runtime never reads it, so there is no cross-provider failover. (`failSafe` does not exist in this repository — see §24.1.)
+
+**Tasks**
+- Define the policy in `docs/modules/ai-agents/provider-configuration.md`: primary → secondary connection of the same `kind` first; cross-`kind` only when the gateway can normalise structured output. The `anthropic` adapter has no structured output (`ai-provider-anthropic.ts:241-244`), so that combination must be **refused**, not silently degraded. §6.2 forbids falling back to an unapproved external provider; §6.3 requires residency/data-class checks and preserved run budgets.
+- Implement fallback behind a settings flag (off by default), recording **both** attempts in `ai_agent_provider_requests` with the actual provider/model for audit and cost analysis.
+
+**Acceptance criteria**
+- A fallback attempt is visible in the ledger with both attempts; budgets and tool idempotency are unchanged, and failover never duplicates a tool action.
+- With the flag off the behaviour is identical to today; `ai-providers.test.ts` stays green. Rollback is a settings change.
+
+---
+
+### Phase 19-AI.27 — Test Coverage Consolidation (P2)
+
+**Finding (corrected):** Coverage is **not missing** (see §24.1): MCP calls, the SSRF allowlist and prompt injection are already asserted in three suites. What is genuinely thin is the frontend — only `AIAgentsAgentsTab.test.ts` (48 lines) — and the self-approval decision has no case until 19-AI.21 lands. There is no single dedicated adversarial file, which makes §11.2 evidence hard to find, not absent. No `high_impact` tool is registered (`ai-agents-module.ts:170`); the class is reserved, and this phase must not register one just to populate it.
+
+**Tasks**
+- Add component tests for `AIAgentsApprovalsTab`, `AIAgentsUsageTab` and `AIAgentsEvaluationsTab`: loading/error/empty states plus approve/reject control wiring.
+- Consolidate the existing SSRF, injection and cross-user/tenant cases into one named adversarial suite (move or re-export — do not delete coverage), and add a cross-tenant-through-tools case if the audit finds one missing.
+- Do **not** add an `Email.body` denial test: `crm_read_record` cannot address `Email` at all.
+
+**Acceptance criteria**
+- `pnpm test:web` covers the three tabs; removing a handler turns a test red.
+- The consolidated adversarial suite passes, and `ai-providers.test.ts`, `ai-agent-runs.test.ts` and `crm-chat-evaluation.test.ts` keep their existing cases.
+- No schema change; no ACL, approval, quota or assertion is weakened to make a test pass.
+
+---
+
+### Phase 19-AI.28 — Multi-Reference Run Input Contract (P1, companion to 19-CHAT.26)
+
+**Finding:** `RunCreateInput.input.record` is a **single** `{ entity, id }` object.
+`ai-agent-runs.service.ts:2629,2639` writes and reads exactly one record and the prompt builder
+interpolates that one reference. `CRMChat` validates up to `limits.maxContextRefs` (5) references on
+a turn but can only forward the first (`crm-chat-ai-agents-client.service.ts:68-70`). This is the
+**owner-module gap** behind 19-CHAT.26; CRM Chat may not work around it (§0 of the companion plan).
+
+**Tasks**
+- Extend the run-input schema and the persisted `ai_agent_runs.input` JSON shape to carry an optional
+  list of references, **keeping the existing single `record` field valid** so old runs, other
+  integrations and the trigger doors keep working. Additive schema change only — no migration that
+  rewrites existing rows.
+- Update prompt construction to include every reference, with each one re-checked under the acting
+  user's ACL before it reaches the model. Bound the list with a documented maximum; never
+  validate-and-drop.
+- Version the integration contract in `docs/architecture/crm-chat-contract.md` and record its
+  version in `CRM_CHAT_CONTRACT_VERSION` if the request/response shape changes.
+- Test: a run created with three refs persists all three, the prompt contains all three, an
+  unreadable ref is rejected before any run is created, and a legacy single-`record` run still
+  executes unchanged.
+
+**Acceptance criteria**
+- 19-CHAT.26 can forward every validated ref without losing data; no caller input is silently
+  discarded.
+- Backward compatible: existing single-ref runs and the three trigger doors are unchanged; no
+  destructive migration.
+- Rollback is a flag or service-code revert; `ai-agent-runs.test.ts` and the trigger suites stay
+  green.
 

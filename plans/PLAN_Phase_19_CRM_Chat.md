@@ -1,7 +1,9 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
-> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03; P1 domain tools (`crm_project_status`, `crm_commercial_summary`, `crm_campaign_performance`, `crm_list_emails`) shipped 2026-11-05 (module v1.3.0, contract unchanged)  
-> **Plan version:** 1.8.0 (2026-11-05)  
+> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03; P1 domain tools (`crm_project_status`, `crm_commercial_summary`, `crm_campaign_performance`, `crm_list_emails`) shipped 2026-11-05 (module v1.3.0, contract unchanged)
+> **Post-release hardening 19-CHAT.25 → 19-CHAT.31 (audit 2026-11-07, §17 end; findings corrected the
+> same day after a source-level review) is planned, not yet implemented.**
+> **Plan version:** 1.9.1 (2026-11-07)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
@@ -38,12 +40,13 @@ This plan describes intended behavior. Where it and the code disagree, the code 
 - Never run real outbound emails, SMS, phone calls, payments, external writes, or irreversible integrations as a side effect of automated tests. Use fake/stub providers and narrowly scoped `AGENT_TEST_...` data.
 - Do not mark a phase complete without recording acceptance evidence and any limitations.
 
-### Delivery status (2026-11-02)
+### Delivery status (2026-11-07)
 
 The module is **built and running**, not planned. Phases 19-CHAT.0 → 19-CHAT.19 are the historical
 specification that produced the shipped module; they stay in this file because they define its
 contract. The v2 work added after the review is specified as **19-CHAT.20 → 19-CHAT.24** in §17, and all
-five of those phases have shipped.
+five of those phases have shipped. The open work is **19-CHAT.25 → 19-CHAT.31** (§17, audit
+2026-11-07): post-release hardening, planned but not implemented.
 
 | Phase range | Status | Evidence |
 |---|---|---|
@@ -53,6 +56,14 @@ five of those phases have shipped.
 | 19-CHAT.22 — write loop closure | **Shipped** 2026-11-02 | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2, `crm_update_record_fields` v2; registry 12 → 15 keys; 6 new cases in `ai-agent-runs.test.ts` |
 | 19-CHAT.23 — module intelligence tools | **Shipped** 2026-11-03 | 5 tools, registry 15 → 20 keys; `apps/api/test/crm-chat-intelligence-tools.test.ts` (7 cases); design in `plans/SPEC.md` §9.4 |
 | 19-CHAT.24 — tool-aware suggestions, evaluation, release | **Shipped** 2026-11-03 | 8 declarative chips filtered by `capabilities.assistant.tools` (`apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`); 40 new cases (20 tools × vi + en) in `crm-chat-evaluation.test.ts`; full 21-entry catalogue table in `ai-agent-runs.test.ts`; module v1.2.0; design in `plans/SPEC.md` §9.7 |
+| 19-CHAT.25 → 19-CHAT.31 — post-release hardening | **Planned, not implemented** (audit 2026-11-07, corrected the same day) | §17 phases 25–31; §18.2 DoD addendum; change log 1.9.0/1.9.1. P1: settings honesty, context forwarding, contract accuracy, stream id hygiene. |
+
+**Current-state anchors (2026-11-07, HEAD `2bce1e8`).** As-built rows in §17 describe the state
+*at the time each phase shipped* and are deliberately left unchanged. Against the current checkout:
+`MAX_TOOLS = 32` (`apps/api/src/ai-agents/ai-agent-config.ts:50`, raised from 20/24 since those rows
+were written), the registry has **25** keys asserted in `ai-agent-runs.test.ts:345-369`, and
+`crm-chat.controller.ts` serves **27** routes (`CRM_CHAT_ROUTES` has 27 entries). Any new phase
+that quotes a ceiling, a catalogue size or a route count must verify it against the code first.
 
 Two rules follow from this split, and both have already cost time when ignored:
 
@@ -1501,6 +1512,216 @@ Two things this phase discovered about itself, both written into
 
 ---
 
+### Phase 19-CHAT.25 — Settings and Limits Honesty (P1)
+
+**Finding (audit 2026-11-07, corrected):** `CRMChatSettingsService` stores a large `limits.*`
+surface, but only part of it is enforced. **`maxContextRefs` is already enforced server-side**
+(`crm-chat.controller.ts:250-258`, 422 `CHAT_CONTEXT_TOO_LARGE`), and `maxMessageChars` is enforced
+in `CRMChatComposer.tsx:241-242,332` — but the client allows `8_000` characters (+100 overage)
+while the DTO hard-caps `prompt` at `4_000` (`dto/crm-chat-shapes.ts:83`), so a 5,000-character
+message is accepted by the UI and refused by the API. `maxActiveTurnsPerUser`,
+`maxConversationsPerUser`, `maxTurnsPerMinute`, `maxQueryResults`, `maxConcurrentQueries` and
+`turnTimeoutSeconds` are stored but not checked (queries use a hardcoded `MAX_LIST_SIZE=50` in
+`crm-chat-query.service.ts:48`); `heartbeatSeconds` is unused because
+`crm-chat-streaming.service.ts:122-134` hardcodes `15_000`. An operator reading the settings screen
+believes every advertised bound is live.
+
+**Tasks**
+- For **every** `limits.*` field (including `maxContextRefs`), record one decision in
+  `docs/architecture/crm-chat-contract.md`: **enforce server-side** (preferred for
+  `maxActiveTurnsPerUser`, `maxTurnsPerMinute`, `maxConversationsPerUser`, `turnTimeoutSeconds`) or
+  **remove** from the settings DTO, API docs and admin UI.
+- Make `maxMessageChars` a single source of truth: align the DTO cap with the setting (or have the
+  DTO read the setting) and fix the composer's `maxLength + 100` overage, so the advertised bound
+  equals the enforced bound.
+- Decide the fate of `heartbeatSeconds` here; **wire it in 19-CHAT.29**, which owns the streaming
+  timer. Same for any other orphaned field found by grep.
+- Add tests: a small configured limit is honoured by turn creation, conversation creation and query
+  execute; a removed field is rejected as an unknown key by the settings schema (it is already
+  `.strict()` — `crm-chat-settings.service.ts:42,56,68` — so assert that behaviour rather than
+  adding strictness).
+
+**Acceptance criteria**
+- Every `limits.*` field in the public settings DTO is either enforced (test-proven) or removed; no
+  dead settings remain. A prompt of `maxMessageChars` length is accepted by both client and server,
+  or refused by both.
+- **Removing settings fields changes a public response shape**: bump `CRM_CHAT_CONTRACT_VERSION`
+  (`crm-chat-contract.ts`) and coordinate the SPA/admin UI in the same phase. Rollback is re-adding
+  the fields plus reverting the bump; **no database migration**.
+- An operator can verify the enforced bounds from the admin UI and the updated contract docs.
+
+---
+
+### Phase 19-CHAT.26 — Forward All Context References (P1)
+
+**Finding:** `crm-chat-ai-agents-client.service.ts:68-70` forwards only `contextRefs[0]` as
+`record`. The turn DTO accepts an array and the controller validates up to `limits.maxContextRefs`
+(5) references (`crm-chat.controller.ts:250-258`), so refs 2–5 are validated and then silently
+discarded: a user who attaches three records gets an answer grounded in one.
+
+**Cross-module dependency (resolve before code):** `RunCreateInput.input.record` is a **single
+object** in AIAgents — `ai-agent-runs.service.ts:2629,2639` writes it into the run input and the
+prompt builder. Forwarding a list therefore requires the companion phase **19-AI.28** in
+`plans/PLAN_Phase_19_AI_Agents.md`, which extends the run-input schema and prompt construction;
+§0 forbids working around the owner module. Land 19-AI.28 first. The Chat module only translates
+the DTO and validates refs.
+
+**Tasks**
+- Extend the AIAgents run-input contract to carry all refs (companion phase), then change
+  `submitTurn` to forward the full list. Until that lands, **reject >1 ref with a clear validation
+  error** rather than validating-and-dropping.
+- Re-check every ref for readability before creating the run; no ref reaches the prompt without an
+  ACL decision.
+- Add a multi-ref turn test: two readable records as `contextRefs` → the run input read back from
+  `ai_agent_runs` carries both and the prompt references both; an unreadable ref is rejected before
+  any run is created.
+
+**Acceptance criteria**
+- No validated caller input is silently discarded anywhere in the turn path; if the single-ref
+  fallback ships, it fails loudly with a documented error code.
+- 19-AI.28 has landed (or the >1 rejection has shipped) before this phase is marked complete; the
+  contract doc records which mode is live.
+- `crm-chat-security.test.ts` stays green — multi-ref forwarding must not widen record visibility.
+
+---
+
+### Phase 19-CHAT.27 — Contract Accuracy (P1)
+
+**Findings:**
+1. **Capability/feature drift.** `CRM_CHAT_ROUTES` **already declares** `capability` and `feature`
+   per route (`crm-chat-contract.ts:23-32`), and `crm-chat-contract.test.ts:94-103` checks they are
+   *known keys* — but nothing compares the declared values with what the controller enforces. Three
+   are wrong: `help/search` declares `feature: 'workspace'` while the controller calls
+   `assertFeature('helpRetrieval')` (`crm-chat.controller.ts:356`); `cancel` declares
+   `capability: 'manage'` while the controller calls `assertWorkspace()` → `use` (`:293-297`);
+   prompt **POST** declares `capability: 'use'` while `crm-chat-prompts.service.ts:81` requires
+   `prompts`. The prompt **GET list** is correct (`use`, `:66`) — do not "fix" it.
+2. **Stale docs.** `crm-chat.controller.ts:47-67` still says "Only the foundation routes exist
+   here" — false since v1.1.0. The shipped surface is **27** routes (27 decorators and 27
+   `CRM_CHAT_ROUTES` entries), not 28.
+
+**Tasks**
+- Extend `crm-chat-contract.test.ts` with an explicit expected-enforcement map derived from the
+  controller's `assert*` calls, and assert every `CRM_CHAT_ROUTES` entry against it, so a change in
+  code without a table update turns the suite red.
+- Resolve the three declared values above (or change the enforcement and document why — one source
+  of truth either way).
+- Update the controller header and `docs/architecture/crm-chat-contract.md` to describe the shipped
+  27-route surface.
+
+**Acceptance criteria**
+- The contract test fails if a route's capability or feature enforcement changes without a table
+  update; all three known drifts are resolved on the true values.
+- The "foundation routes" wording is gone and the contract doc's route count matches the controller.
+- No API behaviour change; `pnpm lint:ui` and `pnpm typecheck` clean.
+
+---
+
+### Phase 19-CHAT.28 — Bounded Data Loading (P2)
+
+**Findings (one capability — bound the fetch — at two call sites):**
+1. `toMessageView` awaits `citations.forMessage` per message
+   (`crm-chat-conversations.service.ts:207,343`); each call re-reads 1–2 entities through
+   `crm-chat-citations.service.ts:129`. A 30-message page costs up to 60 Entity Engine calls, and
+   the frontend posts a separate `citations/reauthorize` per rendered link
+   (`CRMChatMessageList.tsx:173-195`).
+2. `crm-chat-help.service.ts:125` calls `portalArticles()` (unbounded corpus,
+   `knowledge-base.service.ts:50-70`) and scores keywords in memory (`:132-146`). Only the
+   *output* is capped (`MAX_HELP_SOURCES=5`); the fetch has no limit, index or pagination.
+
+**Tasks**
+- Batch-load citations: one query for all `crm_chat_citations` rows of the page's messages, then
+  re-read entities in a single pass (or a batch `get` where the Entity Engine supports it). Preserve
+  the "revoked → hidden, not forbidden" semantics.
+- Batch the frontend `reauthorize` into one POST per page, or drop per-link reauth now that
+  server-side `visibleSources` already re-authorizes.
+- Bound the help fetch (server-side limit + ranking, or a TSV index); at minimum cap the corpus scan
+  and document the bound.
+
+**Acceptance criteria (numeric, not "fast enough")**
+- A 30-message history page issues **≤ 3** DB statements for citation materialization (one citation
+  query + one batch entity read + one message query), asserted by a query-count test; a 60-message
+  page must not double that count.
+- With a seeded **5,000-article** corpus, `help/search` reads **≤ 500** articles and answers within
+  **200 ms p95** over 20 measured calls on the CI runner; the test asserts both the fetch bound and
+  the budget. If the runner cannot meet 200 ms, agree a documented number before shipping — do not
+  leave the criterion open-ended.
+- No change to citation visibility semantics; `crm-chat-security.test.ts` stays green.
+
+---
+
+### Phase 19-CHAT.29 — Stream ID Hygiene (P1)
+
+**Finding (severity corrected):** `crm-chat-streaming.service.ts:129` emits heartbeats with
+`id: String(Date.now())`, while `:99-103` parses `Last-Event-ID` straight into `lastSeq`. A client
+that reconnects after a heartbeat sends a 13-digit epoch as its resume cursor and **skips every
+subsequent event** — this is a broken resume, not merely an id collision. Also `action.proposed` and
+`approval.required` share one `id` (`:186,229-250`), and `citation.added` is declared in the
+contract (`:40`) and handled client-side (`useCrmChatStream.ts:121`) but never emitted by the
+server. `assistant.delta` is absent by design (the UI renders a timer); that decision belongs to
+19-CHAT.31.
+
+**Tasks**
+- Heartbeats must not carry a resumable sequence id (omit `id`, or use a non-numeric id the resume
+  parser ignores) and must never advance `lastSeq`. Add a reconnect-after-heartbeat test that
+  asserts all following events are delivered.
+- Give `action.proposed` and `approval.required` distinct ids, or document in the contract why they
+  share one and test that behaviour.
+- Remove `citation.added` from the contract, or emit it server-side with a test.
+- Implement the `heartbeatSeconds` decision from 19-CHAT.25 (the interval is currently a hardcoded
+  `15_000` at `:134`).
+
+**Acceptance criteria**
+- `Last-Event-ID` resume after ≥1 heartbeat delivers the events emitted during the gap; stream ids
+  are unique within a turn and never collide with the resume cursor.
+- Every emitted `CRM_CHAT_STREAM_EVENTS` value has a handler and a mapping test; `pnpm test:web`
+  and `pnpm lint:ui` clean.
+
+---
+
+### Phase 19-CHAT.30 — Frontend Component Coverage (P2)
+
+**Finding:** Only `CRMChatSuggestions.test.tsx` exists under `apps/web`; composer, SSE resume,
+citation, action-card and feedback components have no component tests, and streaming translation is
+covered only indirectly. (`e2e/crm-chat.spec.ts` is a Playwright journey, not a component suite.)
+
+**Tasks**
+- Add vitest.web suites for `CRMChatComposer` (send/cancel/error-recheck state machine,
+  `:160-237`), `useCrmChatStream` (resume via `Last-Event-ID`, terminal close, error re-check),
+  `CRMChatMessageList` (locked citation state), `CRMChatActionCard` (server-driven `actionable`
+  flag) and `CRMChatFeedbackButtons` (down → comment modal). Mock `EventSource`/fetch; no provider
+  calls.
+- Add dense mapping tests for every `CRM_CHAT_STREAM_EVENTS` value (12 today), including dropped or
+  untranslatable events.
+
+**Acceptance criteria**
+- `pnpm test:web` covers all five components/hook; deleting any handler turns a test red.
+- Every stream event value has a mapping test; `pnpm lint:ui` clean (no missing `t()` keys, no raw
+  `<Empty>`).
+
+---
+
+### Phase 19-CHAT.31 — UI Decomposition and the `assistant.delta` Decision (P3)
+
+**Finding:** `CRMChatPage.tsx` is 666 lines and bundles the page, diagnostics drawer (`:502-598`),
+admin settings modal (`:600-663`) and health checks. `assistant.delta` is not emitted — the UI
+renders a timer instead of token deltas. The latter is an unrecorded product decision, not
+necessarily a defect.
+
+**Tasks**
+- Extract the diagnostics drawer and admin settings modal into their own components with the same
+  props and no behaviour change; keep the capability gate and `canStartTurn` logic intact.
+- Decide `assistant.delta`: either open a **separately scoped** token-streaming UX phase, or record
+  the timer-instead-of-tokens choice as intentional in `docs/architecture/crm-chat-contract.md`.
+
+**Acceptance criteria**
+- `CRMChatPage.tsx` is under ~400 lines (or the remaining split is documented with a reason);
+  `pnpm lint:ui` clean.
+- The `assistant.delta` decision is written into the contract doc, so the gap is a decision rather
+  than an oversight. Pure refactor, no migration.
+
+---
+
 ## 18. Definition of Done
 
 The list below is the gate the shipped module was accepted against, and it stays the standing gate
@@ -1539,6 +1760,20 @@ These are the failure modes the shipped module actually exhibits, so each one ge
 - [ ] Every tool has a dual schema, byte/time caps, registered `entityScopes`, one evaluation case, and a catalogue entry.
 - [ ] Every tool's owning module respects the DAG; `pnpm lint:arch` proves it.
 - [ ] Every tool is disableable through AIAgents settings without a deploy or a migration.
+
+### 18.2 Addendum for the post-release hardening (19-CHAT.25 → 19-CHAT.31, audit 2026-11-07)
+
+These criteria cover the **corrected** audit findings recorded in §17 after phase 19-CHAT.24. A
+hardening phase that touches one of them must re-verify it:
+
+- [ ] Every advertised limit is enforced server-side, or it is removed from the settings surface and the DTO; the advertised `maxMessageChars` equals the enforced DTO cap (see 19-CHAT.25).
+- [ ] A turn never silently drops caller-supplied context references; multiple refs are forwarded through the AIAgents run input or rejected with a validation error (see 19-CHAT.26).
+- [ ] `CRM_CHAT_ROUTES` capability/feature declarations match the controller's enforcement for every route, proven by a contract test (see 19-CHAT.27).
+- [ ] A page of conversation history materializes citations in a bounded number of DB statements (≤ 3 for a 30-message page), with no per-message N+1 (see 19-CHAT.28).
+- [ ] Help/KB retrieval reads a bounded number of articles and stays within the documented time budget regardless of corpus growth (see 19-CHAT.28).
+- [ ] A reconnect after a heartbeat still resumes from the correct cursor; stream ids are unique per turn and never collide with the resume cursor; every emitted event type has a handler and a test (see 19-CHAT.29).
+- [ ] Composer, SSE resume, citation, action-card and feedback components have component tests (see 19-CHAT.30).
+- [ ] The `assistant.delta` decision is recorded in the contract doc and `CRMChatPage.tsx` is decomposed (see 19-CHAT.31).
 
 ---
 
@@ -1601,6 +1836,8 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 
 | Version | Date | Change |
 |---|---|---|
+| 1.9.1 | 2026-11-07 | Corrected the same-day §17 additions after a source-level review: disproved "no limit is enforced", "28 routes", "prompt POST/**list** drift" and the "stream ids collide" framing; recorded the real `maxMessageChars` 8,000 vs DTO 4,000 mismatch, the heartbeat → `Last-Event-ID` resume break, the already-enforced `maxContextRefs`, the already-existing `capability`/`feature` contract fields, and the AIAgents run-input dependency. Split the four bundled phases into seven single-capability phases (**19-CHAT.25 → 19-CHAT.31**), promoted stream hygiene to P1, replaced "fast enough" with numeric budgets, moved §18.2 after §18.1, updated §0.1 with current-state anchors (`MAX_TOOLS` 32, 25 tools, 27 routes) and rewrote the final instruction. No shipped phase was changed in place. |
+| 1.9.0 | 2026-11-07 | Initial post-release hardening plan: added phases 19-CHAT.25 → 19-CHAT.28 (settings honesty, context/contract accuracy, bounded loading, frontend/stream hygiene) and a §18.2 Definition-of-Done addendum from the 2026-11-07 audit. **Superseded by 1.9.1 the same day** — several findings did not survive a source check; read 1.9.1 for the corrected scope. |
 | 1.8.0 | 2026-11-05 | P1 release: four domain tools shipped — `crm_project_status` (Projects), `crm_commercial_summary` (Sales, over the 19-S.19 `customerSummary` contract), `crm_campaign_performance` (MarketingAutomation, behind the campaign readability gate), `crm_list_emails` (kernel, metadata only). `MAX_TOOLS` 20 → 24; catalogue asserted as 25 entries; new suite `ai-domain-tools.test.ts` (5 cases, happy + denial paths); `crm-chat-evaluation.test.ts` 62 → 70 cases; module v1.3.0, contract unchanged. §8 items for Projects/Sales/Marketing and Email now closed on the read side only — triggers remain unimplemented. |
 | 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
 | 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
@@ -1618,10 +1855,18 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 Phases 19-CHAT.0 → 19-CHAT.24 are shipped. Do not re-implement them and do not extend them in place;
 a new capability is a new phase with its own acceptance evidence.
 
-**There is no open phase in this plan.** `plans/SPEC.md` §9 is fully implemented. The next piece of AI
-work is a decision, not a task: the items §8 and §9.8 left outside the catalogue (a live-provider
-evaluation through `ai_agent_eval_*`, screenshots and native-review of the Vietnamese docs, and whatever
-`docs/quality/known-gaps.md` still lists for Phase 22) each need their own phase before code.
+**The open work is now 19-CHAT.25 → 19-CHAT.31 (§17, audit 2026-11-07, corrected)** — settings and
+limits honesty, context forwarding, contract accuracy, bounded data loading, stream id hygiene,
+frontend component coverage, and UI decomposition. Each phase has its own acceptance evidence;
+implement one at a time.
+
+Suggested start order (P1 first): **19-CHAT.26** (validated context refs are silently dropped) →
+**19-CHAT.25** (the UI accepts 5,000 characters that the API refuses) → **19-CHAT.29** (resume is
+broken after a heartbeat) → **19-CHAT.27** (contract drift), then the P2/P3 phases. 19-CHAT.26 has a
+hard dependency: land **19-AI.28** (multi-reference run input) in
+`plans/PLAN_Phase_19_AI_Agents.md` first; §0 forbids working around the owner module. The items
+§8 and §9.8 of `plans/SPEC.md` left outside the catalogue (live-provider evaluation, Vietnamese docs
+review) still each need their own phase before code.
 
 When a new tool phase is opened:
 

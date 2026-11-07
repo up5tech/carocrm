@@ -1,7 +1,8 @@
 # `AIAgents` security and threat model
 
-> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §11, §20 Phase 19-AI.1.
-> **Status:** delivered in 19-AI.1; re-reviewed in 19-AI.19.
+> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §11, §20 Phase 19-AI.1, §24 Phase 19-AI.21.
+> **Status:** delivered in 19-AI.1; re-reviewed in 19-AI.19; the self-approval policy was decided,
+> documented and enforced in 19-AI.21.
 > **Scope:** agent definitions, provider gateway, tool execution, approvals, runs, memory, usage and
 > the administration surface.
 
@@ -190,12 +191,61 @@ it (the code never receives it outside the adapter call).
 - High-impact classes require an approval row before execution.
 - Approvers need a dedicated permission and authority over the affected records.
 - The agent cannot approve its own action; approvals are not bearer tokens.
+- A **human** cannot approve their own proposal either — see T9a.
 - Before execution, the service revalidates version, actor, approver authority, target state,
   arguments hash, consent and policy. Any change invalidates the approval.
 - Expiry/rejection never triggers an alternative write.
 
 **Tests:** changed target record invalidates approval; revoked permission invalidates; replayed
 approval does not create a duplicate record.
+
+### T9a — Self-approval of a proposal (19-AI.21)
+
+*Threat:* the person who asked the agent to act approves the agent's own proposal, so the "human in
+the loop" is one person wearing two hats — and the audit trail records one name where the policy
+expects two.
+
+**The decision.** `plans/PLAN_Phase_19_AI_Agents.md` §24 (`19-AI.21`) found no broken rule here:
+§9.2's "an agent cannot approve its own action" concerns the *agent*, and a human requester
+approving their own proposal was simply **unwritten**. The module now decides it explicitly, in
+`approval.selfApprovalPolicy` (`ai-agents-settings.service.ts`):
+
+| Policy | A `material_write` / `high_impact` proposal the requester tries to approve |
+| --- | --- |
+| `forbidden` (default) | **Refused.** `403` with the stable code `AI_APPROVAL_SELF_APPROVAL_FORBIDDEN`. Nothing is decided; the proposal stays `pending` and another approver may still sign it. |
+| `permitted_with_audit` | **Recorded, not effective.** `403` with the stable code `AI_APPROVAL_SECOND_APPROVER_REQUIRED`. The requester's signature is kept on the approval row (`awaitingSecondApproval: true`) and in the run timeline (`approval.self_signed`), and the run stays in `waiting_for_approval` until a **second** approver signs. |
+
+**Controls**
+- The rule is enforced in the `decide()` path of `ai-agent-approvals.service.ts`, on the server. It
+  is not an admin bypass: an administrator who started the run needs a second approver like anyone
+  else, because the threat is the shape of the audit trail, not the privilege level.
+- Only **approvals** are gated. Rejecting one's own proposal stays allowed — refusing an action is
+  the safe direction, and a requester must be able to cancel their own run.
+- A `read` or `low_write` proposal is not gated: there is no business write behind it, and the
+  decision is still audited through the existing `selfApproval` flag.
+- The second signature must come from a **different** person: the requester asking again is refused
+  with the same code, and the first signature is not recorded twice.
+- The rule sits **after** the revalidation check. A proposal whose target already moved is
+  invalidated and the run is blocked — a stale proposal is dead regardless of who signs it.
+- The codes are part of the module's error contract (`AI_AGENTS_ERROR_CODES`) and are resolved per
+  locale from `errors.<CODE>`; a caller switches on the code, never on the message.
+
+**Audit before switching.** The rule applies to new decisions; history is unchanged and stays
+readable. `scripts/audit-ai-self-approvals.ts` is a **read-only** report of the approvals that were
+already decided by their own requester:
+
+```bash
+pnpm tsx scripts/audit-ai-self-approvals.ts
+```
+
+**Rollback:** set `approval.selfApprovalPolicy` back to its previous value (a settings write, no
+migration), or revert the service code. Nothing in the schema changes either way.
+
+**Tests:** `apps/api/test/ai-agent-self-approval.test.ts` — the requester is refused with the
+documented code, the proposal stays pending and the record is untouched; a second approver succeeds
+and the write runs exactly once; permissive mode records the first signature, still refuses the
+requester and completes only after the second signature; a self-rejection is allowed; and a proposal
+whose target changed is still refused before the second signature.
 
 ### T10 — Destructive or financial actions
 
@@ -304,6 +354,7 @@ Any failure is a safe, actionable policy denial. The model is never asked to fin
 | Tool authorization | allowed read returns ACL-scoped record | unreadable record → policy denial |
 | Injection | benign summary | injected instructions cannot widen grants |
 | Approval | approve then execute once | changed target/revoked actor → invalid |
+| Self-approval (19-AI.21) | a second approver signs, the write runs once | the requester's own signature → `AI_APPROVAL_SELF_APPROVAL_FORBIDDEN`, nothing decided |
 | Idempotency | retry returns stored outcome | duplicate request creates one effect |
 | Budget | run stops at limit with partial result | concurrency cannot exceed the cap |
 | Secrets | `hasApiKey` true after save | key absent from every response/log |

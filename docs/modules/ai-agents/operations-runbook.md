@@ -1,5 +1,25 @@
 # AI Agents — Operations Runbook
 
+## Self-approval policy (19-AI.21)
+
+A proposal the requester was the source of may not be completed by that same person.
+
+- **Setting:** `AIAgents` → **Settings** → `approval.selfApprovalPolicy`.
+  - `forbidden` (default) — the requester's attempt is refused with
+    `AI_APPROVAL_SELF_APPROVAL_FORBIDDEN` (403). Nothing is decided: the proposal stays in the inbox
+    for another approver.
+  - `permitted_with_audit` — the requester's signature is recorded (the inbox shows *Waiting for a
+    second approver*, the run timeline shows `approval.self_signed`) but the action cannot execute
+    until a **second** approver signs. The requester asking again is refused with
+    `AI_APPROVAL_SECOND_APPROVER_REQUIRED` (403).
+- Only `material_write` and `high_impact` proposals are gated. Rejecting one's own proposal stays
+  allowed — a requester must be able to cancel their own run.
+- The check is not an admin bypass: an administrator who started the run needs a second approver too.
+- **Before switching an existing installation on**, see what history already contains:
+  `pnpm tsx scripts/audit-ai-self-approvals.ts` (read-only; lists the approvals that were decided by
+  their own requester). The policy applies to new decisions — history is not rewritten.
+- **Rollback:** set the setting back, or revert the service code. No migration, no data change.
+
 ## Event triggers (P1, 2026-11-05)
 
 A committed `entity.*` event can start a run for each agent that opted in. Nothing starts until an

@@ -348,10 +348,23 @@ export const AI_AGENTS_TABLES = [
   'ai_provider_connections',
 ] as const;
 
+/**
+ * The module's stable error codes (§24, `19-AI.21`).
+ *
+ * A caller switches on the code, never on the message; the human-readable text is the i18n
+ * catalog's job (`errors.<CODE>`). None of them carries record content, a provider body or a secret —
+ * they describe a *policy*, not the data behind it.
+ */
+export const AI_AGENTS_ERROR_CODES = [
+  'AI_APPROVAL_SELF_APPROVAL_FORBIDDEN',
+  'AI_APPROVAL_SECOND_APPROVER_REQUIRED',
+] as const;
+export type AIAgentErrorCode = (typeof AI_AGENTS_ERROR_CODES)[number];
+
 export const AI_AGENTS_MODULE = {
   id: 'AIAgents',
   name: 'AI Agents',
-  version: '1.3.0',
+  version: '1.4.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; AI Agents runs after Marketing Automation (`380`). */
   loadOrder: 390,
@@ -388,6 +401,7 @@ export const AI_AGENTS_MODULE = {
     '19-AI.18',
     '19-AI.19',
     '19-AI.20',
+    '19-AI.21',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

@@ -247,6 +247,18 @@ export function AIAgentsSettingsTab({ capabilities }: { readonly capabilities: R
               <Form.Item name={['approval', 'ttlMinutes']} label={t('web.aiAgents.settingsApprovalTtl')}>
                 <InputNumber min={1} max={1_440} style={{ width: '100%' }} />
               </Form.Item>
+              <Form.Item
+                name={['approval', 'selfApprovalPolicy']}
+                label={t('web.aiAgents.settingsSelfApprovalPolicy')}
+                extra={t('web.aiAgents.settingsSelfApprovalPolicyHint')}
+              >
+                <Select
+                  options={[
+                    { value: 'forbidden', label: t('web.aiAgents.settingsSelfApprovalForbidden') },
+                    { value: 'permitted_with_audit', label: t('web.aiAgents.settingsSelfApprovalPermitted') },
+                  ]}
+                />
+              </Form.Item>
             </Card>
           </Col>
 
