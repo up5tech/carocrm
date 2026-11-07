@@ -6,7 +6,7 @@ order: 140
 tags: [ai-agents, agents, runs, approvals, usage]
 aliases: ["trợ lý AI", "tác nhân AI", "chạy trợ lý", "hỏi AI về dữ liệu"]
 related: [user/record-page, admin/settings-overview, admin/users-teams-roles]
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 Module AI Agents là một trang duy nhất với các tab, mở từ sidebar hoặc bằng [Mở màn hình AI agents](/ai-agents).
@@ -33,9 +33,27 @@ Các lệnh nháp, publish và lifecycle là những quyền riêng biệt.
 5. Bấm **Start run**. Tab **Runs** mở ra tại run mới.
 
 Một run là một lần thực thi một nhiệm vụ bởi đúng một version agent đã capture, không phải một tin nhắn
-trong chat. Agent chỉ có thể dùng tool từ một catalogue cố định: search, read, list related và tóm tắt bản
-ghi, tạo một task nội bộ, và đề xuất một cập nhật trường. Tool chạy dưới quyền truy cập của bạn, và việc
-cập nhật trường luôn chờ một con người quyết định.
+trong chat. Agent chỉ có thể dùng tool từ một catalogue cố định gồm 25 tool: search, read, list related và
+tóm tắt bản ghi, tạo một task nội bộ, đề xuất một cập nhật trường, và các tool đọc theo miền — tóm tắt
+thương mại cho sales, trạng thái project, hiệu quả chiến dịch, sức khỏe khách hàng, ngữ cảnh case,
+điểm lead, danh sách email và nhiều tool khác. Tool chạy dưới quyền truy cập của bạn, và việc cập nhật
+trường luôn chờ một con người quyết định.
+
+## Các run tự khởi động
+
+Không phải run nào cũng chờ ai đó bấm **Run**. Một agent đã publish có thể được kích hoạt theo ba cách, và
+run trông giống nhau trong tab **Runs** dù khởi đầu thế nào — trường trigger của nó ghi rõ loại nào đã
+khởi động nó:
+
+- **Event** — một thay đổi bản ghi (tạo, cập nhật, xóa hoặc khôi phục) trên entity mà agent theo dõi.
+- **Scheduled** — một lịch cron; mỗi lần kích hoạt chạy văn bản nhiệm vụ mà agent được publish kèm.
+- **Integration** — một sự kiện tích hợp gửi đến có nêu tên bản ghi, ví dụ một tin nhắn hay một thông báo
+  thanh toán.
+
+Run do trigger khởi động chạy dưới quyền của người đã publish agent, với quyền truy cập của người đó và không
+bao giờ rộng hơn, và cùng áp dụng phê duyệt, ngân sách và giới hạn. Nếu người publish không còn active thì
+agent không kích hoạt. Quản trị viên thiết lập phần này; xem tài liệu cấu hình AI agents để biết các flag và
+allowlist mà agent phải liệt kê trước khi có thể kích hoạt.
 
 > [!NOTE]
 > Execution mặc định tắt. Nếu đầu trang báo execution đang tắt hoặc bị tạm dừng, không run mới nào có thể

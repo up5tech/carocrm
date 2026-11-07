@@ -5,7 +5,7 @@ audience: user
 order: 25
 tags: [home, tasks, calendar, dashboard]
 related: [user/dashboards-and-reports, getting-started/find-your-way, user/activities-and-tasks]
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 ## Trang chủ để làm gì
@@ -48,6 +48,14 @@ Mỗi thẻ là một liên kết, và con số của nó nằm trong tên truy 
 
 Nếu một thẻ không tải được, thẻ vẫn giữ nguyên vị trí, báo `Không tải được thẻ này.` và có nút **Thử
 lại**. Hai thẻ còn lại vẫn hoạt động: một nguồn lỗi không làm trắng cả trang.
+
+## Tóm tắt hôm nay
+
+Dưới các thẻ trọng tâm, một thẻ tóm tắt trình bày lại ngày theo thứ tự cần bạn nhất: việc quá hạn trước,
+rồi hoạt động hôm nay, việc sắp đến hạn và phê duyệt đang chờ, mỗi mục có số lượng và tối đa hai ví dụ. Thẻ
+này là xác định — nó chỉ trình bày lại cùng các việc, lịch và phê duyệt mà thẻ trọng tâm đã hiển thị, dưới
+cùng quyền truy cập — và không gọi model để tạo. Mặt AI duy nhất của nó là link **ưu tiên ngày của tôi**
+mở [CRM Chat](/crm-chat) kèm tóm tắt làm ngữ cảnh, nên model chỉ tham gia khi bạn chủ động hỏi.
 
 ## Lịch hôm nay
 

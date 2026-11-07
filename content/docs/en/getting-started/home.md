@@ -5,7 +5,7 @@ audience: user
 order: 25
 tags: [home, tasks, calendar, dashboard]
 related: [user/dashboards-and-reports, getting-started/find-your-way, user/activities-and-tasks]
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 ## What home is for
@@ -48,6 +48,15 @@ Each card is one link, and its number is part of its accessible name.
 
 If a card cannot load it stays in place, says `This card could not load.` and offers **Retry**. The
 other cards keep working: one failing source never blanks the page.
+
+## Today's briefing
+
+Below the focus cards, a briefing card restates the day in the order it needs you: overdue tasks first,
+then today's events, tasks due soon and pending approvals, each with a count and up to two examples. It
+is deterministic — it re-states the same tasks, agenda and approvals the focus cards already show, under
+the same permissions — and no model is called to produce it. Its only AI surface is a **prioritize my
+day** link that opens [CRM Chat](/crm-chat) with the briefing as context, so the model only ever enters
+when you ask it to.
 
 ## Today's agenda
 

@@ -6,7 +6,7 @@ order: 155
 tags: [ai-agents, providers, settings, approvals, budgets]
 aliases: ["cấu hình trợ lý AI", "khoá API model", "cấp công cụ cho agent", "ngân sách AI"]
 related: [admin/module-settings, admin/users-teams-roles, admin/audit-jobs-and-operations, user/ai-agents]
-updated: 2026-10-22
+updated: 2026-11-06
 ---
 
 The AI Agents module is configured in two places inside [the AI agents screen](/ai-agents): **Providers** manages model connections, and **Settings** edits the single validated `aiAgents` settings document. The server validates every save, refuses an unknown key and increments the document version. This page is about making the module work. For what a run, an approval and a conversation look like to the person using them, read [AI agents](user/ai-agents).
@@ -76,7 +76,25 @@ There are no other adapters, and no adapter has a separate disabled flag: `fake`
 - **Execution** off refuses a new run and stops a queued run from being claimed. An executing run is not canceled; the emergency stop below is the same.
 - **Memory** off refuses a new conversation, hides the Conversations tab, and blocks publishing any agent whose memory mode is not `none`.
 - **Evaluations** off skips the publication gate entirely. Suites can still be created and run; nothing enforces them.
-- **Event triggers** and **scheduled triggers** gate their trigger routes, but the run engine accepts only manual runs in this release, so enabling either switch does not make event or scheduled runs execute. Publishing an agent with either trigger enabled only warns; it is not blocked.
+- **Event triggers**, **scheduled triggers** and **integration triggers** all gate their trigger routes, and all three are live since 2026-11-06: an agent that declares a trigger starts runs without anyone pressing **Run**. The three kinds differ in what starts them and what they need — see [Triggers](#triggers). An agent that declares a trigger while its switch is off only warns at publish; those runs are refused until the switch is on.
+
+### Triggers
+
+A published agent can start a run without anyone pressing **Run**. Three trigger kinds exist, all delivered on 2026-11-06; the agent declares them in its `triggers` block, and each kind is gated by an instance feature flag:
+
+| Kind | Agent fields | Instance flag | What starts a run |
+| --- | --- | --- | --- |
+| Event | `triggers.event`, `triggers.eventTypes`, `triggers.eventEntities` | `features.eventTriggers` | A committed entity change whose type and entity both match the allowlists, for a record-context agent |
+| Scheduled | `triggers.schedule`, `triggers.scheduleCron`, `triggers.scheduleText` | `features.scheduledTriggers` | The cron firing; each firing runs `scheduleText` as the task |
+| Integration | `triggers.integration`, `triggers.integrationTypes` | `features.eventTriggers` (shares the event switch) | A committed `integration.*` event whose type matches the allowlist, for a record-context agent |
+
+The details that matter at publish time:
+
+- **Empty allowlists mean never.** An event agent with no `eventTypes` or no `eventEntities` starts nothing; an integration agent with no `integrationTypes` starts nothing. Both allowlists default to empty, so a trigger that looks switched on can still be inert. Validation warns rather than blocks, which is why this table exists.
+- **Scheduled triggers have publish-blocking requirements.** `scheduleCron` must be a valid 5-field cron expression (for example `0 9 * * 1-5`) and `scheduleText` must be non-empty, or publishing is refused. Only a text-input agent may declare one — a scheduled firing has no record to read. Publishing reconciles a `scheduled_jobs` row (`aiAgentSchedule-<agentId>`); pausing, archiving or restoring the agent disables it.
+- **Integration triggers are record-context only.** The agent runs against the `crmEntityType` / `crmEntityId` the payload names. The payload is untrusted external data and never becomes prompt text.
+- **Every triggered run executes as the agent owner** — the user who published the version — never wider. If that owner is missing or inactive, the agent is skipped. The run's `causation_id` carries the provenance (schedule row id or outbox event id), and delivery is idempotent: a re-delivered event or a repeated firing starts no second run. Events an agent's own run produces never re-enter the trigger door, so an agent cannot start itself. Per event, at most five agents fire.
+- **No write path hides behind a trigger.** The same tool catalogue, approval policy and budgets apply to triggered runs as to manual ones; a material write still pauses for a human.
 
 ### Ceilings and runtime limits
 
@@ -171,7 +189,7 @@ Budgets are policies with a day or month period and a global, user, team, agent 
 | --- | --- |
 | Publishing is refused for an evaluation | A required suite has no passed run at the current checksum. The standard suite contains a human-review case; record the decision in the Evaluations tab (Approve/Reject) or keep evaluations off |
 | Publishing is refused for the configuration | Missing provider or system prompt, a model or data class outside the connection, a disabled tool, a limit above a ceiling, an archived agent, or an identical version |
-| A run never starts | Execution is off or globally paused; you lack `use`; the concurrency ceiling or a hard budget is reached; the agent is not published; a non-manual trigger is refused because only manual runs are implemented. A created run that stays queued is waiting for the worker |
+| A run never starts | Execution is off or globally paused; you lack `use`; the concurrency ceiling or a hard budget is reached; the agent is not published. A triggered run that never starts is usually an empty allowlist (`eventTypes`/`eventEntities`/`integrationTypes`), a trigger switch that is off, or an owner who is missing or inactive — see [Triggers](#triggers) |
 | Cost is zero or shows no price data | No price card matches the provider and model, or no request was priced. Add a card, or a `*` card for the provider |
 | An approval stays pending | Nobody with `approval` has decided it. It expires after the TTL and the run ends as expired; opening Approvals performs the sweep |
 

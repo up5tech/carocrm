@@ -6,7 +6,7 @@ order: 140
 tags: [ai-agents, agents, runs, approvals, usage]
 aliases: ["trợ lý AI", "tác nhân AI", "chạy trợ lý", "hỏi AI về dữ liệu"]
 related: [user/record-page, admin/module-settings, admin/users-teams-roles]
-updated: 2026-10-21
+updated: 2026-11-06
 ---
 
 The AI Agents module is one page with tabs, opened from the sidebar or with [Open the AI agents screen](/ai-agents).
@@ -31,8 +31,24 @@ execution is unavailable. Drafting, publishing and lifecycle commands are separa
 5. Press **Start run**. The **Runs** tab opens on the new run.
 
 A run is one execution of one task by one captured agent version, not a chat message. The agent can only use
-tools from a fixed catalogue: search, read, list related and summarize records, create an internal task, and
-propose a field update. Tools run under your access, and the field update always waits for a human.
+tools from a fixed catalogue of 25: search, read, list related and summarize records, create an internal task,
+propose a field update, and read-side domain tools — a commercial summary for sales, project status,
+campaign performance, customer health, case context, lead score, a list of emails and more. Tools run under
+your access, and the field update always waits for a human.
+
+## Runs that start on their own
+
+Not every run waits for someone to press **Run**. A published agent can be triggered three ways, and the run
+looks the same in the **Runs** tab either way — its trigger field names which kind started it:
+
+- **Event** — a record change (created, updated, deleted or restored) on an entity the agent watches.
+- **Scheduled** — a cron schedule; each firing runs the task text the agent was published with.
+- **Integration** — an incoming integration event that names a record, such as a message or a payment notice.
+
+A triggered run executes as the user who published the agent, with that user's access and never wider, and
+the same approvals, budgets and limits apply. If the publishing user is no longer active the agent does not
+fire at all. An administrator sets these up; see [Configuring AI agents](admin/ai-agents) for the flags and
+the allowlists an agent must list before it can fire.
 
 > [!NOTE]
 > Execution ships switched off. If the top of the page says execution is off or paused, no new run can start;

@@ -6,7 +6,7 @@ order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
 aliases: ["trò chuyện với trợ lý", "cách dùng chat", "khung nhắn tin", "hộp thư thoại"]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 There are two surfaces here and they do not talk to each other. [CRM Chat](/crm-chat) is a thread
@@ -58,6 +58,19 @@ previews.
 
 If the assistant wants to change a record, the turn asks for a decision — and a decision is taken on the
 full page, where the proposal card is, not in the panel. The panel says so and links there.
+
+The same panel also appears inline where the question is already about something specific:
+
+- On a [record page](user/record-page) header, it opens with that record as context, and offers suggestions
+  such as summarizing the record, naming the next step or drafting a follow-up. Asking about the record does
+  not need the record's name typed out.
+- On a [list screen](user/lists-and-views) bulk bar, it opens with the selection (how many records of which
+  type) as context, with suggestions for summarizing or prioritizing them.
+- The email template designer carries a **Draft with AI** link that opens the chat workspace with the
+  template as context, and the chat workspace accepts `?ask=` as a one-time prefill of the composer.
+
+Inline or from the header, the panel is the same turn API, the same ACL and the same stream: context is a
+convenience in the prompt, never a wider permission.
 
 ## The composer
 

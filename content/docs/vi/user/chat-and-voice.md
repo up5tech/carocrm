@@ -6,7 +6,7 @@ order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
 aliases: ["trò chuyện với trợ lý", "cách dùng chat", "khung nhắn tin", "hộp thư thoại"]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 Có hai bề mặt ở đây và chúng không liên quan đến nhau. [CRM Chat](/crm-chat) là một luồng trò chuyện
@@ -59,6 +59,19 @@ ghi.
 
 Nếu trợ lý muốn thay đổi một bản ghi, turn sẽ hỏi xin quyết định — và quyết định đó được đưa ra trên
 trang đầy đủ, nơi có proposal card, không phải trong panel. Panel nói rõ điều đó và dẫn link tới đó.
+
+Cùng panel đó cũng xuất hiện inline nơi câu hỏi vốn đã gắn với một thứ cụ thể:
+
+- Trên thanh đầu của [trang bản ghi](user/record-page), panel mở kèm bản ghi đó làm ngữ cảnh, với các
+  gợi ý như tóm tắt bản ghi, nêu bước tiếp theo hay soạn thư follow-up. Hỏi về bản ghi không cần gõ lại tên
+  của nó.
+- Trên thanh bulk của [màn hình danh sách](user/lists-and-views), panel mở kèm phần đang chọn (bao nhiêu bản
+  ghi thuộc loại nào) làm ngữ cảnh, với gợi ý tóm tắt hoặc ưu tiên chúng.
+- Trình thiết kế email template có link **Draft with AI** mở workspace chat kèm template làm ngữ cảnh, và
+  workspace chat chấp nhận `?ask=` để điền sẵn một lần vào ô soạn.
+
+Inline hay từ thanh đầu trang, panel dùng cùng turn API, cùng ACL và cùng stream: ngữ cảnh chỉ là tiện
+ích trong prompt, không phải quyền rộng hơn.
 
 ## Composer
 

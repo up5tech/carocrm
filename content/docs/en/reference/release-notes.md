@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-10-30
+updated: 2026-11-06
 ---
 
 Nothing inside the application opens a list of what changed. There is no **What's new** screen, no version
@@ -60,17 +60,19 @@ reader can notice:
 
 ### The last module release
 
-The newest module-specific note is CRM Chat v1.1, released 2026-10-21 with contract version 1.2.0. It is a
-correction release: the earlier notes declared work that the review found unbuilt, and the application did
-not compile. What changed for a reader of that screen:
+The newest module releases are CRM Chat v1.3.0 and AI Agents v1.3.0, both 2026-11-06. The Chat release
+adds read-side domain tools (project status, commercial summary, campaign performance, email list) and
+inline AI: the quick-chat panel now opens from a record header and a list bulk bar with the record or
+selection as context, the email template designer links to **Draft with AI**, and home gains a
+deterministic briefing card. AI Agents v1.3.0 adds the three trigger kinds — event, scheduled and
+integration — so a published agent can start runs without anyone pressing **Run**. What changed for a
+reader of [CRM chat](/crm-chat):
 
 | What you see at [CRM chat](/crm-chat) | What it means |
 | --- | --- |
-| An answer arrives with its tool steps and usage, rather than an empty reply | The stream now maps the runtime's real run timeline onto the chat vocabulary. |
-| A citation list you can actually follow | Citations are re-read under your own permission. A record you may no longer read produces no citation at all. |
-| A refused filter instead of a surprising result set | A filter the server cannot translate is answered as a client error. It used to be dropped, which quietly widened the answer. |
-| Prompt templates, and a rating on an answer | Save your own templates and rate the answer a turn produced, one rating per person per answer. |
-| Cross-module analysis with partial results | The scenarios are server-owned and bounded, and a failed step returns a sanitised reason rather than an internal message. |
+| An answer can draw on project, sales and campaign figures | The read-side domain tools are in the catalogue, running under your own permission. |
+| The **Ask AI** panel opens from a record or a list with suggestions | Inline AI reuses the same turn API and ACL; the context is in the prompt, not a wider permission. |
+| A run appears that nobody started by hand | A trigger fired it, as the user who published the agent. See [AI agents](user/ai-agents). |
 
 ## What this handbook does instead
 
