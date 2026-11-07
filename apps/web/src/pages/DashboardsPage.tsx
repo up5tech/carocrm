@@ -67,6 +67,18 @@ const DASH_MIN_COLUMN = 420;
 /** Height used until the card has been measured; the observer corrects it before the next paint. */
 const DASH_FALLBACK_HEIGHT = 240;
 
+/**
+ * Field types the dashboard runner accepts for each picker (apps/api/src/search/portal-shapes.ts +
+ * dashboard.service.ts `assertDashletConfig`). The form offers exactly these, so a dashlet can never
+ * be submitted with a field name the server would reject as "must be a categorical text field" or
+ * "must be a numeric field".
+ */
+const DASHLET_GROUP_TYPES: ReadonlySet<string> = new Set(['varchar', 'text', 'email', 'phone', 'url', 'enum', 'multiEnum']);
+const DASHLET_MEASURE_TYPES: ReadonlySet<string> = new Set(['int', 'float', 'decimal', 'currency']);
+
+/** Kinds whose config is owned by another module; the generic entity/groupBy/measure pickers do not apply. */
+const SPECIALISED_KINDS: ReadonlySet<string> = new Set(['projectTasks', 'esignature', 'leadScore', 'customerSuccess']);
+
 function dashColumnCount(width: number): number {
   return Math.max(1, Math.floor((Math.max(width, DASH_MIN_COLUMN) + DASH_GAP) / (DASH_MIN_COLUMN + DASH_GAP)));
 }
@@ -229,14 +241,35 @@ export function DashboardsPage() {
   const [form] = Form.useForm();
   const [renameForm] = Form.useForm();
   const [dashletForm] = Form.useForm();
-  const dashletKind = Form.useWatch('kind', dashletForm);
+  const dashletKind = Form.useWatch('kind', dashletForm) ?? 'list';
   const dashletEntity = Form.useWatch('entity', dashletForm);
+  const dashletMeasure = Form.useWatch('measure', dashletForm);
   // §5.7 KPI context: the comparison window names a field of the chosen entity, and only a
   // date-typed field can carry one — so the picker offers exactly those.
-  const kpiDefinition = metadata.data?.[String(dashletEntity ?? '')];
-  const kpiDateFields = Object.entries(kpiDefinition?.fields ?? {})
+  const dashletDefinition = metadata.data?.[String(dashletEntity ?? '')];
+  const kpiDateFields = Object.entries(dashletDefinition?.fields ?? {})
     .filter(([, field]) => field.type === 'date' || field.type === 'datetime')
     .map(([name, field]) => ({ value: name, label: fieldLabel(name, field, metadata.data) }));
+  const groupByOptions = Object.entries(dashletDefinition?.fields ?? {})
+    .filter(([, field]) => DASHLET_GROUP_TYPES.has(field.type))
+    .map(([name, field]) => ({ value: name, label: fieldLabel(name, field, metadata.data) }));
+  const measureOptions = Object.entries(dashletDefinition?.fields ?? {})
+    .filter(([, field]) => DASHLET_MEASURE_TYPES.has(field.type))
+    .map(([name, field]) => ({ value: name, label: `${fieldLabel(name, field, metadata.data)} (${field.type})` }));
+  const isSpecialisedKind = SPECIALISED_KINDS.has(String(dashletKind));
+  const isGroupedKind = dashletKind === 'chart' || dashletKind === 'kpi';
+
+  // A field chosen for one entity is meaningless on another; clear the dependent pickers on change
+  // rather than letting a stale name reach the server and fail with a confusing message.
+  useEffect(() => {
+    dashletForm.setFieldsValue({ groupBy: undefined, measure: undefined, kpiDateField: undefined });
+  }, [dashletEntity, dashletForm]);
+
+  // A measure is always aggregated with sum/avg (the server rejects "count" with a measure), so
+  // picking one flips the aggregation default to sum; clearing it flips back to count.
+  useEffect(() => {
+    dashletForm.setFieldsValue({ aggregation: dashletMeasure ? 'sum' : 'count' });
+  }, [dashletMeasure, dashletForm]);
 
   const entities = navEntities(metadata.data, principal?.type).map((entity) => ({ value: entity.name, label: entity.label }));
   const active = dashboards.find((item) => item.id === activeId) ?? null;
@@ -597,6 +630,12 @@ export function DashboardsPage() {
                 maxSize: 25,
                 ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
                 ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
+                // The server rejects a measure with aggregation "count": choosing a numeric field
+                // always means sum or avg, so default to sum when the picker was left untouched.
+                aggregation:
+                  typeof values.measure === 'string' && values.measure !== ''
+                    ? String(values.aggregation ?? 'sum')
+                    : String(values.aggregation ?? 'count'),
                 // §5.7 KPI context: an optional target, and a date window that gives the number an
                 // equivalent previous period. The server only windows a KPI when both are present.
                 ...(kind === 'kpi' && values.kpiTarget !== undefined && values.kpiTarget !== null
@@ -871,18 +910,16 @@ export function DashboardsPage() {
               ]}
             />
           </Form.Item>
-          <Form.Item
-            name="entity"
-            label={t('web.reports.entityLabel')}
-            rules={[{ required: !['projectTasks', 'esignature', 'leadScore', 'customerSuccess'].includes(String(dashletKind)) }]}
-          >
-            <Select
-              options={entities}
-              showSearch
-              optionFilterProp="label"
-              disabled={['projectTasks', 'esignature', 'leadScore', 'customerSuccess'].includes(String(dashletKind))}
-            />
-          </Form.Item>
+          {isSpecialisedKind ? null : (
+            <Form.Item name="entity" label={t('web.reports.entityLabel')} rules={[{ required: true }]}>
+              <Select
+                options={entities}
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('web.dashboards.entityPlaceholder')}
+              />
+            </Form.Item>
+          )}
           {dashletKind === 'projectTasks' ? (
             <>
               <Form.Item name="nextDays" label={t('web.dashboards.dueWithin')} initialValue={14}>
@@ -957,16 +994,64 @@ export function DashboardsPage() {
               </Form.Item>
             </>
           ) : null}
-          {dashletKind === 'esignature' || dashletKind === 'customerSuccess' ? null : (
+          {isGroupedKind ? (
             <>
-              <Form.Item name="groupBy" label={t('web.dashboards.groupByLabel')}>
-                <Input placeholder={t('web.dashboards.groupByPlaceholder')} />
+              <Form.Item
+                name="groupBy"
+                label={t('web.dashboards.groupByLabel')}
+                tooltip={t('web.dashboards.groupByHelp')}
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={groupByOptions}
+                  placeholder={t('web.dashboards.chooseField')}
+                  disabled={!dashletEntity}
+                />
               </Form.Item>
-              <Form.Item name="measure" label={t('web.dashboards.measureLabel')}>
-                <Input placeholder={t('web.dashboards.measurePlaceholder')} />
+              <Form.Item
+                name="measure"
+                label={t('web.dashboards.measureLabel')}
+                tooltip={t('web.dashboards.measureHelp')}
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={measureOptions}
+                  placeholder={t('web.dashboards.chooseField')}
+                  disabled={!dashletEntity}
+                />
+              </Form.Item>
+              <Form.Item
+                name="aggregation"
+                label={t('web.dashboards.aggregationLabel')}
+                initialValue="count"
+                tooltip={t('web.dashboards.aggregationHelp')}
+                rules={[
+                  ({ getFieldValue }) => ({
+                    validator: (_rule, value) => {
+                      const measure = getFieldValue('measure');
+                      if (typeof measure === 'string' && measure !== '' && value === 'count') {
+                        return Promise.reject(new Error(t('web.dashboards.aggregationCountWithMeasure')));
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
+              >
+                <Select
+                  disabled={typeof dashletMeasure === 'string' && dashletMeasure !== ''}
+                  options={[
+                    { value: 'count', label: t('web.reports.aggCount') },
+                    { value: 'sum', label: t('web.reports.aggSum') },
+                    { value: 'avg', label: t('web.reports.aggAvg') },
+                  ]}
+                />
               </Form.Item>
             </>
-          )}
+          ) : null}
           {/* §5.7 KPI context: the target the business aims at, and the date window that gives the
               number an equivalent previous period to compare against. Both optional. */}
           {dashletKind === 'kpi' ? (

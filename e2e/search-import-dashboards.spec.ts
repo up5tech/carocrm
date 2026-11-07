@@ -232,7 +232,7 @@ test.describe('phase 12 — search, saved filters, csv and dashboards', () => {
       await expect(dashlet.getByText('Scored', { exact: true })).toBeVisible();
       await expect(dashlet.getByText('Not scored', { exact: true })).toBeVisible();
       await expect(dashlet.getByText('Leads', { exact: true })).toBeVisible();
-      await expect(page.getByText('Lead score operations (Phase 19)')).toBeVisible();
+      await expect(page.getByText('Lead score operations')).toBeVisible();
     } finally {
       const found = (settingsBefore as { settings?: Record<string, unknown> }).settings ?? {};
       await call(request, token, 'POST', '/LeadScore/action/settings', {
