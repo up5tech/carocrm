@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { MAX_RUN_RECORD_REFS } from '../ai-agents-module.js';
+
 /**
  * Phase 19-AI.4 — request shapes
  * (plans/PLAN_Phase_19_AI_Agents.md §14.4, §20 `19-AI.4`).
@@ -131,18 +133,25 @@ export const AgentPublishSchema = z
   })
   .strict();
 
+const RunRecordRefSchema = z
+  .object({
+    entity: z.string().trim().min(1).max(120),
+    id: z.string().trim().min(1).max(120),
+  })
+  .strict();
+
 export const RunCreateSchema = z
   .object({
     input: z
       .object({
         text: z.string().max(4_000).optional(),
-        record: z
-          .object({
-            entity: z.string().trim().min(1).max(120),
-            id: z.string().trim().min(1).max(120),
-          })
-          .strict()
-          .optional(),
+        record: RunRecordRefSchema.optional(),
+        /**
+         * 19-AI.28 — the full list of record references (CRM Chat context). `record` remains the
+         * single-reference shorthand; `records` is what the prompt renders. The service enforces
+         * the same bound and ACL-checks every entry.
+         */
+        records: z.array(RunRecordRefSchema).max(MAX_RUN_RECORD_REFS).optional(),
       })
       .strict()
       .optional(),
@@ -174,13 +183,8 @@ export const RunTriggerSchema = z
     input: z
       .object({
         text: z.string().max(4_000).optional(),
-        record: z
-          .object({
-            entity: z.string().trim().min(1).max(120),
-            id: z.string().trim().min(1).max(120),
-          })
-          .strict()
-          .optional(),
+        record: RunRecordRefSchema.optional(),
+        records: z.array(RunRecordRefSchema).max(MAX_RUN_RECORD_REFS).optional(),
       })
       .strict()
       .optional(),

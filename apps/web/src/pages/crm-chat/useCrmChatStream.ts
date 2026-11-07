@@ -24,6 +24,25 @@ export interface UseCrmChatStreamResult {
   readonly disconnect: () => void;
 }
 
+/**
+ * Every stream event the hook listens for. Kept at module level so a test can prove the listener
+ * set covers the whole contract vocabulary — a handler deleted here turns that test red
+ * (19-CHAT.29/19-CHAT.30).
+ */
+export const CRM_CHAT_LISTENED_STREAM_EVENTS: readonly CRMChatStreamEventType[] = [
+  'turn.started',
+  'tool.started',
+  'tool.completed',
+  'action.proposed',
+  'approval.required',
+  'assistant.message',
+  'usage.summary',
+  'turn.completed',
+  'turn.failed',
+  'turn.cancelled',
+  'heartbeat',
+];
+
 export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatStreamResult {
   const { turnId, enabled = true, lastEventId, onEvent, onError, onComplete } = options;
 
@@ -114,22 +133,7 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
     };
 
     // Listen for all registered event types.
-    const eventTypes: CRMChatStreamEventType[] = [
-      'turn.started',
-      'tool.started',
-      'tool.completed',
-      'citation.added',
-      'action.proposed',
-      'approval.required',
-      'assistant.message',
-      'usage.summary',
-      'turn.completed',
-      'turn.failed',
-      'turn.cancelled',
-      'heartbeat',
-    ];
-
-    for (const eventType of eventTypes) {
+    for (const eventType of CRM_CHAT_LISTENED_STREAM_EVENTS) {
       eventSource.addEventListener(eventType, (event: MessageEvent) => {
         if (!isCurrent()) return;
 

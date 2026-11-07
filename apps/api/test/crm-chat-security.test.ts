@@ -62,6 +62,9 @@ beforeAll(async () => {
   baselineChatSettings = await snapshotSettings(ctx, 'crmChat');
   const chatSettings = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
     features: { helpRetrieval: true, readTools: true },
+    // Pin the advertised bound: the stored row on a dev database may carry a larger value, and the
+    // context-reference tests below assert the refusal at exactly `maxContextRefs` (19-CHAT.25).
+    limits: { maxContextRefs: 5 },
   });
   expect(chatSettings.status, JSON.stringify(chatSettings.body)).toBe(200);
 

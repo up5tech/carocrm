@@ -134,6 +134,13 @@ afterAll(async () => {
     });
   }
   if (createdUserIds.length > 0) {
+    // A limit probe can create a real turn when the shared database has a ready assistant; remove
+    // the rows it left, by exact owner id, before the users themselves (19-CHAT.25).
+    await db.deleteFrom('ai_agent_messages')
+      .where('conversation_id', 'in', db.selectFrom('ai_agent_conversations').select('id').where('owner_user_id', 'in', createdUserIds))
+      .execute();
+    await db.deleteFrom('ai_agent_runs').where('initiated_by_user_id', 'in', createdUserIds).execute();
+    await db.deleteFrom('ai_agent_conversations').where('owner_user_id', 'in', createdUserIds).execute();
     await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
   await db.deleteFrom('roles').where('id', 'in', [ROLE_USE, ROLE_NONE]).execute();
@@ -388,5 +395,71 @@ describe('CRMChat module shell (19-CHAT.2)', () => {
     const catalog = recordOf(result.body['catalog']);
     expect(catalog['web.crmChat.title']).toBe('CRM Chat');
     expect(catalog['web.crmChat.assistantState.not_configured']).toBeDefined();
+  });
+});
+
+describe('CRMChat settings limits honesty (19-CHAT.25)', () => {
+  it('enforces maxMessageChars on turn submission before assistant readiness is consulted', async () => {
+    // The prompt-length check sits between the feature gate and the readiness check, so it is
+    // deterministic on any installation: no assistant has to exist for the bound to be proven.
+    const before = await call('GET', '/api/v1/CRMChat/action/settings', ctx.adminToken);
+    const priorLimits = recordOf(recordOf(before.body['settings'])['limits']);
+    const priorReadTools = recordOf(recordOf(before.body['settings'])['features'])['readTools'];
+    try {
+      expect((await patchSettings({ features: { readTools: true }, limits: { maxMessageChars: 10 } })).status).toBe(200);
+      const tooLong = await call('POST', '/api/v1/CRMChat/action/turns', useToken, {
+        prompt: 'x'.repeat(11),
+      });
+      expect(tooLong.status).toBe(422);
+      expect(errorCode(tooLong)).toBe('VALIDATION_FAILED');
+      // Exactly at the bound is not refused by the length check. On an installation with a ready
+      // assistant this creates a real turn, so it is cancelled immediately and never left running.
+      const atBound = await call('POST', '/api/v1/CRMChat/action/turns', useToken, { prompt: 'x'.repeat(10) });
+      expect(errorCode(atBound)).not.toBe('VALIDATION_FAILED');
+      if (atBound.status === 201) {
+        const turnId = String(atBound.body['turnId'] ?? '');
+        await call('POST', `/api/v1/CRMChat/action/turns/${turnId}/cancel`, useToken, {});
+      }
+    } finally {
+      await patchSettings({
+        features: { readTools: priorReadTools === true },
+        limits: { maxMessageChars: Number(priorLimits['maxMessageChars'] ?? 8_000) },
+      });
+    }
+  });
+
+  it('enforces maxQueryResults on the grounded query route', async () => {
+    const before = await call('GET', '/api/v1/CRMChat/action/settings', ctx.adminToken);
+    const priorLimits = recordOf(recordOf(before.body['settings'])['limits']);
+    const priorReadTools = recordOf(recordOf(before.body['settings'])['features'])['readTools'];
+    try {
+      expect(
+        (await patchSettings({ features: { readTools: true }, limits: { maxQueryResults: 2 } })).status,
+      ).toBe(200);
+      const overLimit = await call('POST', '/api/v1/CRMChat/action/query/execute', ctx.adminToken, {
+        entity: 'Account',
+        limit: 10,
+      });
+      expect(overLimit.status).toBe(422);
+      const withinLimit = await call('POST', '/api/v1/CRMChat/action/query/execute', ctx.adminToken, {
+        entity: 'Account',
+        limit: 2,
+      });
+      expect(withinLimit.status).toBe(201);
+    } finally {
+      await patchSettings({
+        features: { readTools: priorReadTools === true },
+        limits: { maxQueryResults: Number(priorLimits['maxQueryResults'] ?? 100) },
+      });
+    }
+  });
+
+  it('rejects an unknown limits key as an unknown key, not a silently stored value', async () => {
+    // The settings schema is `.strict()` at every level: a field the module does not enforce must
+    // not be storable, or the admin UI would advertise a bound nothing obeys (19-CHAT.25).
+    const bogus = await patchSettings({ limits: { maxMessageCharsTypo: 5 } });
+    expect(bogus.status).toBe(400);
+    const after = await call('GET', '/api/v1/CRMChat/action/settings', ctx.adminToken);
+    expect(recordOf(recordOf(after.body['settings'])['limits'])['maxMessageCharsTypo']).toBeUndefined();
   });
 });

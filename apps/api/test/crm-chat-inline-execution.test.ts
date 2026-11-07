@@ -29,6 +29,10 @@ function buildService(mode: 'queue' | 'inline') {
     { create, execute } as unknown as AIAgentRunService,
     settings as unknown as CRMChatSettingsService,
     citations as unknown as CRMChatCitationService,
+    // 19-CHAT.25 — the adapter also reads the per-user budgets; with no principal in scope they are
+    // skipped, which is what this dispatch-only suite exercises.
+    {} as never,
+    { userId: undefined } as never,
   );
   return { service, create, execute };
 }

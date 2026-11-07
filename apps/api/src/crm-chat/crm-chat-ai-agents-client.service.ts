@@ -1,10 +1,14 @@
+import { AppError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import type { RunCreateInput } from '../ai-agents/ai-agent-runs.service.js';
 import { AIAgentRunService } from '../ai-agents/ai-agent-runs.service.js';
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { DatabaseService } from '../database/database.service.js';
 import { CRMChatCitationService } from './crm-chat-citations.service.js';
-import { CRMChatSettingsService } from './crm-chat-settings.service.js';
+import { type CRMChatSettings,CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.5 — narrow AIAgents integration adapter
@@ -54,6 +58,8 @@ export class CRMChatAIAgentsClientService {
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
     @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
     @Inject(CRMChatCitationService) private readonly citations: CRMChatCitationService,
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
   /**
@@ -62,18 +68,24 @@ export class CRMChatAIAgentsClientService {
    * current authenticated user's security context.
    */
   async submitTurn(input: CrmChatTurnSubmission): Promise<CrmChatTurnResult> {
+    // 19-CHAT.26 / 19-AI.28 — every validated context reference is forwarded. `record` stays the
+    // first ref so single-reference consumers (conversation binding, run view) keep working;
+    // `records` carries the full list into the run input and the prompt. AIAgents re-checks each
+    // ref under the starter's ACL at creation, so nothing unreadable reaches the model.
+    const refs = input.contextRefs ?? [];
     const runInput: RunCreateInput = {
       input: {
         text: input.prompt,
-        ...(input.contextRefs && input.contextRefs.length > 0
-          ? { record: input.contextRefs[0] }
-          : {}),
+        ...(refs.length > 0 ? { record: refs[0] } : {}),
+        ...(refs.length > 0 ? { records: [...refs] } : {}),
       },
       idempotencyKey: input.idempotencyKey,
       conversationId: input.conversationId,
     };
 
-    const executionMode = (await this.settings.settings()).execution.mode;
+    const settings = await this.settings.settings();
+    const executionMode = settings.execution.mode;
+    await this.assertTurnBudgets(settings.limits, input.conversationId !== undefined);
     const run = await this.runs.create(input.agentId, runInput);
 
     // `queue` is the durable default: BullMQ hands the run to a worker. `inline` starts the exact
@@ -135,5 +147,77 @@ export class CRMChatAIAgentsClientService {
    */
   async getTurnEvents(turnId: string) {
     return this.runs.events(turnId);
+  }
+
+  /**
+   * 19-CHAT.25 — the per-user bounds the settings screen advertises, checked before a run exists.
+   * The counts are read-then-create, the same best-effort shape `aiAgents.limits.maxConcurrency`
+   * uses: two simultaneous submissions can both pass, which is why the hard ceilings live in
+   * AIAgents' own quota service. These bounds stop a runaway client, they do not meter.
+   */
+  private async assertTurnBudgets(
+    limits: CRMChatSettings['limits'],
+    continuingConversation: boolean,
+  ): Promise<void> {
+    const userId = this.scope.userId;
+    if (userId === undefined) return; // Without a principal the run service refuses anyway.
+    const db = this.database.db;
+
+    const active = await db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('initiated_by_user_id', '=', userId)
+      .where('status', 'in', [
+        'queued',
+        'running',
+        'retry_wait',
+        'cancel_requested',
+        'waiting_for_approval',
+        'waiting_for_input',
+      ])
+      .executeTakeFirst();
+    if (Number(active?.count ?? 0) >= limits.maxActiveTurnsPerUser) {
+      throw new AppError(
+        'CHAT_TURN_LIMITED',
+        `You already have the maximum of ${String(limits.maxActiveTurnsPerUser)} active Chat turns.`,
+        { maxActiveTurnsPerUser: limits.maxActiveTurnsPerUser },
+        429,
+      );
+    }
+
+    const recent = await db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('initiated_by_user_id', '=', userId)
+      .where('created_at', '>', new Date(Date.now() - 60_000))
+      .executeTakeFirst();
+    if (Number(recent?.count ?? 0) >= limits.maxTurnsPerMinute) {
+      throw new AppError(
+        'RATE_LIMITED',
+        `You may start at most ${String(limits.maxTurnsPerMinute)} Chat turns per minute.`,
+        { maxTurnsPerMinute: limits.maxTurnsPerMinute },
+        429,
+      );
+    }
+
+    // A new conversation is only created when the turn does not continue one; continuing an
+    // existing thread never consumes a slot.
+    if (!continuingConversation) {
+      const conversations = await db
+        .selectFrom('ai_agent_conversations')
+        .select((eb) => eb.fn.countAll<string>().as('count'))
+        .where('owner_user_id', '=', userId)
+        .where('status', '<>', 'deleted')
+        .where((eb) => eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', new Date())]))
+        .executeTakeFirst();
+      if (Number(conversations?.count ?? 0) >= limits.maxConversationsPerUser) {
+        throw new AppError(
+          'CHAT_CONVERSATION_LIMIT',
+          `You already have the maximum of ${String(limits.maxConversationsPerUser)} conversations.`,
+          { maxConversationsPerUser: limits.maxConversationsPerUser },
+          429,
+        );
+      }
+    }
   }
 }

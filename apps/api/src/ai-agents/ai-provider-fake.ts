@@ -90,12 +90,16 @@ export class FakeProviderAdapter implements AIProviderAdapter {
     if (request.responseFormat?.type === 'json_schema') structured = { ok: true };
 
     const echoedActor = prompt.includes('__FAKE_ECHO_ACTOR__') ? actorIdFromSystem(request) : null;
+    // 19-AI.28 test seam: `__FAKE_ECHO_PROMPT__` returns the full user message, so a test can prove
+    // which record references actually reached the model prompt (the default echo is 200 chars).
+    const echoPrompt = prompt.includes('__FAKE_ECHO_PROMPT__') ? lastUserContent(request) : null;
     const text =
       echoedActor !== null
         ? echoedActor
-        : request.responseFormat?.type === 'json_schema'
-          ? JSON.stringify(structured)
-          : `Fake response to: ${prompt.slice(0, 200)}`;
+        : (echoPrompt ??
+          (request.responseFormat?.type === 'json_schema'
+            ? JSON.stringify(structured)
+            : `Fake response to: ${prompt.slice(0, 200)}`));
 
     return {
       providerRequestId: `fake-${String(Date.now())}`,

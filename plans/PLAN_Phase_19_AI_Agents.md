@@ -6,8 +6,8 @@
 > their read-side tools (P1, 2026-11-05); all three trigger kinds are now delivered — event triggers
 > (2026-11-06 morning), schedule and integration triggers (2026-11-06); 19-AI.18 is half delivered.**
 > **Post-release hardening 19-AI.21 → 19-AI.28 (audit 2026-11-07, §24 below; findings corrected the
-> same day after a source-level review): 19-AI.21 shipped 2026-11-07; 19-AI.22 → 19-AI.28 are
-> planned, not yet implemented.**
+> same day after a source-level review): 19-AI.21 and 19-AI.28 shipped (21 on 2026-11-07, 28 on
+> 2026-11-08); 19-AI.22 → 19-AI.27 are planned, not yet implemented.**
 > **Plan revision:** 2026-11-07 — §24 added, then corrected (see "Audit corrections" in §24), then
 > 19-AI.21 delivered (see the phase entry).
 > This header was corrected
@@ -1739,7 +1739,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.28 — Multi-Reference Run Input Contract (P1, companion to 19-CHAT.26)
+### Phase 19-AI.28 — Multi-Reference Run Input Contract (P1, companion to 19-CHAT.26) — **Shipped 2026-11-08**
 
 **Finding:** `RunCreateInput.input.record` is a **single** `{ entity, id }` object.
 `ai-agent-runs.service.ts:2629,2639` writes and reads exactly one record and the prompt builder

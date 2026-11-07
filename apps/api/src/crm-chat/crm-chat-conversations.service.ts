@@ -204,7 +204,9 @@ export class CRMChatConversationService {
       .execute();
     const hasMore = rows.length > maxSize;
     const page = rows.slice(0, maxSize).reverse();
-    const list = await Promise.all(page.map((message) => this.toMessageView(message)));
+    // 19-CHAT.28 — one batched citation read for the whole page instead of one per message.
+    const citationsByMessage = await this.citations.forMessages(page);
+    const list = page.map((message) => this.toMessageView(message, citationsByMessage.get(message.id) ?? []));
     return {
       list,
       nextBefore: hasMore && list.length > 0 ? Number(list[0]?.sequence ?? 0) : null,
@@ -327,7 +329,7 @@ export class CRMChatConversationService {
     };
   }
 
-  private async toMessageView(row: AIAgentMessagesTable): Promise<CRMChatMessageView> {
+  private toMessageView(row: AIAgentMessagesTable, citations: readonly CRMChatCitationView[]): CRMChatMessageView {
     const role: CRMChatMessageView['role'] =
       row.role === 'user' || row.role === 'assistant' || row.role === 'system' ? row.role : 'system';
     const redaction: CRMChatMessageView['redaction'] =
@@ -340,7 +342,7 @@ export class CRMChatConversationService {
       contentFormat: 'plain',
       redaction,
       turnId: row.run_id,
-      citations: await this.citations.forMessage(row),
+      citations,
       createdAt: row.created_at.toISOString(),
       completedAt: null,
     };

@@ -84,6 +84,30 @@ export function CRMChatActionCard(props: CRMChatActionCardProps) {
   if (view === undefined) return null;
 
   return (
+    <CRMChatActionCardView
+      view={view}
+      deciding={decide.isPending ? decide.variables : null}
+      decideError={decide.isError ? (decide.error instanceof Error ? decide.error.message : t('web.crmChat.action.failed')) : null}
+      onDecide={(decision) => decide.mutate(decision)}
+    />
+  );
+}
+
+export interface CRMChatActionCardViewProps {
+  readonly view: CRMChatActionView;
+  /** Which decision is in flight, so only that button spins. */
+  readonly deciding: 'confirm' | 'reject' | null;
+  readonly decideError: string | null;
+  readonly onDecide: (decision: 'confirm' | 'reject') => void;
+}
+
+/**
+ * The presentational half of the card, exported so a component test can render every server-driven
+ * state (`actionable`, decided, expired) without a query client or a network (19-CHAT.30).
+ */
+export function CRMChatActionCardView(props: CRMChatActionCardViewProps) {
+  const { view, deciding, decideError, onDecide } = props;
+  return (
     <Card
       size="small"
       className="carocrm-card"
@@ -144,29 +168,23 @@ export function CRMChatActionCard(props: CRMChatActionCardProps) {
             <Button
               type="primary"
               icon={<CheckOutlined />}
-              loading={decide.isPending && decide.variables === 'confirm'}
-              onClick={() => decide.mutate('confirm')}
+              loading={deciding === 'confirm'}
+              onClick={() => onDecide('confirm')}
             >
               {t('web.crmChat.action.confirm')}
             </Button>
             <Button
               danger
               icon={<CloseOutlined />}
-              loading={decide.isPending && decide.variables === 'reject'}
-              onClick={() => decide.mutate('reject')}
+              loading={deciding === 'reject'}
+              onClick={() => onDecide('reject')}
             >
               {t('web.crmChat.action.reject')}
             </Button>
           </Space>
         ) : null}
 
-        {decide.isError ? (
-          <Alert
-            type="error"
-            showIcon
-            message={decide.error instanceof Error ? decide.error.message : t('web.crmChat.action.failed')}
-          />
-        ) : null}
+        {decideError === null ? null : <Alert type="error" showIcon message={decideError} />}
       </Space>
     </Card>
   );

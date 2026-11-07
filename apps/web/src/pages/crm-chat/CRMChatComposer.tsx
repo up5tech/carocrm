@@ -124,9 +124,6 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         case 'assistant.message':
           setTurnPhase('finishing');
           break;
-        case 'citation.added':
-          // Citations arrive in the final conversation history; nothing to do live.
-          break;
         case 'approval.required': {
           // The turn paused on a write proposal. The card decides it; the composer only shows it.
           const approvalId = event.data['approvalId'];
@@ -329,7 +326,9 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
           onChange={(e) => setPrompt(e.target.value)}
           disabled={!enabled || submitTurn.isPending || stream.isConnected || turnActive}
           placeholder={enabled ? t('web.crmChat.composerPlaceholder') : t('web.crmChat.composerUnavailable')}
-          maxLength={maxMessageChars + 100} // Allow slight overage for UX, validate on submit
+          // 19-CHAT.25 — the advertised bound is the enforced bound: the server refuses a prompt
+          // over `limits.maxMessageChars`, so the input stops at exactly that many characters.
+          maxLength={maxMessageChars}
           onKeyDown={(e) => {
             // Submit on Enter (without Shift), cancel on Escape.
             if (e.key === 'Enter' && !e.shiftKey && canSubmit) {

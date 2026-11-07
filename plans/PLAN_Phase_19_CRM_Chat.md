@@ -2,7 +2,7 @@
 
 > **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 shipped 2026-11-03; P1 domain tools (`crm_project_status`, `crm_commercial_summary`, `crm_campaign_performance`, `crm_list_emails`) shipped 2026-11-05 (module v1.3.0, contract unchanged)
 > **Post-release hardening 19-CHAT.25 → 19-CHAT.31 (audit 2026-11-07, §17 end; findings corrected the
-> same day after a source-level review) is planned, not yet implemented.**
+> same day after a source-level review) shipped 2026-11-08 (contract v1.3.0).**
 > **Plan version:** 1.9.1 (2026-11-07)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
@@ -45,8 +45,8 @@ This plan describes intended behavior. Where it and the code disagree, the code 
 The module is **built and running**, not planned. Phases 19-CHAT.0 → 19-CHAT.19 are the historical
 specification that produced the shipped module; they stay in this file because they define its
 contract. The v2 work added after the review is specified as **19-CHAT.20 → 19-CHAT.24** in §17, and all
-five of those phases have shipped. The open work is **19-CHAT.25 → 19-CHAT.31** (§17, audit
-2026-11-07): post-release hardening, planned but not implemented.
+five of those phases have shipped. The post-release hardening **19-CHAT.25 → 19-CHAT.31** (§17, audit
+2026-11-07) shipped 2026-11-08 together with its owner-module dependency 19-AI.28.
 
 | Phase range | Status | Evidence |
 |---|---|---|
@@ -56,7 +56,7 @@ five of those phases have shipped. The open work is **19-CHAT.25 → 19-CHAT.31*
 | 19-CHAT.22 — write loop closure | **Shipped** 2026-11-02 | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2, `crm_update_record_fields` v2; registry 12 → 15 keys; 6 new cases in `ai-agent-runs.test.ts` |
 | 19-CHAT.23 — module intelligence tools | **Shipped** 2026-11-03 | 5 tools, registry 15 → 20 keys; `apps/api/test/crm-chat-intelligence-tools.test.ts` (7 cases); design in `plans/SPEC.md` §9.4 |
 | 19-CHAT.24 — tool-aware suggestions, evaluation, release | **Shipped** 2026-11-03 | 8 declarative chips filtered by `capabilities.assistant.tools` (`apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`); 40 new cases (20 tools × vi + en) in `crm-chat-evaluation.test.ts`; full 21-entry catalogue table in `ai-agent-runs.test.ts`; module v1.2.0; design in `plans/SPEC.md` §9.7 |
-| 19-CHAT.25 → 19-CHAT.31 — post-release hardening | **Planned, not implemented** (audit 2026-11-07, corrected the same day) | §17 phases 25–31; §18.2 DoD addendum; change log 1.9.0/1.9.1. P1: settings honesty, context forwarding, contract accuracy, stream id hygiene. |
+| 19-CHAT.25 → 19-CHAT.31 — post-release hardening | **Shipped** 2026-11-08 (contract v1.3.0) | §17 phases 25–31; §18.2 DoD addendum; change log 1.9.0/1.9.1. Evidence: limits enforced in `crm-chat.controller.ts`/`crm-chat-ai-agents-client.service.ts`/`crm-chat-streaming.service.ts` + `crm-chat.test.ts` "settings limits honesty"; all `contextRefs` forwarded via `records` (19-AI.28) + `ai-agent-runs.test.ts`; enforcement map in `crm-chat-contract.test.ts` (27 routes); batched citations `crm-chat-citations-batch.test.ts` + bounded KB scan (`MAX_KB_CORPUS_SCAN`); stream id hygiene `crm-chat-streaming.test.ts`; component coverage `crm-chat-components.test.tsx`; `CRMChatDiagnosticsDrawer`/`CRMChatSettingsModal` extracted, `assistant.delta` decision in contract §8.1 |
 
 **Current-state anchors (2026-11-07, HEAD `2bce1e8`).** As-built rows in §17 describe the state
 *at the time each phase shipped* and are deliberately left unchanged. Against the current checkout:
@@ -1512,7 +1512,7 @@ Two things this phase discovered about itself, both written into
 
 ---
 
-### Phase 19-CHAT.25 — Settings and Limits Honesty (P1)
+### Phase 19-CHAT.25 — Settings and Limits Honesty (P1) — **Shipped 2026-11-08**
 
 **Finding (audit 2026-11-07, corrected):** `CRMChatSettingsService` stores a large `limits.*`
 surface, but only part of it is enforced. **`maxContextRefs` is already enforced server-side**
@@ -1552,7 +1552,7 @@ believes every advertised bound is live.
 
 ---
 
-### Phase 19-CHAT.26 — Forward All Context References (P1)
+### Phase 19-CHAT.26 — Forward All Context References (P1) — **Shipped 2026-11-08**
 
 **Finding:** `crm-chat-ai-agents-client.service.ts:68-70` forwards only `contextRefs[0]` as
 `record`. The turn DTO accepts an array and the controller validates up to `limits.maxContextRefs`
@@ -1585,7 +1585,7 @@ the DTO and validates refs.
 
 ---
 
-### Phase 19-CHAT.27 — Contract Accuracy (P1)
+### Phase 19-CHAT.27 — Contract Accuracy (P1) — **Shipped 2026-11-08**
 
 **Findings:**
 1. **Capability/feature drift.** `CRM_CHAT_ROUTES` **already declares** `capability` and `feature`
@@ -1617,7 +1617,7 @@ the DTO and validates refs.
 
 ---
 
-### Phase 19-CHAT.28 — Bounded Data Loading (P2)
+### Phase 19-CHAT.28 — Bounded Data Loading (P2) — **Shipped 2026-11-08**
 
 **Findings (one capability — bound the fetch — at two call sites):**
 1. `toMessageView` awaits `citations.forMessage` per message
@@ -1650,7 +1650,7 @@ the DTO and validates refs.
 
 ---
 
-### Phase 19-CHAT.29 — Stream ID Hygiene (P1)
+### Phase 19-CHAT.29 — Stream ID Hygiene (P1) — **Shipped 2026-11-08**
 
 **Finding (severity corrected):** `crm-chat-streaming.service.ts:129` emits heartbeats with
 `id: String(Date.now())`, while `:99-103` parses `Last-Event-ID` straight into `lastSeq`. A client
@@ -1679,7 +1679,7 @@ server. `assistant.delta` is absent by design (the UI renders a timer); that dec
 
 ---
 
-### Phase 19-CHAT.30 — Frontend Component Coverage (P2)
+### Phase 19-CHAT.30 — Frontend Component Coverage (P2) — **Shipped 2026-11-08**
 
 **Finding:** Only `CRMChatSuggestions.test.tsx` exists under `apps/web`; composer, SSE resume,
 citation, action-card and feedback components have no component tests, and streaming translation is
@@ -1701,7 +1701,7 @@ covered only indirectly. (`e2e/crm-chat.spec.ts` is a Playwright journey, not a 
 
 ---
 
-### Phase 19-CHAT.31 — UI Decomposition and the `assistant.delta` Decision (P3)
+### Phase 19-CHAT.31 — UI Decomposition and the `assistant.delta` Decision (P3) — **Shipped 2026-11-08**
 
 **Finding:** `CRMChatPage.tsx` is 666 lines and bundles the page, diagnostics drawer (`:502-598`),
 admin settings modal (`:600-663`) and health checks. `assistant.delta` is not emitted — the UI

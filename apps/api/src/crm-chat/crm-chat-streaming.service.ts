@@ -4,6 +4,7 @@ import type { AIAgentRunEventView } from '../ai-agents/ai-agent-runs.service.js'
 import { AIAgentRunService } from '../ai-agents/ai-agent-runs.service.js';
 import { AIToolRegistry } from '../ai-agents/ai-agent-tools.js';
 import { DatabaseService } from '../database/database.service.js';
+import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.6 — streaming event types (plans/PLAN_Phase_19_CRM_Chat.md §9.1, §17 `19-CHAT.6`;
@@ -37,7 +38,6 @@ export type CrmChatStreamEventType =
   | 'turn.started'
   | 'tool.started'
   | 'tool.completed'
-  | 'citation.added'
   | 'action.proposed'
   | 'approval.required'
   | 'assistant.message'
@@ -83,6 +83,7 @@ export class CRMChatStreamingService {
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
   ) {}
 
   /**
@@ -108,8 +109,10 @@ export class CRMChatStreamingService {
       closed = true;
     });
 
-    // The run itself is the turn: read it once so the first event can carry the conversation id.
-    const conversationId = await this.conversationIdOf(turnId);
+    // The run itself is the turn: read it once so the first event can carry the conversation id,
+    // and so the configured turn timeout is measured from when the turn was accepted (19-CHAT.25).
+    const { conversationId, acceptedAt } = await this.turnContext(turnId);
+    const limits = (await this.settings.settings()).limits;
 
     // Send initial turn.started event.
     const startEvent: CrmChatStreamEvent = {
@@ -119,25 +122,55 @@ export class CRMChatStreamingService {
     };
     writer.write(serializeSSEEvent(startEvent));
 
-    // Heartbeat every 15 seconds to keep connection alive.
+    // 19-CHAT.25/19-CHAT.29 — the heartbeat cadence is a setting, not a literal. The interval id is
+    // deliberately *not* a resumable sequence: see the heartbeat emission below.
     const heartbeatInterval = setInterval(() => {
       if (closed) {
         clearInterval(heartbeatInterval);
         return;
       }
       const heartbeat: CrmChatStreamEvent = {
-        id: String(Date.now()),
+        id: `hb-${String(Date.now())}`,
         event: 'heartbeat',
         data: { at: new Date().toISOString() },
       };
       writer.write(serializeSSEEvent(heartbeat));
-    }, 15_000);
+    }, limits.heartbeatSeconds * 1_000);
+
+    // 19-CHAT.25 — `limits.turnTimeoutSeconds` is enforced on the streaming path: a turn that
+    // outlives it is cancelled and reported as timed out. A run nobody streams is still bounded by
+    // the AIAgents instance and agent elapsed-time ceilings, which are the hard limits.
+    const turnDeadline = acceptedAt + limits.turnTimeoutSeconds * 1_000;
+    let timeoutHandled = false;
 
     // Poll for run events and translate them to stream events.
     const pollInterval = setInterval(async () => {
       if (closed) {
         clearInterval(pollInterval);
         clearInterval(heartbeatInterval);
+        return;
+      }
+
+      // 19-CHAT.25 — the configured turn timeout is enforced here, on the only path a Chat turn is
+      // consumed. The run is asked to cancel; the stream reports the timeout rather than waiting
+      // for the cancellation to land, because the caller's bound already elapsed.
+      if (!timeoutHandled && Date.now() > turnDeadline) {
+        timeoutHandled = true;
+        const timeoutEvent: CrmChatStreamEvent = {
+          id: `timeout-${String(lastSeq + 1)}`,
+          event: 'turn.failed',
+          data: {
+            turnId,
+            state: 'failed',
+            errorCode: 'CHAT_TURN_TIMEOUT',
+            message: `The turn exceeded the configured ${String(limits.turnTimeoutSeconds)}-second limit.`,
+          },
+        };
+        writer.write(serializeSSEEvent(timeoutEvent));
+        clearInterval(pollInterval);
+        clearInterval(heartbeatInterval);
+        void this.runs.cancel(turnId).catch(() => undefined);
+        writer.end();
         return;
       }
 
@@ -166,7 +199,9 @@ export class CRMChatStreamingService {
         // Log error but don't crash the stream.
         const errorMessage = error instanceof Error ? error.message : 'Failed to fetch events.';
         const errorEvent: CrmChatStreamEvent = {
-          id: String(Date.now()),
+          // 19-CHAT.29 — a wall-clock id is not a resumable sequence; the `err-` prefix keeps the
+          // `Last-Event-ID` parser from ever mistaking it for one.
+          id: `err-${String(Date.now())}`,
           event: 'turn.failed',
           data: { turnId, state: 'failed', errorCode: 'CHAT_STREAM_INTERRUPTED', message: errorMessage },
         };
@@ -230,9 +265,12 @@ export class CRMChatStreamingService {
         const approvalId = this.extractString(event.payload, 'approvalId');
         const expiresAt = this.extractString(event.payload, 'expiresAt');
         const toolKey = this.extractString(event.payload, 'toolKey');
+        // 19-CHAT.29 — the two frames derive from one run event but are distinct stream events, so
+        // they get distinct ids. The `-a`/`-r` suffix keeps `parseInt` on the leading seq intact for
+        // `Last-Event-ID` resume while making the pair unique within the turn.
         return [
           {
-            id,
+            id: `${id}-a`,
             event: 'action.proposed',
             data: {
               approvalId,
@@ -242,7 +280,7 @@ export class CRMChatStreamingService {
             },
           },
           {
-            id,
+            id: `${id}-r`,
             event: 'approval.required',
             data: { approvalId, expiresAt, toolKey },
           },
@@ -261,17 +299,19 @@ export class CRMChatStreamingService {
         const answer = await this.awaitAssistantMessage(turnId);
         if (answer !== null) {
           events.push({
-            id,
+            // 19-CHAT.29 — the three frames derived from one terminal run event carry distinct ids;
+            // the suffix keeps `parseInt` on the leading seq intact for `Last-Event-ID` resume.
+            id: `${id}-m`,
             event: 'assistant.message',
             data: { messageId: answer.id, content: answer.content, redaction: answer.redaction },
           });
         }
         const usage = await this.usageOf(turnId);
         if (usage !== null) {
-          events.push({ id, event: 'usage.summary', data: usage });
+          events.push({ id: `${id}-u`, event: 'usage.summary', data: usage });
         }
         events.push({
-          id,
+          id: `${id}-t`,
           event: 'turn.completed',
           data: { turnId, state: 'completed', usage: usage ?? undefined },
         });
@@ -400,14 +440,17 @@ export class CRMChatStreamingService {
     };
   }
 
-  /** The conversation a run belongs to, when it has one. */
-  private async conversationIdOf(turnId: string): Promise<string | null> {
+  /** The conversation a run belongs to and when the turn was accepted (19-CHAT.25 timeout basis). */
+  private async turnContext(turnId: string): Promise<{ conversationId: string | null; acceptedAt: number }> {
     const row = await this.database.db
       .selectFrom('ai_agent_runs')
-      .select('conversation_id')
+      .select(['conversation_id', 'created_at'])
       .where('id', '=', turnId)
       .executeTakeFirst();
-    return row?.conversation_id ?? null;
+    return {
+      conversationId: row?.conversation_id ?? null,
+      acceptedAt: row?.created_at.getTime() ?? Date.now(),
+    };
   }
 
   /** The tool's declared label, or its key when the tool is unknown. */

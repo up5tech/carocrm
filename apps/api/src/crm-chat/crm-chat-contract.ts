@@ -16,7 +16,7 @@ import type { CRMChatCapabilityKey, CRMChatFeatureKey } from './crm-chat-module.
  */
 
 /** Bumped whenever a path, request shape, response shape, event or error code changes incompatibly. */
-export const CRM_CHAT_CONTRACT_VERSION = '1.2.0';
+export const CRM_CHAT_CONTRACT_VERSION = '1.3.0';
 
 export type CRMChatHttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -138,7 +138,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
   {
     method: 'POST',
     path: 'action/turns/:turnId/cancel',
-    capability: 'manage',
+    capability: 'use',
     feature: 'workspace',
     phase: '19-CHAT.5',
     implemented: true,
@@ -193,7 +193,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     method: 'GET',
     path: 'action/help/search',
     capability: 'use',
-    feature: 'workspace',
+    feature: 'helpRetrieval',
     phase: '19-CHAT.9',
     implemented: true,
     summary: 'Search Knowledge Base and approved help sources for "how do I" questions.',
@@ -255,7 +255,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
   {
     method: 'POST',
     path: 'action/prompts',
-    capability: 'use',
+    capability: 'prompts',
     feature: 'workspace',
     phase: '19-CHAT.14',
     implemented: true,
@@ -296,18 +296,22 @@ export const CRM_CHAT_ERROR_CODES: readonly {
   { code: 'CONCURRENCY_CONFLICT', status: 409, meaning: 'The record changed since it was read (stale approval, title clash).' },
   { code: 'RATE_LIMITED', status: 429, meaning: 'The kernel rate limiter, or a per-user turn/budget limit, refused the request.' },
   { code: 'CHAT_TURN_LIMITED', status: 429, meaning: 'The caller already has the maximum active turns.' },
+  { code: 'CHAT_CONVERSATION_LIMIT', status: 429, meaning: 'The caller already has the maximum conversations (limits.maxConversationsPerUser).' },
   { code: 'CHAT_AGENT_UNAVAILABLE', status: 503, meaning: 'The configured assistant is not ready; details.state explains why.' },
   { code: 'CHAT_PROVIDER_UNAVAILABLE', status: 503, meaning: 'The provider failed; the turn is reported as failed, never as succeeded.' },
   { code: 'CHAT_APPROVAL_REQUIRED', status: 409, meaning: 'The turn is waiting for a confirmed proposal.' },
   { code: 'CHAT_CONTEXT_TOO_LARGE', status: 422, meaning: 'More context references than limits.maxContextRefs.' },
 ];
 
-/** Stream events, in the order the contract describes them. `assistant.delta` is deliberately absent. */
+/**
+ * Stream events, in the order the contract describes them. `assistant.delta` is deliberately absent
+ * (19-CHAT.31 records the timer-instead-of-tokens decision), and `citation.added` was removed in
+ * 19-CHAT.29: the server never emitted it — citations reach the client with the final history.
+ */
 export const CRM_CHAT_STREAM_EVENTS: readonly string[] = [
   'turn.started',
   'tool.started',
   'tool.completed',
-  'citation.added',
   'action.proposed',
   'approval.required',
   'assistant.message',

@@ -150,3 +150,65 @@ describe('CRMChat contract (19-CHAT.1)', () => {
     expect(doc).toContain(`**Contract version:** \`${CRM_CHAT_CONTRACT_VERSION}\``);
   });
 });
+
+/**
+ * Phase 19-CHAT.27 — the declared `capability`/`feature` of every route must equal what the code
+ * actually enforces. This map is the enforcement truth, read off the controller's `assert*` calls
+ * and the services they delegate to (`permissions.assert`, `policy.assertWorkspace`,
+ * `policy.assertFeature`, `policy.assertWrites`). If enforcement changes without a matching
+ * `CRM_CHAT_ROUTES` update — or vice versa — this test fails.
+ *
+ * `GET action/conversations` additionally requires `conversationSearch` when the `q` parameter is
+ * present; that is a conditional feature on one route, not the route's base gate, so it is noted
+ * here rather than duplicated in the table.
+ */
+const EXPECTED_ENFORCEMENT: Readonly<Record<string, { capability: string; feature: string | null }>> = {
+  'GET action/capabilities': { capability: 'use', feature: null },
+  'GET action/health': { capability: 'use', feature: 'workspace' },
+  'GET action/settings': { capability: 'admin', feature: null },
+  'POST action/settings': { capability: 'admin', feature: null },
+  'GET action/conversations': { capability: 'use', feature: 'workspace' },
+  'GET action/conversations/:id': { capability: 'use', feature: 'workspace' },
+  'GET action/conversations/:id/messages': { capability: 'use', feature: 'workspace' },
+  'PATCH action/conversations/:id': { capability: 'manage', feature: 'workspace' },
+  'DELETE action/conversations/:id': { capability: 'delete', feature: 'workspace' },
+  'POST action/turns': { capability: 'use', feature: 'readTools' },
+  'GET action/turns/:turnId': { capability: 'use', feature: 'workspace' },
+  'POST action/turns/:turnId/cancel': { capability: 'use', feature: 'workspace' },
+  'GET action/turns/:turnId/events': { capability: 'use', feature: 'workspace' },
+  'POST action/turns/:turnId/feedback': { capability: 'feedback', feature: 'feedback' },
+  'GET action/actions/:approvalId': { capability: 'use', feature: 'workspace' },
+  'POST action/actions/:approvalId/confirm': { capability: 'use', feature: 'actionProposals' },
+  'POST action/actions/:approvalId/reject': { capability: 'use', feature: 'workspace' },
+  'GET action/help/search': { capability: 'use', feature: 'helpRetrieval' },
+  'POST action/query/execute': { capability: 'use', feature: 'readTools' },
+  'POST action/citations/reauthorize': { capability: 'use', feature: 'workspace' },
+  'GET action/cross-module/scenarios': { capability: 'use', feature: 'workspace' },
+  'POST action/cross-module/analyze': { capability: 'use', feature: 'workspace' },
+  'GET action/turns/:turnId/usage': { capability: 'use', feature: 'workspace' },
+  'GET action/prompts': { capability: 'use', feature: 'workspace' },
+  'POST action/prompts': { capability: 'prompts', feature: 'workspace' },
+  'PATCH action/prompts/:id': { capability: 'prompts', feature: 'workspace' },
+  'DELETE action/prompts/:id': { capability: 'prompts', feature: 'workspace' },
+};
+
+describe('CRMChat route enforcement (19-CHAT.27)', () => {
+  it('declares the same capability and feature the code enforces, for every implemented route', () => {
+    const implemented = CRM_CHAT_ROUTES.filter((route) => route.implemented);
+    expect(implemented.length).toBe(Object.keys(EXPECTED_ENFORCEMENT).length);
+    for (const route of implemented) {
+      const key = `${route.method} ${route.path}`;
+      const expected = EXPECTED_ENFORCEMENT[key];
+      expect(expected, `no enforcement expectation for ${key}`).toBeDefined();
+      expect(route.capability, `${key} capability drift`).toBe(expected.capability);
+      expect(route.feature, `${key} feature drift`).toBe(expected.feature);
+    }
+  });
+
+  it('serves exactly the 27 routes the contract document describes', () => {
+    // Audit 2026-11-07: the shipped surface is 27 routes; an earlier doc claimed 28.
+    const implemented = CRM_CHAT_ROUTES.filter((route) => route.implemented);
+    expect(implemented).toHaveLength(27);
+    expect(servedRoutes()).toHaveLength(27);
+  });
+});

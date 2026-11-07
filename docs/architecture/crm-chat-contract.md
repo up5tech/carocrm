@@ -5,8 +5,14 @@
 > **Status:** delivered in 19-CHAT.1 and implemented in full through 19-CHAT.24
 > (`apps/api/src/crm-chat/`). Every route in §6 is served by the controller; the route table in
 > `crm-chat-contract.ts` is pinned against the controller by `apps/api/test/crm-chat-contract.test.ts`.
-> **Contract version:** `1.2.0`. Any breaking change to a path, a request shape, a response shape, a
+> **Contract version:** `1.3.0`. Any breaking change to a path, a request shape, a response shape, a
 > stream event or an error code bumps the minor version and is recorded in §15.
+> **1.3.0 (19-CHAT.25 → 19-CHAT.29 hardening):** every `limits.*` bound is now enforced server-side
+> (`maxMessageChars`, `maxActiveTurnsPerUser`, `maxTurnsPerMinute`, `maxConversationsPerUser`,
+> `turnTimeoutSeconds`, `maxConcurrentQueries`, `maxQueryResults`, `heartbeatSeconds`); all
+> `contextRefs` are forwarded to the run input instead of only the first; new error codes
+> `CHAT_CONVERSATION_LIMIT` and stream failure `CHAT_TURN_TIMEOUT`; heartbeat frames carry a
+> non-resumable id. No route was added or removed.
 > **Naming:** module `CRMChat`, route slug `crm-chat`, API prefix `/api/v1/CRMChat`, SPA route
 > `/crm-chat`. No `Ua` prefix anywhere.
 
@@ -230,7 +236,7 @@ Pagination decisions that the implementation fixes, so the client cannot get the
 | `GET` | `action/turns/:turnId` | `use` + owner | — | `CRMChatTurnView` |
 | `GET` | `action/turns/:turnId/events` | `use` + owner | `Last-Event-ID` | `text/event-stream` (§8) |
 | `POST` | `action/turns/:turnId/cancel` | `use` + owner | `{}` | `CRMChatTurnView` |
-| `GET` | `action/help/search` | `use` | `?q=query` | `HelpSearchResult` (§11) |
+| `GET` | `action/help/search` | `use` + `helpRetrieval` | `?q=query` | `HelpSearchResult` (§11) |
 | `POST` | `action/query/execute` | `use` | `QueryPlan` | `QueryResult` (§12) |
 | `POST` | `action/citations/reauthorize` | `use` | `{ citations }` | `{ citations: ReauthorizedCitation[] }` (§10) |
 | `POST` | `action/turns/:turnId/feedback` | `feedback` + owner | `{ rating, category?, comment? }` | `{ status: true }` |
@@ -240,9 +246,13 @@ does not exist until the first turn: `conversationId` is optional in the body an
 the thread when it is absent (§4.3).
 
 `contextRefs` is the only client-supplied influence on what the agent may look at, and it is a
-**reference**, not data: `{ entity: string, id: string }` (at most `limits.maxContextRefs`). The server
-re-reads the record under the caller's ACL, and an unreadable reference is dropped with a
-`partialContext` flag rather than failing the turn.
+**reference**, not data: `{ entity: string, id: string }` (at most `limits.maxContextRefs`). Since
+19-CHAT.26/19-AI.28 **every** reference is forwarded — the run input carries the full list as
+`records` (with `record` kept as the first ref for single-reference consumers), and each ref is
+re-read under the caller's ACL when the run is created and again under the acting user's ACL when
+the prompt is built. An unreadable reference **fails the turn at creation** (`404 NOT_FOUND`) rather
+than being silently dropped; refs that become unreadable later are withheld from the prompt and
+counted in the task text.
 
 `prompt` is the field name the implementation uses; an earlier draft of this contract called it
 `message`. The implemented name is the one clients send, and it is the name the SPA and the tests
@@ -284,8 +294,9 @@ differently.
 | Conversation or turn not owned / absent | 404 | `NOT_FOUND` | Chat |
 | Title changed concurrently | 409 | `CONCURRENCY_CONFLICT` | 19-CHAT.4 |
 | Rate limit | 429 | `RATE_LIMITED` | kernel + Chat limits |
-| Turn limit reached | 429 | `CHAT_TURN_LIMITED` | 19-CHAT.17 |
-| Message over the limit | 422 | `VALIDATION_FAILED` (`details.maxChars`) | 19-CHAT.4 |
+| Turn limit reached | 429 | `CHAT_TURN_LIMITED` | 19-CHAT.17 / 19-CHAT.25 |
+| Turn rate or conversation cap reached | 429 | `RATE_LIMITED` / `CHAT_CONVERSATION_LIMIT` | 19-CHAT.25 |
+| Message over the limit | 422 | `VALIDATION_FAILED` (`details.maxMessageChars`) | 19-CHAT.25 |
 | Assistant not ready | 503 | `CHAT_AGENT_UNAVAILABLE` (`details.state`) | 19-CHAT.5 |
 | Provider outage | 503 | `CHAT_PROVIDER_UNAVAILABLE` | 19-CHAT.6 |
 | Approval required for a write | 409 | `CHAT_APPROVAL_REQUIRED` | 19-CHAT.12 |
@@ -424,12 +435,15 @@ bumps `version` and records `updatedBy`.
 | `features.conversationSearch` | boolean | false | History search (19-CHAT.14) |
 | `assistant.agentKey` | string ≤ 120 | `''` | Stable key of the published answering agent; empty = not configured |
 | `execution.mode` | `queue` \| `inline` | `queue` | `queue` dispatches the run to the durable worker; `inline` starts the same run in the API process (no worker required) |
-| `limits.maxMessageChars` | int 1–20 000 | 8 000 | One user message |
-| `limits.maxContextRefs` | int 0–20 | 5 | Client-supplied record references per turn |
-| `limits.maxActiveTurnsPerUser` | int 1–5 | 1 | Concurrent turns (19-CHAT.17) |
-| `limits.maxConversationsPerUser` | int 1–2 000 | 200 | Stored threads (19-CHAT.4) |
-| `limits.turnTimeoutSeconds` | int 10–600 | 180 | Turn budget surfaced to the client |
-| `limits.heartbeatSeconds` | int 5–60 | 15 | SSE heartbeat (§8) |
+| `limits.maxMessageChars` | int 1–20 000 | 8 000 | One user message; enforced on `POST action/turns` (422 `VALIDATION_FAILED`) and mirrored by the composer |
+| `limits.maxContextRefs` | int 0–20 | 5 | Client-supplied record references per turn; enforced on `POST action/turns` (422 `CHAT_CONTEXT_TOO_LARGE`) |
+| `limits.maxActiveTurnsPerUser` | int 1–5 | 1 | Concurrent turns per user; enforced before run creation (429 `CHAT_TURN_LIMITED`) |
+| `limits.maxConversationsPerUser` | int 1–2 000 | 200 | Live threads per user; enforced when a turn would create one (429 `CHAT_CONVERSATION_LIMIT`) |
+| `limits.maxTurnsPerMinute` | int 1–60 | 10 | Turn submissions per user per minute; enforced before run creation (429 `RATE_LIMITED`) |
+| `limits.turnTimeoutSeconds` | int 10–600 | 180 | Turn budget; enforced on the SSE path — an overdue turn is cancelled and answered `turn.failed`/`CHAT_TURN_TIMEOUT` |
+| `limits.heartbeatSeconds` | int 5–60 | 15 | SSE heartbeat cadence (§8); the frame id is non-numeric so it can never be used as a resume cursor |
+| `limits.maxConcurrentQueries` | int 1–10 | 3 | In-flight `action/query/execute` calls per user; the (10th) concurrent call is refused 429 `RATE_LIMITED` |
+| `limits.maxQueryResults` | int 1–1 000 | 100 | Records one query may return; capped by the hard `MAX_LIST_SIZE` = 50 and enforced on `action/query/execute` |
 | `retention.conversationsDays` | int 1–3 650 | 30 | Ceiling passed to the runtime; it stays the only executor |
 | `safety.allowWrites` | boolean | false | Independent operator switch for every mutation |
 
@@ -537,10 +551,9 @@ the stream is a delivery channel that may drop and be re-established.
 | `turn.started` | `{ turnId, conversationId, state, at }` | Sent on acceptance (`queued`), then again when a worker/inline dispatch claims the run (`running`) |
 | `tool.started` | `{ step, toolKey, label }` | `label` is the tool's declared label — never its arguments |
 | `tool.completed` | `{ step, toolKey, status, summary, durationMs }` | `summary` is the tool's own user-safe summary |
-| `citation.added` | `CRMChatCitationView` | After the ACL re-check that produced `label`/`route` |
 | `action.proposed` | `{ approvalId, riskClass, targetCount, summary }` | No before/after values in the event; they are fetched from the action route |
-| `approval.required` | `{ approvalId, expiresAt }` | The turn pauses |
-| `assistant.delta` | `{ text }` | **Not in v1** — the provider contract is request/response (audit §5); the UI shows a running state |
+| `approval.required` | `{ approvalId, expiresAt }` | The turn pauses; emitted with its own id (`<seq>-r`), distinct from `action.proposed` (`<seq>-a`) |
+| `assistant.delta` | `{ text }` | **Deliberately absent (19-CHAT.31 decision):** the provider contract is request/response (audit §5), so token deltas cannot be produced honestly; the UI shows a running timer instead. Revisit only as a separately scoped token-streaming phase |
 | `assistant.message` | `{ messageId, content, redaction }` | The final answer, once |
 | `turn.completed` | `{ state, usage }` | Terminal |
 | `turn.failed` | `{ state, errorCode, message }` | Terminal; `message` is user-safe |
@@ -592,7 +605,8 @@ lacks is an AI Agents phase, documented as a blocker — not a private implement
 ### 9.1 Context envelope
 
 What Chat may send to the runtime: the user's message text (bounded by `limits.maxMessageChars`), at
-most `limits.maxContextRefs` record references re-read under the caller's ACL, the conversation id, and
+most `limits.maxContextRefs` record references — **all** of them, forwarded as the run input's
+`records` list (19-AI.28) and each re-read under the caller's ACL — the conversation id, and
 the idempotency key. Everything else — roles, permissions, allowed entities, locale-derived facts — is
 derived server-side and never accepted from the browser.
 

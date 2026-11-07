@@ -25,6 +25,13 @@ import { KnowledgeBaseService } from '../service-desk/knowledge-base.service.js'
 /** How many sources one answer may cite, across both help corpora. */
 const MAX_HELP_SOURCES = 5;
 
+/**
+ * 19-CHAT.28 — the knowledge-base corpus scan is bounded regardless of corpus size: at most this
+ * many of the newest published, non-internal articles are scored per query. The bound is applied
+ * inside `portalArticles` so the limit selects eligible articles, not an arbitrary table prefix.
+ */
+const MAX_KB_CORPUS_SCAN = 500;
+
 export interface HelpSource {
   readonly sourceType: 'knowledge_article' | 'entity_field' | 'module_doc';
   readonly sourceId?: string | undefined;
@@ -121,8 +128,8 @@ export class CRMChatHelpService {
    */
   private async searchKnowledgeBase(query: string): Promise<HelpSource[]> {
     try {
-      // Get all portal-visible articles
-      const articles = await this.knowledgeBase.portalArticles();
+      // Get portal-visible articles, bounded to the newest MAX_KB_CORPUS_SCAN eligible ones (19-CHAT.28)
+      const articles = await this.knowledgeBase.portalArticles(MAX_KB_CORPUS_SCAN);
 
       if (articles.length === 0) {
         return [];

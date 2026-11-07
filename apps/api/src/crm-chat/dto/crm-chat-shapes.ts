@@ -79,8 +79,12 @@ export type CRMChatConversationPatchShape = z.infer<typeof CRMChatConversationPa
  */
 export const CRMChatTurnCreateSchema = z
   .object({
-    /** User-visible prompt text. Required. */
-    prompt: z.string().trim().min(1).max(4_000),
+    /**
+     * User-visible prompt text. Required. The schema ceiling is the settings schema's own maximum
+     * (20,000); the *enforced* bound is `limits.maxMessageChars`, checked against the stored
+     * settings where the turn is accepted (19-CHAT.25) — one source of truth, no silent clamp.
+     */
+    prompt: z.string().trim().min(1).max(20_000),
     /** Optional conversation thread to continue; refused if the agent has memory off. */
     conversationId: z.string().trim().min(1).max(120).optional(),
     /** Client-generated idempotency key to prevent duplicate turns on retry. */

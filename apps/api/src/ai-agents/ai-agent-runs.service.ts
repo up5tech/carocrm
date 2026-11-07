@@ -35,7 +35,7 @@ import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from './ai-agent-tools.js';
 import { AIToolRegistry, expectedTargetVersionsOf } from './ai-agent-tools.js';
-import { type AgentStatus, aiAgentScheduleId, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
+import { type AgentStatus, aiAgentScheduleId, MAX_RUN_RECORD_REFS, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
@@ -66,8 +66,22 @@ import { AIProviderGateway } from './ai-provider-gateway.service.js';
  * reconstruct a vendor's tool transcript) and makes the untrusted-data boundary explicit.
  */
 
+export interface RunRecordRef {
+  readonly entity: string;
+  readonly id: string;
+}
+
 export interface RunCreateInput {
-  readonly input?: { readonly text?: string | undefined; readonly record?: { entity: string; id: string } | undefined } | undefined;
+  readonly input?: {
+    readonly text?: string | undefined;
+    readonly record?: RunRecordRef | undefined;
+    /**
+     * 19-AI.28 — every record the run was started alongside (CRM Chat context refs). Additive:
+     * `record` stays valid for single-reference callers; `records` carries the full list and is
+     * what the prompt renders. Ignored — and refused — for record-mode agents.
+     */
+    readonly records?: readonly RunRecordRef[] | undefined;
+  } | undefined;
   readonly idempotencyKey?: string | undefined;
   readonly trigger?: RunTrigger | undefined;
   /** Continue an existing owner-scoped thread of the same agent (conversation memory only). */
@@ -980,10 +994,20 @@ export class AIAgentRunService {
     const record = asRecord(storedInput['record']);
     const entity = typeof record['entity'] === 'string' ? record['entity'] : undefined;
     const recordId = typeof record['id'] === 'string' ? record['id'] : undefined;
+    const storedRefs = storedInput['records'];
+    const records = Array.isArray(storedRefs)
+      ? storedRefs.flatMap((ref) => {
+          const entry = asRecord(ref);
+          const entity = typeof entry['entity'] === 'string' ? entry['entity'] : undefined;
+          const id = typeof entry['id'] === 'string' ? entry['id'] : undefined;
+          return entity === undefined || id === undefined ? [] : [{ entity, id }];
+        })
+      : [];
     const view = await this.create(row.agent_id, {
       input: {
         ...(text === undefined ? {} : { text }),
         ...(entity === undefined || recordId === undefined ? {} : { record: { entity, id: recordId } }),
+        ...(records.length === 0 ? {} : { records }),
       },
       ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
@@ -2224,6 +2248,33 @@ export class AIAgentRunService {
       if (taskParts.length === 0) {
         taskParts.push(`Summarize the ${entity} record "${id}" for the user.`);
       }
+    } else {
+      // 19-AI.28 — a text-mode run may carry record references (CRM Chat context). Each is loaded
+      // again here, under the acting user's scope, so a reference that became unreadable after
+      // creation is withheld rather than leaked into the prompt.
+      const refs = Array.isArray(input['records']) ? input['records'] : [];
+      let withheldRefs = 0;
+      for (const raw of refs) {
+        const ref = asRecord(raw);
+        const entity = typeof ref['entity'] === 'string' ? ref['entity'] : '';
+        const id = typeof ref['id'] === 'string' ? ref['id'] : '';
+        if (entity === '' || id === '') continue;
+        try {
+          const fields = summaryFieldNames(this.metadata, entity);
+          const loaded = await this.entities.get(entity, id, fields.join(','));
+          taskParts.push(
+            'A CRM record the user attached as context (untrusted data, limited by the actor\'s access):\n' +
+              `<record_context entity="${escapeAttribute(entity)}" id="${escapeAttribute(id)}">\n${safeJson(loaded, 4_000)}\n</record_context>`,
+          );
+        } catch {
+          withheldRefs += 1;
+        }
+      }
+      if (withheldRefs > 0) {
+        taskParts.push(
+          `${String(withheldRefs)} attached record reference(s) are no longer readable by the actor and were withheld.`,
+        );
+      }
     }
     if (actions !== '') {
       taskParts.push(`Actions already executed in this run:\n${actions}`);
@@ -2612,9 +2663,14 @@ export class AIAgentRunService {
     config: AgentConfig,
     raw: RunCreateInput['input'],
   ): Promise<{
-    input: { text?: string; record?: { entity: string; id: string }; ref?: string };
+    input: { text?: string; record?: RunRecordRef; records?: RunRecordRef[]; ref?: string };
   }> {
     if (config.input.mode === 'record') {
+      // A record-context agent reads exactly one record; extra references would be validated and
+      // then dropped, so they are refused instead (19-AI.28: never validate-and-drop).
+      if (raw?.records !== undefined && raw.records.length > 0) {
+        throw new ValidationError('A record-context agent takes a single record, not a list of references.');
+      }
       const record = raw?.record;
       const expected = config.input.entity ?? '';
       if (record === undefined) throw new ValidationError(`This agent must be started from a ${expected} record.`);
@@ -2634,9 +2690,47 @@ export class AIAgentRunService {
     const text = raw?.text?.trim() ?? '';
     if (text === '') throw new ValidationError('A run needs a task.');
     if (text.length > 4_000) throw new ValidationError('A run task may contain at most 4000 characters.');
+    const records = await this.normalizeRecordRefs(raw?.records);
     // A text-mode run may still name the record it was started from. It is metadata (the model does
     // not read the record), and it lets the owning module bind a run to its subject.
-    return { input: { text, ...(raw?.record === undefined ? {} : { record: raw.record }) } };
+    return {
+      input: {
+        text,
+        ...(raw?.record === undefined ? {} : { record: raw.record }),
+        ...(records.length === 0 ? {} : { records }),
+      },
+    };
+  }
+
+  /**
+   * 19-AI.28 — validate the reference list a text-mode run carries. Every entry must name a
+   * registered entity and a record the **starter** can read right now: `entities.get` applies the
+   * Entity Engine ACL under the current request scope, so an unreadable reference fails creation
+   * instead of reaching the prompt. Duplicates collapse to the first occurrence.
+   */
+  private async normalizeRecordRefs(raw: readonly RunRecordRef[] | undefined): Promise<RunRecordRef[]> {
+    if (raw === undefined || raw.length === 0) return [];
+    if (raw.length > MAX_RUN_RECORD_REFS) {
+      throw new ValidationError(`A run may carry at most ${String(MAX_RUN_RECORD_REFS)} record references.`);
+    }
+    const seen = new Set<string>();
+    const refs: RunRecordRef[] = [];
+    for (const ref of raw) {
+      const entity = ref.entity.trim();
+      const id = ref.id.trim();
+      if (entity === '' || id === '') throw new ValidationError('A record reference needs an entity and an id.');
+      if (!this.metadata.registry.hasEntity(entity)) {
+        throw new ValidationError(`Entity "${entity}" is not registered.`);
+      }
+      const key = `${entity}:${id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // ACL check at creation, under the starter's scope — the same guarantee the single
+      // record-mode path gives. A ref the caller cannot read never becomes a run.
+      await this.entities.get(entity, id);
+      refs.push({ entity, id });
+    }
+    return refs;
   }
 
   private async runPrincipal(row: AIAgentRunsTable): Promise<AuthenticatedPrincipal | undefined> {

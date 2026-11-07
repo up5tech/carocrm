@@ -45,13 +45,10 @@ import {
 } from './dto/crm-chat-shapes.js';
 
 /**
- * Phase 19-CHAT.2 — the `CRMChat` foundation API
- * (plans/PLAN_Phase_19_CRM_Chat.md §8, §13, §17 `19-CHAT.2`).
- *
- * Only the foundation routes exist here: capabilities, diagnostics and the administrative settings
- * row. Conversation, turn, streaming, citation, feedback and prompt routes arrive with their own
- * sub-phases, and they are specified — not implemented — in
- * `docs/architecture/crm-chat-contract.md`.
+ * Phase 19-CHAT.2 — the `CRMChat` HTTP surface
+ * (plans/PLAN_Phase_19_CRM_Chat.md §8, §13, §17). The shipped module serves the 27 routes declared
+ * in `crm-chat-contract.ts` and documented in `docs/architecture/crm-chat-contract.md`; the route
+ * table and its contract test are the source of truth for what exists.
  *
  * Route shape follows the repository, not the plan's illustrative sketch: a PascalCase resource
  * prefix with `action/…` for commands (`api/v1/AIAgents`, `api/v1/AdvancedIntegrations`). It is
@@ -93,6 +90,7 @@ export interface CRMChatCapabilitiesView {
     readonly settingsPath: string;
   }[];
   readonly assistant: AssistantReadiness;
+  /** Every configured bound, so the shell never advertises a limit the server does not enforce. */
   readonly limits: {
     readonly maxMessageChars: number;
     readonly maxContextRefs: number;
@@ -100,6 +98,9 @@ export interface CRMChatCapabilitiesView {
     readonly maxConversationsPerUser: number;
     readonly turnTimeoutSeconds: number;
     readonly heartbeatSeconds: number;
+    readonly maxConcurrentQueries: number;
+    readonly maxTurnsPerMinute: number;
+    readonly maxQueryResults: number;
   };
   /** What the shell may offer right now, derived on the server, never inferred from a hidden control. */
   readonly actions: {
@@ -246,8 +247,20 @@ export class CRMChatController {
     await this.policy.assertFeature('readTools');
     const input = parse(CRMChatTurnCreateSchema, body);
 
+    // 19-CHAT.25 — every advertised bound is enforced here, against the stored settings. The DTO
+    // only knows the schema ceiling; `limits.maxMessageChars` is the deployment's own bound.
+    const { limits } = await this.settings.settings();
+    if (input.prompt.length > limits.maxMessageChars) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `A message may contain at most ${String(limits.maxMessageChars)} characters on this installation.`,
+        { maxMessageChars: limits.maxMessageChars },
+        422,
+      );
+    }
+
     // How many context references a turn may carry is a deployment limit, not a client choice.
-    const { maxContextRefs } = (await this.settings.settings()).limits;
+    const { maxContextRefs } = limits;
     if ((input.contextRefs?.length ?? 0) > maxContextRefs) {
       throw new AppError(
         'CHAT_CONTEXT_TOO_LARGE',

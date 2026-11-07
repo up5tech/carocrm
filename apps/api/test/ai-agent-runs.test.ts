@@ -1932,3 +1932,86 @@ describe('write tool family: notes, activities, drafts, tasks (19-CHAT.22)', () 
     expect(after.body['name']).toBe(`${MARKER} locked name`);
   });
 });
+
+describe('multi-reference run input (19-AI.28)', () => {
+  it('persists every ref, renders each in the prompt, and refuses an unreadable ref', async () => {
+    const first = await createRecord('Account', `${MARKER} ref one`);
+    const second = await createRecord('Task', `${MARKER} ref two`);
+    const third = await createRecord('Account', `${MARKER} ref three`);
+    const refs = [
+      { entity: 'Account', id: first },
+      { entity: 'Task', id: second },
+      { entity: 'Account', id: third },
+    ];
+    const id = await publishedAgent('record-refs');
+
+    const created = await call('POST', `/api/v1/AIAgents/action/agents/${id}/runs`, ctx.adminToken, {
+      input: { text: '__FAKE_ECHO_PROMPT__', records: refs },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const refRunId = String(created.body['id']);
+    runIds.push(refRunId);
+
+    // The whole list is persisted on the run row — nothing the caller validated is dropped.
+    const stored = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select('input')
+      .where('id', '=', refRunId)
+      .executeTakeFirst();
+    const storedInput = stored?.input as { records?: { entity: string; id: string }[] };
+    expect(storedInput.records).toEqual(refs);
+
+    const executed = await executeRun(refRunId);
+    expect(executed.status).toBe(200);
+    const run = executed.body['run'] as { status: string; result: { text: string } };
+    expect(run.status).toBe('succeeded');
+    // `__FAKE_ECHO_PROMPT__` returns the user message verbatim, so the prompt itself is the proof:
+    // every ref was re-read under the actor's ACL and rendered as a record_context block.
+    for (const ref of refs) {
+      expect(run.result.text).toContain(`entity="${ref.entity}"`);
+      expect(run.result.text).toContain(`id="${ref.id}"`);
+    }
+  });
+
+  it('rejects an unreadable reference before any run is created', async () => {
+    const account = await createRecord('Account', `${MARKER} hidden ref`);
+    const id = await publishedAgent('record-refs-denied');
+    // The `use` role holds AIAgent:read only — no Account permission, so the Entity Engine refuses.
+    const created = await call('POST', `/api/v1/AIAgents/action/agents/${id}/runs`, useToken, {
+      input: {
+        text: 'Summarize these.',
+        records: [
+          { entity: 'Account', id: account },
+          { entity: 'Account', id: '00000000-0000-0000-0000-000000000000' },
+        ],
+      },
+    });
+    expect([400, 403, 404, 422]).toContain(created.status);
+    expect(created.body['id']).toBeUndefined();
+  });
+
+  it('keeps a legacy single-record run unchanged: metadata only, no record_context in the prompt', async () => {
+    const account = await createRecord('Account', `${MARKER} legacy ref`);
+    const id = await publishedAgent('record-legacy');
+    const created = await call('POST', `/api/v1/AIAgents/action/agents/${id}/runs`, ctx.adminToken, {
+      input: { text: '__FAKE_ECHO_PROMPT__', record: { entity: 'Account', id: account } },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const legacyRunId = String(created.body['id']);
+    runIds.push(legacyRunId);
+
+    const executed = await executeRun(legacyRunId);
+    const run = executed.body['run'] as { status: string; result: { text: string } };
+    expect(run.status).toBe('succeeded');
+    // Single `record` stays the metadata shorthand it always was: stored on the run, bound to the
+    // conversation, but not rendered into the prompt — only `records` reaches the model.
+    expect(run.result.text).not.toContain('record_context');
+    const stored = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select('input')
+      .where('id', '=', legacyRunId)
+      .executeTakeFirst();
+    const storedInput = stored?.input as { record?: { entity: string; id: string } };
+    expect(storedInput.record).toEqual({ entity: 'Account', id: account });
+  });
+});

@@ -1,8 +1,11 @@
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { AppError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { EntityCrudService, ListQuery } from '../entity/entity.service.js';
 import { EntityCrudService as EntityService } from '../entity/entity.service.js';
+import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.10 — Read-Only CRM Tools and Safe Query Plans
@@ -99,8 +102,18 @@ interface QueryCriterionPayload {
 
 @Injectable()
 export class CRMChatQueryService {
+  /**
+   * 19-CHAT.25 — in-flight queries per user, the enforcement behind
+   * `limits.maxConcurrentQueries`. The map lives on the singleton service, so the count survives
+   * across requests; a leaked slot is bounded by the request's own lifetime (the `finally` always
+   * releases), and a process crash resets it — the honest failure mode of an in-memory gate.
+   */
+  private readonly inFlight = new Map<string, number>();
+
   constructor(
     @Inject(EntityService) private readonly entities: EntityCrudService,
+    @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
   /**
@@ -108,34 +121,62 @@ export class CRMChatQueryService {
    * Delegates to EntityCrudService which enforces ACL and validates against metadata.
    */
   async executeQuery(plan: QueryPlan): Promise<QueryResult> {
-    this.validateQueryPlan(plan);
+    const limits = (await this.settings.settings()).limits;
+    this.validateQueryPlan(plan, limits.maxQueryResults);
+    const release = this.acquireSlot(limits.maxConcurrentQueries);
+    try {
+      const limit = Math.min(plan.limit ?? DEFAULT_LIMIT, limits.maxQueryResults);
+      const offset = plan.offset ?? 0;
 
-    const limit = Math.min(plan.limit ?? DEFAULT_LIMIT, MAX_LIST_SIZE);
-    const offset = plan.offset ?? 0;
+      const query: ListQuery = { maxSize: limit, offset };
 
-    const query: ListQuery = { maxSize: limit, offset };
+      if (plan.fields && plan.fields.length > 0) {
+        query.select = [...plan.fields];
+      }
 
-    if (plan.fields && plan.fields.length > 0) {
-      query.select = [...plan.fields];
+      const criteria = this.buildCriteria(plan.filters ?? {});
+      if (criteria.length > 0) {
+        query.where = criteria;
+      }
+
+      if (plan.sort) {
+        query.orderBy = [{ [plan.sort.field]: plan.sort.direction }];
+      }
+
+      const result = await this.entities.list(plan.entity, query);
+      const total = result.total ?? result.list.length;
+
+      return {
+        records: result.list,
+        total,
+        hasMore: result.list.length === limit && total > offset + limit,
+        queryTime: new Date().toISOString(),
+      };
+    } finally {
+      release();
     }
+  }
 
-    const criteria = this.buildCriteria(plan.filters ?? {});
-    if (criteria.length > 0) {
-      query.where = criteria;
+  /**
+   * Take one of the caller's concurrent-query slots, or refuse with 429 when the configured bound
+   * is already in use. The slot is released by the caller's `finally`, never by a timer.
+   */
+  private acquireSlot(maxConcurrent: number): () => void {
+    const userId = this.scope.userId ?? '';
+    const current = this.inFlight.get(userId) ?? 0;
+    if (current >= maxConcurrent) {
+      throw new AppError(
+        'RATE_LIMITED',
+        `You already have ${String(maxConcurrent)} queries running; wait for one to finish.`,
+        { maxConcurrentQueries: maxConcurrent },
+        429,
+      );
     }
-
-    if (plan.sort) {
-      query.orderBy = [{ [plan.sort.field]: plan.sort.direction }];
-    }
-
-    const result = await this.entities.list(plan.entity, query);
-    const total = result.total ?? result.list.length;
-
-    return {
-      records: result.list,
-      total,
-      hasMore: result.list.length === limit && total > offset + limit,
-      queryTime: new Date().toISOString(),
+    this.inFlight.set(userId, current + 1);
+    return () => {
+      const remaining = (this.inFlight.get(userId) ?? 1) - 1;
+      if (remaining <= 0) this.inFlight.delete(userId);
+      else this.inFlight.set(userId, remaining);
     };
   }
 
@@ -161,7 +202,8 @@ export class CRMChatQueryService {
   async searchRecords(entity: string, query: string, limit = 10): Promise<readonly RecordSummary[]> {
     this.validateEntityName(entity);
 
-    const safeLimit = Math.min(limit, MAX_LIST_SIZE);
+    const maxResults = Math.min(MAX_LIST_SIZE, (await this.settings.settings()).limits.maxQueryResults);
+    const safeLimit = Math.min(limit, maxResults);
     const normalizedQuery = query.trim();
 
     if (!normalizedQuery) return [];
@@ -181,13 +223,16 @@ export class CRMChatQueryService {
   }
 
   /**
-   * Validate a query plan against safety rules.
+   * Validate a query plan against safety rules. `maxResults` is the deployment's own bound
+   * (`limits.maxQueryResults`, itself capped by the hard `MAX_LIST_SIZE`), so an advertised limit
+   * is the limit that is enforced (19-CHAT.25).
    */
-  private validateQueryPlan(plan: QueryPlan): void {
+  private validateQueryPlan(plan: QueryPlan, maxQueryResults: number): void {
     this.validateEntityName(plan.entity);
 
-    if (plan.limit !== undefined && (plan.limit < 0 || plan.limit > MAX_LIST_SIZE)) {
-      throw new ValidationError(`Limit must be between 0 and ${MAX_LIST_SIZE}, got ${plan.limit}.`, {
+    const maxResults = Math.min(MAX_LIST_SIZE, maxQueryResults);
+    if (plan.limit !== undefined && (plan.limit < 0 || plan.limit > maxResults)) {
+      throw new ValidationError(`Limit must be between 0 and ${String(maxResults)}, got ${plan.limit}.`, {
         field: 'limit',
       });
     }

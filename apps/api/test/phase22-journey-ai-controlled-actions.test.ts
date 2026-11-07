@@ -218,7 +218,7 @@ beforeAll(async () => {
     assistant: { agentKey: AGENT_KEY },
     execution: { mode: 'inline' },
     safety: { allowWrites: true },
-    limits: { maxActiveTurnsPerUser: 5, maxContextRefs: 10 },
+    limits: { maxActiveTurnsPerUser: 5, maxContextRefs: 10, maxTurnsPerMinute: 60 },
   });
   expect(chatSettings.status, JSON.stringify(chatSettings.body)).toBe(200);
 

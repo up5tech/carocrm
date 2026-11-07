@@ -121,6 +121,158 @@ export class CRMChatCitationService {
     return persisted.map((row) => this.toView(row));
   }
 
+  /**
+   * Phase 19-CHAT.28 — citations for a whole page of messages in a bounded number of reads.
+   *
+   * `forMessage` re-reads one message at a time; a 30-message page would cost one citation query and
+   * one Entity Engine read per message. This batch does instead:
+   *
+   *  1. one `crm_chat_citations` query for every message on the page;
+   *  2. one `EntityCrudService.list` per *distinct entity* for every record reference still needing
+   *     materialisation (the `id in (…)` criterion keeps it a single store query, ACL predicate
+   *     included); handbook references go through `DocsService` once each, bounded by the page's
+   *     reference count;
+   *  3. one multi-row `INSERT … ON CONFLICT DO NOTHING` for everything materialised;
+   *  4. one final `crm_chat_citations` query for the messages that were materialised, so a
+   *     concurrent winner's rows are what the caller sees — the same honesty `forMessage` keeps.
+   *
+   * Entity reads are batched by entity type, never by record: the statement count grows with the
+   * number of *kinds* of thing cited, not with the number of messages or references.
+   */
+  async forMessages(messages: readonly AIAgentMessagesTable[]): Promise<Map<string, CRMChatCitationView[]>> {
+    const out = new Map<string, CRMChatCitationView[]>();
+    if (messages.length === 0) return out;
+
+    const messageIds = messages.map((message) => message.id);
+    const stored = await this.database.db
+      .selectFrom('crm_chat_citations')
+      .selectAll()
+      .where('message_id', 'in', messageIds)
+      .orderBy('ordinal', 'asc')
+      .execute();
+    const storedByMessage = new Map<string, CRMChatCitationsTable[]>();
+    for (const row of stored) {
+      const list = storedByMessage.get(row.message_id) ?? [];
+      list.push(row);
+      storedByMessage.set(row.message_id, list);
+    }
+
+    const pending = messages.filter((message) => !storedByMessage.has(message.id));
+    const refsByMessage = new Map<string, readonly MessageReference[]>();
+    const recordIdsByEntity = new Map<string, Set<string>>();
+    for (const message of pending) {
+      const references = readReferences(message.content_meta);
+      refsByMessage.set(message.id, references);
+      for (const reference of references) {
+        if (reference.kind !== 'record') continue;
+        const ids = recordIdsByEntity.get(reference.entity) ?? new Set<string>();
+        ids.add(reference.id);
+        recordIdsByEntity.set(reference.entity, ids);
+      }
+    }
+
+    // One ACL-scoped read per entity type covers every record reference on the page. An entity the
+    // caller cannot read at all yields no records — the same "revoked → hidden" rule as `get`.
+    const records = new Map<string, Record<string, unknown>>();
+    for (const [entity, ids] of recordIdsByEntity) {
+      try {
+        const page = await this.entities.list(entity, {
+          where: { type: 'criterion', field: 'id', operator: 'in', value: [...ids] },
+          maxSize: ids.size,
+          total: false,
+        });
+        for (const record of page.list) {
+          const id = record['id'];
+          if (typeof id === 'string') records.set(`${entity}:${id}`, record);
+        }
+      } catch {
+        // Unknown or unreadable entity: every reference to it materialises as no citation.
+      }
+    }
+
+    const inserts: CRMChatCitationsTable[] = [];
+    const materializedMessageIds: string[] = [];
+    for (const message of pending) {
+      const references = refsByMessage.get(message.id) ?? [];
+      if (references.length === 0) {
+        out.set(message.id, []);
+        continue;
+      }
+      const rows: CRMChatCitationsTable[] = [];
+      let ordinal = 0;
+      for (const reference of references) {
+        const built =
+          reference.kind === 'help_document'
+            ? await this.buildHelpDocument(reference.key)
+            : this.buildRecordFrom(records.get(`${reference.entity}:${reference.id}`), reference.entity, reference.id);
+        if (built === null) continue;
+        rows.push({
+          id: `${message.id}:${String(ordinal)}`,
+          message_id: message.id,
+          conversation_id: message.conversation_id,
+          ordinal,
+          rechecked_at: new Date(),
+          created_at: new Date(),
+          ...built,
+        });
+        ordinal += 1;
+      }
+      if (rows.length > 0) {
+        inserts.push(...rows);
+        materializedMessageIds.push(message.id);
+      }
+      out.set(message.id, []);
+    }
+
+    if (inserts.length > 0) {
+      await this.database.db
+        .insertInto('crm_chat_citations')
+        .values(inserts)
+        .onConflict((oc) => oc.columns(['message_id', 'ordinal']).doNothing())
+        .execute();
+
+      const persisted = await this.database.db
+        .selectFrom('crm_chat_citations')
+        .selectAll()
+        .where('message_id', 'in', materializedMessageIds)
+        .orderBy('ordinal', 'asc')
+        .execute();
+      const persistedByMessage = new Map<string, CRMChatCitationsTable[]>();
+      for (const row of persisted) {
+        const list = persistedByMessage.get(row.message_id) ?? [];
+        list.push(row);
+        persistedByMessage.set(row.message_id, list);
+      }
+      for (const messageId of materializedMessageIds) {
+        out.set(messageId, (persistedByMessage.get(messageId) ?? []).map((row) => this.toView(row)));
+      }
+    }
+
+    for (const [messageId, rows] of storedByMessage) {
+      out.set(messageId, rows.map((row) => this.toView(row)));
+    }
+    return out;
+  }
+
+  /**
+   * A record citation from an already ACL-checked batch read, or nothing when the record was not in
+   * the readable set — which is exactly the set `entities.list` returned under the caller's rights.
+   */
+  private buildRecordFrom(
+    record: Record<string, unknown> | undefined,
+    entity: string,
+    id: string,
+  ): Pick<CRMChatCitationsTable, 'source_type' | 'entity' | 'record_id' | 'label' | 'route'> | null {
+    if (record === undefined) return null;
+    return {
+      source_type: 'crm_record',
+      entity,
+      record_id: id,
+      label: displayLabel(entity, record),
+      route: buildRoute(entity, id),
+    };
+  }
+
   /** A record citation, or nothing when the caller may no longer read the record. */
   private async buildRecord(
     entity: string,

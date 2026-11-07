@@ -8,8 +8,8 @@ import {
   SettingOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Descriptions, Divider, Drawer, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Tooltip, Typography } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { Alert, Button, Input, Skeleton, Space, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -22,7 +22,9 @@ import { usePageTitle } from '../components/PageHeader.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
 import { CRMChatComposer } from './crm-chat/CRMChatComposer.js';
+import { CRMChatDiagnosticsDrawer } from './crm-chat/CRMChatDiagnosticsDrawer.js';
 import { CRMChatMessageList } from './crm-chat/CRMChatMessageList.js';
+import { CRMChatSettingsModal } from './crm-chat/CRMChatSettingsModal.js';
 import { CRMChatSuggestions } from './crm-chat/CRMChatSuggestions.js';
 
 /**
@@ -54,7 +56,7 @@ function threadInitial(title: string | null): string {
 
 /**
  * Phase 19-CHAT.2 — the CRM Chat workspace shell
- * (plans/PLAN_Phase_19_CRM_Chat.md §6.1, §6.3, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §6.1, §6.3, §17 `19-CHAT.2`; decomposed in 19-CHAT.31).
  *
  * What this page is: the navigation surface, the state machine of "can this deployment chat at all?",
  * and the evidence for *why not* when it cannot. It issues two reads — capabilities and, on demand,
@@ -62,8 +64,10 @@ function threadInitial(title: string | null): string {
  *
  * The layout is a conversation workspace — rail, transcript, docked composer — because that is the
  * shape of the task. The capability, feature-flag and module facts that used to fill four cards
- * below the thread are still one click away in the diagnostics drawer: they answer "why can't I
- * send?", which is a question asked when something is wrong, not while reading an answer.
+ * below the thread are still one click away in the diagnostics drawer
+ * (`CRMChatDiagnosticsDrawer`): they answer "why can't I send?", which is a question asked when
+ * something is wrong, not while reading an answer. The administrator settings modal is
+ * `CRMChatSettingsModal`.
  *
  * What this page is not: an authorization boundary. Every endpoint behind it is gated on the server,
  * so a caller who types the URL without the capability gets `AUTHORIZATION_DENIED`, and a caller with
@@ -73,6 +77,7 @@ export function CRMChatPage() {
   usePageTitle(t('web.crmChat.title'));
   usePageDocs('user/chat-and-voice');
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [older, setOlder] = useState<readonly CRMChatMessageView[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -144,70 +149,8 @@ export function CRMChatPage() {
     }
   };
 
-  const queryClient = useQueryClient();
-  const [showSettings, setShowSettings] = useState(false);
-  const [assistantKey, setAssistantKey] = useState('');
-  const [executionMode, setExecutionMode] = useState<'queue' | 'inline'>('queue');
   const isAdmin = capabilities.data?.capabilities?.some((c) => c.key === 'admin' && c.granted) === true;
 
-  const settingsQuery = useQuery({
-    queryKey: ['crmChat', 'settings'],
-    queryFn: () => api.crmChatSettings(),
-    enabled: isAdmin,
-    staleTime: 15_000,
-    retry: false,
-  });
-
-  useEffect(() => {
-    const settings = settingsQuery.data?.settings as
-      | { assistant?: { agentKey?: string }; execution?: { mode?: string } }
-      | undefined;
-    const key = settings?.assistant?.agentKey;
-    if (typeof key === 'string') setAssistantKey(key);
-    if (settings?.execution?.mode === 'inline' || settings?.execution?.mode === 'queue') {
-      setExecutionMode(settings.execution.mode);
-    }
-  }, [settingsQuery.data]);
-
-  // The assistant is an AI Agent profile key, not a credential: list the published profiles so an
-  // administrator picks one instead of typing a key from memory. The stored value stays the key.
-  const assistantAgents = useQuery({
-    queryKey: ['crmChat', 'assistantAgents'],
-    queryFn: () => api.aiAgentsAgents({ status: 'published', maxSize: 50 }),
-    enabled: showSettings && isAdmin,
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const agentOptions = (assistantAgents.data?.list ?? []).map((agent) => ({
-    value: agent.key,
-    label: `${agent.name} (${agent.key})`,
-  }));
-  // A configured key may no longer be published (or readable); keep it selectable so saving another
-  // field never silently clears the current assistant.
-  if (assistantKey !== '' && !agentOptions.some((option) => option.value === assistantKey)) {
-    agentOptions.unshift({ value: assistantKey, label: assistantKey });
-  }
-
-  const saveSettings = useMutation({
-    mutationFn: () =>
-      api.crmChatUpdateSettings({
-        assistant: { agentKey: assistantKey.trim() },
-        execution: { mode: executionMode },
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['crmChat'] });
-      setShowSettings(false);
-    },
-  });
-
-  const health = useQuery({
-    queryKey: ['crmChat', 'health'],
-    queryFn: () => api.crmChatHealth(),
-    enabled: detailsOpen,
-    staleTime: 15_000,
-    retry: false,
-  });
   if (capabilities.isLoading) return <LoadingSkeleton rows={10} />;
   if (capabilities.isError) {
     if (capabilities.error instanceof ApiError && capabilities.error.status === 403) {
@@ -496,171 +439,14 @@ export function CRMChatPage() {
         </section>
       </div>
 
-      {/* Diagnostics: the capability, flag and module facts, plus the health checks. They explain
-          *why* the assistant cannot answer, so they live behind one button instead of under the
-          thread. */}
-      <Drawer
+      <CRMChatDiagnosticsDrawer
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
-        width={440}
-        title={t('web.crmChat.diagnosticsTitle')}
-        extra={
-          <Button size="small" loading={health.isFetching} onClick={() => void health.refetch()}>
-            {t('core.common.refresh')}
-          </Button>
-        }
-      >
-        <div className="carocrm-chat-panel">
-          {health.isLoading ? <LoadingSkeleton rows={4} /> : null}
-          {health.isError ? (
-            <ErrorState
-              message={health.error instanceof Error ? health.error.message : undefined}
-              onRetry={() => void health.refetch()}
-            />
-          ) : null}
-          {health.data !== undefined ? (
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              {health.data.checks.map((check) => (
-                <div key={check.name} className="carocrm-chat-fact">
-                  <div>
-                    <div className="carocrm-chat-fact-title">{check.name}</div>
-                    <div className="carocrm-chat-fact-desc">{check.detail}</div>
-                  </div>
-                  <Tag color={check.ok ? 'green' : 'red'}>{check.ok ? t('web.crmChat.featureOn') : t('web.crmChat.featureOff')}</Tag>
-                </div>
-              ))}
-              {health.data.settings.warnings.map((warning) => (
-                <Alert key={warning} type="warning" showIcon message={warning} />
-              ))}
-            </Space>
-          ) : null}
-        </div>
-
-        <div className="carocrm-chat-panel">
-          <h3 className="carocrm-chat-panel-title">{t('web.crmChat.capabilitiesTitle')}</h3>
-          {data.capabilities.map((capability) => (
-            <div key={capability.key} className="carocrm-chat-fact">
-              <div>
-                <div className="carocrm-chat-fact-title">{capability.label}</div>
-                <div className="carocrm-chat-fact-desc">{capability.description}</div>
-              </div>
-              <Tag color={capability.granted ? 'blue' : 'default'}>
-                {capability.granted ? t('web.crmChat.granted') : t('web.crmChat.notGranted')}
-              </Tag>
-            </div>
-          ))}
-        </div>
-
-        <div className="carocrm-chat-panel">
-          <h3 className="carocrm-chat-panel-title">{t('web.crmChat.featuresTitle')}</h3>
-          {data.features.map((feature) => (
-            <div key={feature.key} className="carocrm-chat-fact">
-              <div>
-                <div className="carocrm-chat-fact-title">{feature.label}</div>
-                <div className="carocrm-chat-fact-desc">{feature.description}</div>
-                <Typography.Text code style={{ fontSize: 11 }}>
-                  {feature.settingsPath}
-                </Typography.Text>
-              </div>
-              <Tag color={feature.effective ? 'green' : feature.enabled ? 'gold' : 'default'}>
-                {feature.effective
-                  ? t('web.crmChat.featureOn')
-                  : feature.enabled
-                    ? t('web.crmChat.featureInactive')
-                    : t('web.crmChat.featureOff')}
-              </Tag>
-            </div>
-          ))}
-        </div>
-
-        <div className="carocrm-chat-panel">
-          <h3 className="carocrm-chat-panel-title">{t('web.crmChat.moduleTitle')}</h3>
-          <Descriptions size="small" column={1}>
-            <Descriptions.Item label={t('web.crmChat.moduleVersionLabel')}>{data.module.version}</Descriptions.Item>
-            <Descriptions.Item label={t('web.crmChat.moduleApiLabel')}>
-              <Typography.Text code>{data.module.apiPrefix}</Typography.Text>
-            </Descriptions.Item>
-            <Descriptions.Item label={t('web.crmChat.moduleRouteLabel')}>
-              <Typography.Text code>{data.module.frontendRoute}</Typography.Text>
-            </Descriptions.Item>
-            <Descriptions.Item label={t('web.crmChat.modulePhasesLabel')}>
-              <Space size={4} wrap>
-                {data.module.implementedPhases.map((phase) => (
-                  <Tag key={phase}>{phase}</Tag>
-                ))}
-              </Space>
-            </Descriptions.Item>
-          </Descriptions>
-          <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
-            {t('web.crmChat.roadmapHint')}
-          </Typography.Text>
-        </div>
-      </Drawer>
-
-      <Modal
-        open={showSettings}
-        title={t('web.crmChat.settingsTitle')}
-        onCancel={() => setShowSettings(false)}
-        onOk={() => void saveSettings.mutate()}
-        confirmLoading={saveSettings.isPending}
-      >
-        <Form layout="vertical">
-          {assistantAgents.isError ? (
-            <Alert
-              type="error"
-              showIcon
-              message={t('web.crmChat.agentListFailed')}
-              style={{ marginBottom: 12 }}
-            />
-          ) : null}
-          <Form.Item label={t('web.crmChat.agentFieldLabel')}>
-            {assistantAgents.isError ? (
-              // A Chat administrator without AI Agents read access can still set the key by hand;
-              // the picker stays the default path whenever the list is readable.
-              <Input
-                value={assistantKey}
-                onChange={(event) => setAssistantKey(event.target.value)}
-                placeholder={t('web.crmChat.agentKeyInputPlaceholder')}
-              />
-            ) : (
-              <Select
-                showSearch
-                allowClear
-                optionFilterProp="label"
-                loading={assistantAgents.isLoading}
-                placeholder={t('web.crmChat.agentFieldPlaceholder')}
-                value={assistantKey === '' ? undefined : assistantKey}
-                options={agentOptions}
-                onChange={(value?: string) => setAssistantKey(value ?? '')}
-                notFoundContent={
-                  assistantAgents.isLoading ? undefined : t('web.crmChat.agentFieldEmpty')
-                }
-              />
-            )}
-          </Form.Item>
-          {settingsQuery.data?.warnings?.length ? (
-            <Alert type="warning" showIcon message={settingsQuery.data.warnings.map((w) => w.message).join('; ')} />
-          ) : null}
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('web.crmChat.agentFieldHint')}
-          </Typography.Text>
-          <Divider style={{ margin: '16px 0' }} />
-          <Form.Item label={t('web.crmChat.executionFieldLabel')}>
-            <Radio.Group
-              value={executionMode}
-              onChange={(event) => setExecutionMode(event.target.value as 'queue' | 'inline')}
-            >
-              <Space direction="vertical" size={4}>
-                <Radio value="queue">{t('web.crmChat.executionQueue')}</Radio>
-                <Radio value="inline">{t('web.crmChat.executionInline')}</Radio>
-              </Space>
-            </Radio.Group>
-          </Form.Item>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('web.crmChat.executionHint')}
-          </Typography.Text>
-        </Form>
-      </Modal>
+        data={data}
+      />
+      {isAdmin ? (
+        <CRMChatSettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      ) : null}
     </div>
   );
 }

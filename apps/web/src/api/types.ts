@@ -2984,7 +2984,6 @@ export type CRMChatStreamEventType =
   | 'turn.started'
   | 'tool.started'
   | 'tool.completed'
-  | 'citation.added'
   | 'action.proposed'
   | 'approval.required'
   | 'assistant.message'

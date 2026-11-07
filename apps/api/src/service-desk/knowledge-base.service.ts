@@ -46,15 +46,29 @@ export class KnowledgeBaseService {
     return this.toView(updated);
   }
 
-  /** Portal-safe list: only published, non-internal, in-date articles. */
-  async portalArticles(): Promise<KnowledgeArticleView[]> {
+  /**
+   * Portal-safe list: only published, non-internal, in-date articles.
+   *
+   * `limit` bounds the corpus scan for callers that score every article in memory (CRM Chat help
+   * retrieval, 19-CHAT.28). When given, the published/non-internal predicates are pushed into SQL so
+   * the limit applies to *eligible* articles — the newest `limit` of them — instead of an arbitrary
+   * prefix of the table. Callers that need the whole portal corpus omit it.
+   */
+  async portalArticles(limit?: number): Promise<KnowledgeArticleView[]> {
     await this.requireFeature();
-    const rows = await this.database.db
+    let query = this.database.db
       .selectFrom("entity_records")
       .select(["id", "attrs"])
       .where("entity_type", "=", KB_ARTICLE)
-      .where("deleted_at", "is", null)
-      .execute();
+      .where("deleted_at", "is", null);
+    if (limit !== undefined) {
+      query = query
+        .where(sql<boolean>`attrs->>'status' = 'Published'`)
+        .where(sql<boolean>`coalesce(attrs->>'isInternal', 'false') <> 'true'`)
+        .orderBy("created_at", "desc")
+        .limit(limit);
+    }
+    const rows = await query.execute();
     const now = new Date();
     const out: KnowledgeArticleView[] = [];
     for (const r of rows) {

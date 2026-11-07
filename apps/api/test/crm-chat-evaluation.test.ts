@@ -333,6 +333,8 @@ beforeAll(async () => {
     features: { workspace: true, readTools: true, helpRetrieval: true },
     assistant: { agentKey: assistantKeyFor(0) },
     execution: { mode: 'inline' },
+    // 19-CHAT.25 — the per-minute turn bound is enforced now; this suite submits dozens of turns.
+    limits: { maxTurnsPerMinute: 60, maxActiveTurnsPerUser: 5 },
   });
   expect(chatReady.status, JSON.stringify(chatReady.body)).toBe(200);
   activeAssistant = 0;

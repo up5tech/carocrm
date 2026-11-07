@@ -155,6 +155,14 @@ export const TERMINAL_RUN_STATUSES: ReadonlySet<RunStatus> = new Set([
 export const RUN_TRIGGERS = ['manual', 'record', 'event', 'schedule', 'integration'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
+/**
+ * 19-AI.28 — the documented maximum number of record references one text-mode run may carry.
+ * Every reference is ACL-checked at creation and again when the prompt is built, so the bound
+ * exists to keep prompt size and entity reads finite, not to ration a feature. Lives in this leaf
+ * module so the request DTO can share it without importing the run engine (which would cycle).
+ */
+export const MAX_RUN_RECORD_REFS = 8;
+
 /** The worker job name a scheduled agent firing enqueues (19-AI.17). */
 export const AI_AGENT_SCHEDULE_JOB = 'aiAgents.triggerSchedule';
 
