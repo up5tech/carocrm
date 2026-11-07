@@ -34,6 +34,40 @@ const DEFAULT_LIMITS = {
   temperature: 0.2,
 } as const;
 
+/**
+ * The server's `message` is a localized category ("Validation failed."); the explanation the
+ * operator needs travels in `details.reason` / `details.issues` (same convention as
+ * `AIAgentsProvidersTab` and `CampaignLifecycleActions`). A bare category toast left the user
+ * unable to tell *which* field or check refused the save/publish, so this prefers the server's
+ * specific reason and then every issue as `path: message`, falling back to the category only
+ * when the API supplied nothing more.
+ */
+export function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    const details = (error as Error & { details?: Record<string, unknown> }).details;
+    const parts: string[] = [];
+    const reason = details?.['reason'];
+    if (typeof reason === 'string' && reason.trim() !== '') parts.push(reason.trim());
+    const rawIssues = details?.['issues'];
+    if (Array.isArray(rawIssues)) {
+      for (const issue of rawIssues) {
+        if (typeof issue === 'string') {
+          if (issue.trim() !== '') parts.push(issue.trim());
+        } else if (typeof issue === 'object' && issue !== null) {
+          const record = issue as { path?: unknown; message?: unknown };
+          if (typeof record.message === 'string' && record.message.trim() !== '') {
+            const label = typeof record.path === 'string' && record.path !== '' ? `${record.path}: ` : '';
+            parts.push(`${label}${record.message.trim()}`);
+          }
+        }
+      }
+    }
+    if (parts.length > 0) return parts.join('\n');
+    return error.message;
+  }
+  return String(error);
+}
+
 interface AgentFormValues {
   key: string;
   name: string;
@@ -146,7 +180,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       refresh();
       setDetailId(agent.id);
     },
-    onError: (error: Error) => void message.error(error.message),
+    onError: (error: Error) => void message.error(errorText(error), 8),
   });
 
   const publish = useMutation({
@@ -157,7 +191,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       setPublishNote('');
       refresh();
     },
-    onError: (error: Error) => void message.error(error.message),
+    onError: (error: Error) => void message.error(errorText(error), 8),
   });
 
   const lifecycle = useMutation({
@@ -172,7 +206,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       void message.success(t('web.aiAgents.agentNow', { status: agent.status }));
       refresh();
     },
-    onError: (error: Error) => void message.error(error.message),
+    onError: (error: Error) => void message.error(errorText(error), 8),
   });
 
   const runConversations = useQuery({
@@ -192,7 +226,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       void queryClient.invalidateQueries({ queryKey: ['aiAgents', 'runs'] });
       onOpenRun(run.id);
     },
-    onError: (error: Error) => void message.error(error.message),
+    onError: (error: Error) => void message.error(errorText(error), 8),
   });
 
   useEffect(() => {
@@ -336,7 +370,12 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
         ]}
       />
 
+      {/*
+        The editor/publish/run modals open on top of the detail Drawer (both default to z-index
+        1000, and the Drawer is later in the tree, so it covered the modal). Stack them above it.
+      */}
       <Modal
+        zIndex={1100}
         open={editorOpen}
         title={editing === undefined ? t('web.aiAgents.newAgent') : t('web.aiAgents.editDraft')}
         onCancel={() => {
@@ -648,6 +687,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       </Drawer>
 
       <Modal
+        zIndex={1100}
         open={publishOpen}
         title={t('web.aiAgents.publishTitle')}
         okText={t('web.aiAgents.publish')}
@@ -669,6 +709,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       </Modal>
 
       <Modal
+        zIndex={1100}
         open={runOpen}
         title={t('web.aiAgents.runAgent')}
         okText={t('web.aiAgents.startRun')}
@@ -740,7 +781,7 @@ function ValidationPanel({
         type="warning"
         showIcon
         message={t('web.aiAgents.validationUnavailable')}
-        description={error instanceof Error ? error.message : undefined}
+        description={errorText(error)}
       />
     );
   }
