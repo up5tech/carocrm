@@ -332,11 +332,57 @@ export interface AgentConfigIssue {
   readonly message: string;
 }
 
+/**
+ * Drafts written before the typed schema landed used a flatter shape:
+ * `{ model: { provider, model }, instructions, tools }`. Those rows still sit in
+ * `ai_agents.draft_config` (e.g. the seeded "Sales Copilot"), and the strict schema rejects
+ * them with "Unrecognized keys", surfacing as a bare "Validation failed" on validate/publish
+ * with no actionable detail. Normalise the legacy keys into the current shape before parsing —
+ * only when the current keys are absent, so a config that already uses the new shape is never
+ * rewritten, and unknown keys still fail validation as before.
+ */
+function normalizeLegacyAgentConfig(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const raw = value as Record<string, unknown>;
+  if (!('model' in raw) && !('instructions' in raw)) return value;
+  const out: Record<string, unknown> = { ...raw };
+  const model = raw['model'];
+  if (
+    out['provider'] === undefined &&
+    typeof model === 'object' &&
+    model !== null &&
+    !Array.isArray(model) &&
+    typeof (model as Record<string, unknown>)['provider'] === 'string' &&
+    typeof (model as Record<string, unknown>)['model'] === 'string'
+  ) {
+    out['provider'] = {
+      key: (model as Record<string, unknown>)['provider'],
+      model: (model as Record<string, unknown>)['model'],
+      fallbackModels: [],
+    };
+  }
+  // A legacy `model` block next to a current `provider` is redundant; drop it rather
+  // than failing the strict parse on the old key.
+  if (out['provider'] !== undefined && 'model' in out) delete out['model'];
+  if (typeof raw['instructions'] === 'string') {
+    const prompt =
+      typeof out['prompt'] === 'object' && out['prompt'] !== null && !Array.isArray(out['prompt'])
+        ? { ...(out['prompt'] as Record<string, unknown>) }
+        : {};
+    if (typeof prompt['system'] !== 'string' || prompt['system'].trim() === '') {
+      prompt['system'] = raw['instructions'];
+      out['prompt'] = prompt;
+    }
+    delete out['instructions'];
+  }
+  return out;
+}
+
 /** Parse a draft or a stored snapshot. The caller decides whether an issue is fatal. */
 export function parseAgentConfig(
   value: unknown,
 ): { ok: true; config: AgentConfig } | { ok: false; issues: AgentConfigIssue[] } {
-  const parsed = AgentConfigSchema.safeParse(value);
+  const parsed = AgentConfigSchema.safeParse(normalizeLegacyAgentConfig(value));
   if (!parsed.success) {
     return {
       ok: false,
