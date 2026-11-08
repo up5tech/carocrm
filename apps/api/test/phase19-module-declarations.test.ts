@@ -32,7 +32,7 @@ const DECLARED: Record<string, readonly string[]> = {
   AIAgents: [
     '19-AI.0', '19-AI.1', '19-AI.2', '19-AI.3', '19-AI.4', '19-AI.5', '19-AI.6', '19-AI.7', '19-AI.8',
     '19-AI.9', '19-AI.10', '19-AI.11', '19-AI.12', '19-AI.13', '19-AI.14', '19-AI.17', '19-AI.18',
-    '19-AI.19', '19-AI.20', '19-AI.21',
+    '19-AI.19', '19-AI.20', '19-AI.21', '19-AI.28',
   ],
   CRMChat: [
     '19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4', '19-CHAT.5', '19-CHAT.6',

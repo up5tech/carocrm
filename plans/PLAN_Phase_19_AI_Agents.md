@@ -7,7 +7,7 @@
 > (2026-11-06 morning), schedule and integration triggers (2026-11-06); 19-AI.18 is half delivered.**
 > **Post-release hardening 19-AI.21 → 19-AI.28 (audit 2026-11-07, §24 below; findings corrected the
 > same day after a source-level review): 19-AI.21 and 19-AI.28 shipped (21 on 2026-11-07, 28 on
-> 2026-11-08); 19-AI.22 → 19-AI.24, 19-AI.26 and 19-AI.27 are shipped; 19-AI.25 is planned, not yet implemented.**
+> 2026-11-08); 19-AI.22 → 19-AI.24, 19-AI.25, 19-AI.26 and 19-AI.27 are shipped.**
 > **Plan revision:** 2026-11-07 — §24 added, then corrected (see "Audit corrections" in §24), then
 > 19-AI.21 delivered (see the phase entry).
 > This header was corrected
@@ -1538,7 +1538,7 @@ The module is complete only when all applicable criteria below are met.
 
 ## 23. Final Instructions to the Coding Agent
 
-1. Phases 19-AI.0 → 19-AI.21 are the delivered set (see the header for exceptions); do not re-implement them and do not extend them in place. Start with the next open phase in §24 (currently **19-AI.22**) and implement **one phase at a time**; do not begin the whole hardening backlog at once.
+1. Phases 19-AI.0 → 19-AI.21 and the §24 hardening slice 19-AI.21 → 19-AI.28 are the delivered set (see the header for exceptions); do not re-implement them and do not extend them in place. The hardening backlog is complete; any further work starts a new phase.
 2. Read `plans/PLAN.md` and `AGENTS.MD`; their repository conventions and database-safety rules are mandatory.
 3. Inspect the actual codebase and provide the repository audit, dependency map, feature gaps, migration proposal, and safe verification commands.
 4. Use the exact module name `AIAgents`; do not introduce a `Ua` prefix.
@@ -1694,7 +1694,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.25 — Decompose the Run Service and Tool Registry (P3)
+### Phase 19-AI.25 — Decompose the Run Service and Tool Registry (P3) — **Shipped 2026-11-08**
 
 **Finding:** `ai-agent-runs.service.ts` is 2,850 lines (create + execute loop + lease claim + retry/cancel/input/resume + three trigger doors + usage + budget check) and `ai-agent-tools.ts` is 1,912 (registry + 15 handlers + inline Zod schemas). Pure size/maintainability debt; no behaviour change intended.
 
