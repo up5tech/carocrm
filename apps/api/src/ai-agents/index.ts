@@ -5,6 +5,7 @@ import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AIAgentReportToolContribution, AIAgentStaleRecordsToolContribution } from './ai-agent-intelligence-tools.contribution.js';
+import { AIAgentMcpDirectService } from './ai-agent-mcp-direct.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
@@ -33,6 +34,7 @@ export { AIAgentError, aiApprovalSecondApproverRequiredError, aiApprovalSelfAppr
 export { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 export { AIAgentReportToolContribution, AIAgentStaleRecordsToolContribution } from './ai-agent-intelligence-tools.contribution.js';
 export { AI_AGENT_RETENTION_JOB, AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
+export { AIAgentMcpDirectService } from './ai-agent-mcp-direct.service.js';
 export { AIAgentMemoryService } from './ai-agent-memory.service.js';
 export type { PeriodToken, ResolvedPeriod } from './ai-agent-periods.js';
 export { isPeriodToken, localDateString, PERIOD_TOKENS, resolvePeriod } from './ai-agent-periods.js';
@@ -80,6 +82,7 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentQuotaService,
   AIAgentRunService,
   AIAgentApprovalService,
+  AIAgentMcpDirectService,
   AIProviderConnectionService,
   AIProviderGateway,
   AnthropicProviderAdapter,

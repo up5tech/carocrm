@@ -1053,6 +1053,18 @@ export interface AIAgentEvalCasesTable {
 }
 
 /** Phase 19-AI.14 — one evaluation run of one configuration checksum against one suite. */
+/** 19-AI.23 — idempotency receipt for MCP direct tool calls (no run exists to dedup on). */
+export interface AIAgentMcpDirectCallsTable {
+  id: string;
+  principal_id: string;
+  idempotency_key: string;
+  tool_key: string;
+  argument_hash: string;
+  call_id: string;
+  result: unknown;
+  created_at: Date;
+}
+
 export interface AIAgentEvalRunsTable {
   id: string;
   agent_id: string;
@@ -1688,6 +1700,7 @@ export interface Database {
   ai_agent_eval_suites: AIAgentEvalSuitesTable;
   ai_agent_eval_cases: AIAgentEvalCasesTable;
   ai_agent_eval_runs: AIAgentEvalRunsTable;
+  ai_agent_mcp_direct_calls: AIAgentMcpDirectCallsTable;
   crm_chat_citations: CRMChatCitationsTable;
   crm_chat_feedback: CRMChatFeedbackTable;
   crm_chat_prompts: CRMChatPromptsTable;

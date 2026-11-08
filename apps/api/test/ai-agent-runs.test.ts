@@ -42,6 +42,7 @@ const USER_DENY = `AGENT_TEST-ai5-deny-user-${runId}`;
 const USER_TOOLS = `AGENT_TEST-ai5-tools-user-${runId}`;
 const USER_APPROVE = `AGENT_TEST-ai5-approve-user-${runId}`;
 const PROVIDER_KEY = `agent-test-ai5-${runId}`;
+const FALLBACK_PROVIDER_KEY = `agent-test-ai5-fb-${runId}`;
 
 let ctx: ApiContext;
 let useToken = '';
@@ -279,6 +280,7 @@ afterAll(async () => {
     await db.deleteFrom('ai_agent_budget_policies').where('id', 'in', budgetPolicyIds).execute();
   }
   await db.deleteFrom('ai_provider_connections').where('key', '=', PROVIDER_KEY).execute();
+  await db.deleteFrom('ai_provider_connections').where('key', '=', FALLBACK_PROVIDER_KEY).execute();
   const testAgents = await db
     .selectFrom('ai_agents')
     .select('id')
@@ -1171,9 +1173,11 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
   it('reports usage from the run and provider ledgers', async () => {
     const usage = await call('GET', '/api/v1/AIAgents/action/usage', ctx.adminToken);
     expect(usage.status).toBe(200);
-    const totals = usage.body['totals'] as { runs: number; modelCalls: number; toolCalls: number };
+    const totals = usage.body['totals'] as { runs: number; modelCalls: number; toolCalls: number; ledgerWriteFailures: number };
     expect(totals.runs).toBeGreaterThan(0);
     expect(totals.modelCalls).toBeGreaterThan(0);
+    // 19-AI.24 — the dropped-ledger-write counter is always reported, even when it is zero.
+    expect(typeof totals.ledgerWriteFailures).toBe('number');
     expect(Array.isArray(usage.body['byProvider'])).toBe(true);
     expect((usage.body['byProvider'] as { providerKey: string }[]).some((entry) => entry.providerKey === PROVIDER_KEY)).toBe(true);
   });
@@ -1224,9 +1228,11 @@ describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
     expect(view.counters.estimatedCostUsd).toBeGreaterThan(0);
 
     const usage = await call('GET', '/api/v1/AIAgents/action/usage', ctx.adminToken);
-    const totals = usage.body['totals'] as { estimatedCostUsd: number; costLabel: string };
+    const totals = usage.body['totals'] as { estimatedCostUsd: number; costLabel: string; ledgerWriteFailures: number };
     expect(totals.costLabel).toBe('estimate');
     expect(totals.estimatedCostUsd).toBeGreaterThan(0);
+    // 19-AI.24 — with no dropped ledger writes the label stays a confident `estimate`.
+    expect(totals.ledgerWriteFailures).toBe(0);
 
     // A duplicate (provider, model) card is refused; replace updates it in place.
     const duplicate = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
@@ -2013,5 +2019,127 @@ describe('multi-reference run input (19-AI.28)', () => {
       .executeTakeFirst();
     const storedInput = stored?.input as { record?: { entity: string; id: string } };
     expect(storedInput.record).toEqual({ entity: 'Account', id: account });
+  });
+});
+
+describe('per-user run admission fairness (19-AI.22)', () => {
+  it('throttles a burst from one principal while another principal is unaffected', async () => {
+    const agentId = await publishedAgent('rate-cap');
+    // Two dedicated principals so the 60-second window starts empty for both.
+    const burstUser = await createTestUser(ctx, {
+      userName: `${USER_USE}-burst-${runId}`,
+      roleIds: [ROLE_USE],
+    });
+    const bystander = await createTestUser(ctx, {
+      userName: `${USER_USE}-bystander-${runId}`,
+      roleIds: [ROLE_USE],
+    });
+    createdUserIds.push(burstUser.id, bystander.id);
+
+    const before = await call('GET', '/api/v1/AIAgents/action/settings', ctx.adminToken);
+    const previous = Number(
+      ((before.body['settings'] as { limits?: { maxRunsPerUserPerMinute?: number } }).limits ?? {})
+        .maxRunsPerUserPerMinute ?? 30,
+    );
+    const patched = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+      limits: { maxRunsPerUserPerMinute: 2 },
+    });
+    expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+    try {
+      for (let i = 0; i < 2; i += 1) {
+        const created = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, burstUser.token, {
+          input: { text: 'burst' },
+        });
+        expect(created.status, JSON.stringify(created.body)).toBe(201);
+        runIds.push(String(created.body['id']));
+      }
+      const refused = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, burstUser.token, {
+        input: { text: 'burst' },
+      });
+      expect(refused.status).toBe(429);
+      expect(errorCode(refused)).toBe('RATE_LIMITED');
+
+      const other = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, bystander.token, {
+        input: { text: 'burst' },
+      });
+      expect(other.status, JSON.stringify(other.body)).toBe(201);
+      runIds.push(String(other.body['id']));
+    } finally {
+      await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+        limits: { maxRunsPerUserPerMinute: previous },
+      });
+    }
+  });
+});
+
+describe('provider fallback (19-AI.26)', () => {
+  it('tries fallbackModels in order only when the settings flag is on, and ledgers both attempts', async () => {
+    const provider = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {
+      kind: 'fake',
+      key: FALLBACK_PROVIDER_KEY,
+      label: `${MARKER} fallback provider`,
+      baseUrl: 'https://example.com/v1',
+      models: ['fake-model', 'fake-model-2'],
+      dataClasses: ['internal'],
+    });
+    expect(provider.status).toBe(201);
+
+    const fallbackConfig = baseConfig({
+      provider: { key: FALLBACK_PROVIDER_KEY, model: 'fake-model', fallbackModels: ['fake-model-2'] },
+    });
+    const patched = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+      provider: { fallbackEnabled: true },
+    });
+    expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+    try {
+      // Flag on: the primary fails, the fallback answers, and both attempts hit the ledger.
+      const { id } = await createAgent({ suffix: 'fallback-on', config: fallbackConfig });
+      expect((await publish(id)).status).toBe(200);
+      const created = await runAgent(id, '__FAKE_FAIL_MODEL__:fake-model hello');
+      const executed = await executeRun(String(created.body['id']));
+      const run = executed.body['run'] as {
+        status: string;
+        result: { format: string; text: string };
+      };
+      expect(run.status).toBe('succeeded');
+
+      const events = await call('GET', `/api/v1/AIAgents/action/runs/${String(created.body['id'])}/events`, ctx.adminToken);
+      const types = (events.body['list'] as { type: string }[]).map((event) => event.type);
+      expect(types).toContain('model.fallback');
+
+      const ledger = await ctx.database.db
+        .selectFrom('ai_agent_provider_requests')
+        .select(['model', 'outcome'])
+        .where('provider_key', '=', FALLBACK_PROVIDER_KEY)
+        .where('run_id', '=', String(created.body['id']))
+        .orderBy('created_at', 'asc')
+        .execute();
+      expect(ledger.map((row) => `${row.model}:${row.outcome}`)).toEqual([
+        'fake-model:failed',
+        'fake-model-2:succeeded',
+      ]);
+
+      // Flag off: identical config fails on the primary with no fallback attempt.
+      const off = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+        provider: { fallbackEnabled: false },
+      });
+      expect(off.status).toBe(200);
+      const { id: offId } = await createAgent({ suffix: 'fallback-off', config: fallbackConfig });
+      expect((await publish(offId)).status).toBe(200);
+      const offRun = await runAgent(offId, '__FAKE_FAIL_MODEL__:fake-model hello');
+      const offExecuted = await executeRun(String(offRun.body['id']));
+      expect((offExecuted.body['run'] as { status: string }).status).toBe('failed');
+      const offLedger = await ctx.database.db
+        .selectFrom('ai_agent_provider_requests')
+        .select(['model'])
+        .where('provider_key', '=', FALLBACK_PROVIDER_KEY)
+        .where('run_id', '=', String(offRun.body['id']))
+        .execute();
+      expect(offLedger.map((row) => row.model)).toEqual(['fake-model']);
+    } finally {
+      await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+        provider: { fallbackEnabled: false },
+      });
+    }
   });
 });

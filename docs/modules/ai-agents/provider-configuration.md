@@ -196,6 +196,42 @@ It does **not** store the prompt or the completion by default. `request_meta` co
 settings only. A ledger write failure is logged with the run id and never exposes request content; it
 does not fail a call whose tokens were already consumed.
 
+**Failure policy (19-AI.24, decided):** the ledger write stays best-effort — failing the caller after
+the provider already consumed tokens would invite a duplicate retry, which is the worse outcome. But a
+log line alone is not operator-visible, so every dropped write also appends a
+`run.ledger_write_failed` event to the affected run's event ledger (best-effort, `operator`
+visibility). `GET action/usage` counts those markers into `totals.ledgerWriteFailures` and reports
+`costLabel: 'unknown'` while any exist, so a missing row can never read as a confident `estimate` or
+a misleading `none`/`0`. No competing ledger and no second costing path: `ai-agent-pricing.service.ts`
+still owns snapshot → estimate.
+
+---
+
+## 7b. Provider fallback (19-AI.26)
+
+A published agent may declare `provider.fallbackModels` (same connection, validated against its
+allowlist at publication). Fallback is **off by default** (`settings.provider.fallbackEnabled`);
+with the flag off the runtime behaviour is identical to a single-model agent.
+
+When enabled, a model step tries the primary model first and then each fallback **in order, on the
+same connection**. A candidate keeps the normal bounded-retry behaviour; a provider error that
+survives its retries moves to the next candidate, recorded as a `model.fallback` run event. Every
+attempt — primary and fallback — is written to `ai_agent_provider_requests` with the actual
+provider/model, so audit and cost analysis see both. The model-call, token, cost and elapsed budgets
+are unchanged and bound the whole sequence; a fallback never duplicates a tool action because tool
+execution only happens after a successful model response.
+
+Policy limits, per §6.2/§6.3:
+
+- Fallback stays on the **same connection**, so it can never reach an unapproved provider, a
+  different credential, or a different residency boundary.
+- Only `AIProviderError` failures trigger a fallback. Validation, policy and permission errors are
+  not provider failures and never fall back.
+- Structured-output runs may fall back only to a model on a connection whose adapter supports
+  structured output — publication already refuses an agent whose provider cannot serve its output
+  mode, and `anthropic` (no structured output) therefore cannot be a fallback target for a JSON run.
+- The structured-answer repair turn always uses the primary model; fallback covers the main loop.
+
 ---
 
 ## 8. Adapters

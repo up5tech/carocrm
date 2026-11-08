@@ -353,6 +353,7 @@ export const AI_AGENTS_TABLES = [
   'ai_agent_eval_suites',
   'ai_agent_eval_cases',
   'ai_agent_eval_runs',
+  'ai_agent_mcp_direct_calls',
   'ai_provider_connections',
 ] as const;
 
@@ -410,6 +411,7 @@ export const AI_AGENTS_MODULE = {
     '19-AI.19',
     '19-AI.20',
     '19-AI.21',
+    '19-AI.28',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

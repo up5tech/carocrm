@@ -49,6 +49,12 @@ export const AIAgentsSettingsSchema = z
          * explicitly; the module never infers a provider from whichever connection happens to exist.
          */
         defaultKey: z.string().trim().max(64).default(''),
+        /**
+         * 19-AI.26 — provider fallback (§6.3). Off by default: when enabled, a published agent's
+         * `provider.fallbackModels` are tried in order after the primary model fails, on the same
+         * connection. Every attempt is ledgered with its actual model; run budgets are unchanged.
+         */
+        fallbackEnabled: z.boolean().default(false),
       })
       .strict()
       .prefault({}),
@@ -64,6 +70,13 @@ export const AIAgentsSettingsSchema = z
         maxRetries: z.number().int().min(0).max(5).default(2),
         maxConcurrency: z.number().int().min(1).max(20).default(2),
         maxResultBytes: z.number().int().min(1024).max(1_048_576).default(65_536),
+        /**
+         * 19-AI.22 — per-user run-creation fairness. The global `maxConcurrency` and the quota
+         * policies bound the instance, but without this one principal could consume the whole
+         * allowance. Enforced inside `createInternal`, so the manual door and every trigger door
+         * (event, schedule, integration) share the same cap, charged to the acting principal.
+         */
+        maxRunsPerUserPerMinute: z.number().int().min(1).max(600).default(120),
       })
       .strict()
       .prefault({}),

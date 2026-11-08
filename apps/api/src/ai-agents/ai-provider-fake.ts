@@ -65,6 +65,12 @@ export class FakeProviderAdapter implements AIProviderAdapter {
       const category = ERROR_CATEGORIES.has(error) ? (error as AIProviderErrorCategory) : 'unknown';
       throw new AIProviderError(category, providerErrorMessage(category, null));
     }
+    // 19-AI.26 test seam: `__FAKE_FAIL_MODEL__:<model>` fails only when the request targets that
+    // model, so a fallback test can fail the primary and still answer on the fallback.
+    const failModel = extract(prompt, '__FAKE_FAIL_MODEL__:');
+    if (failModel !== null && request.model === failModel) {
+      throw new AIProviderError('provider_unavailable', providerErrorMessage('provider_unavailable', null));
+    }
 
     const delay = Number(extract(prompt, '__FAKE_DELAY__:') ?? '0');
     if (Number.isFinite(delay) && delay > 0) {

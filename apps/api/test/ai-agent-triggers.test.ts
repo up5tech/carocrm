@@ -305,6 +305,57 @@ describe('the domain-event trigger door (19-AI.17)', () => {
     expect(await countRuns(EVENT_CREATE)).toBe(1);
   });
 
+  it('a trigger storm respects the same per-user cap (19-AI.22)', async () => {
+    // The event door runs as the agent owner (the admin). Count their creations inside the window
+    // and leave exactly one slot, so the first delivery starts and the second is refused.
+    const since = new Date(Date.now() - 60_000);
+    const row = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('initiated_by_user_id', '=', adminUserId)
+      .where('created_at', '>', since)
+      .executeTakeFirst();
+    const cap = Number(row?.count ?? 0) + 1;
+    const before = await call('GET', '/api/v1/AIAgents/action/settings', ctx.adminToken);
+    const previous = Number(
+      ((before.body['settings'] as { limits?: { maxRunsPerUserPerMinute?: number } }).limits ?? {})
+        .maxRunsPerUserPerMinute ?? 120,
+    );
+    const patched = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+      limits: { maxRunsPerUserPerMinute: cap },
+    });
+    expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+
+    const stormA = `evt-storm-a-${runId}`;
+    const stormB = `evt-storm-b-${runId}`;
+    eventIds.push(stormA, stormB);
+    try {
+      const first = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+        eventId: stormA,
+        eventType: 'entity.created',
+        entityType: 'Account',
+        entityId: accountId,
+      }, TEST_SECRET);
+      expect(first.status, JSON.stringify(first.body)).toBe(200);
+      expect(first.body['started']).toBe(1);
+
+      const second = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+        eventId: stormB,
+        eventType: 'entity.created',
+        entityType: 'Account',
+        entityId: accountId,
+      }, TEST_SECRET);
+      expect(second.status, JSON.stringify(second.body)).toBe(200);
+      expect(second.body['started']).toBe(0);
+      const errors = second.body['errors'] as { category: string }[];
+      expect(errors.some((entry) => entry.category === 'rate_limited')).toBe(true);
+    } finally {
+      await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+        limits: { maxRunsPerUserPerMinute: previous },
+      });
+    }
+  });
+
   it('does not start the agent for a non-listed event type', async () => {
     const before = await countRuns(EVENT_CREATE);
     const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {

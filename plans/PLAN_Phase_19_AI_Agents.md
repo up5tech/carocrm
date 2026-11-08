@@ -7,7 +7,7 @@
 > (2026-11-06 morning), schedule and integration triggers (2026-11-06); 19-AI.18 is half delivered.**
 > **Post-release hardening 19-AI.21 → 19-AI.28 (audit 2026-11-07, §24 below; findings corrected the
 > same day after a source-level review): 19-AI.21 and 19-AI.28 shipped (21 on 2026-11-07, 28 on
-> 2026-11-08); 19-AI.22 → 19-AI.27 are planned, not yet implemented.**
+> 2026-11-08); 19-AI.22 → 19-AI.24 and 19-AI.26 are shipped; 19-AI.25 and 19-AI.27 are planned, not yet implemented.**
 > **Plan revision:** 2026-11-07 — §24 added, then corrected (see "Audit corrections" in §24), then
 > 19-AI.21 delivered (see the phase entry).
 > This header was corrected
@@ -1643,7 +1643,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.22 — Per-User Run Admission Fairness (P2)
+### Phase 19-AI.22 — Per-User Run Admission Fairness (P2) — **Shipped 2026-11-08**
 
 **Finding (corrected):** Run creation is **not** unbounded — global rate limiting (600/min), the `limits.maxConcurrency` default of 2 (`ai-agent-runs.service.ts:451-460`) and the atomic quota re-check already bound it. The real gap is **per-user fairness**: one principal can consume the whole instance allowance, and there is no per-minute run-creation cap on the three trigger doors.
 
@@ -1659,7 +1659,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.23 — MCP Direct-Call Idempotency (P1)
+### Phase 19-AI.23 — MCP Direct-Call Idempotency (P1) — **Shipped 2026-11-08**
 
 **Finding:** `ai-agents.controller.ts:444` builds `idempotencyKey: mcp-${Date.now()}` with `runId: 'mcp-direct'`. The run pipeline deduplicates on `ai_agent_runs.idempotency_key` and `ai_agent_tool_calls(run_id, idempotency_key)`, but the MCP path inserts **neither** row, so retrying a `low_write` tool duplicates the effect. Approval-gated (`material_write` / `high_impact`) tools are already refused on this path (`:430-436`).
 
@@ -1678,7 +1678,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.24 — Ledger Failure Observability (P2)
+### Phase 19-AI.24 — Ledger Failure Observability (P2) — **Shipped 2026-11-08**
 
 **Finding (corrected):** `ai-provider-gateway.service.ts:37-39` deliberately makes the `ai_agent_provider_requests` write best-effort — failing the caller after tokens were consumed would invite a duplicate retry — and `:309-316` logs the failure with a correlation id. The estimate is not duplicated in the gateway: it calls `pricing.estimate()` from `ai-agent-pricing.service.ts`, while `ai-agent-quota.service.ts` only aggregates. The real gap is that **a log line is not an operator-visible signal**: a dropped ledger write can leave usage reporting with a plausible `0`.
 
@@ -1709,7 +1709,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.26 — Provider Fallback (P2)
+### Phase 19-AI.26 — Provider Fallback (P2) — **Shipped 2026-11-08**
 
 **Finding:** §6.3 allows a published agent to declare fallback models. `fallbackModels` is validated and persisted (`ai-agent-config.ts:176`, `ai-agent-definitions.service.ts:439-442,666`) but the runtime never reads it, so there is no cross-provider failover. (`failSafe` does not exist in this repository — see §24.1.)
 

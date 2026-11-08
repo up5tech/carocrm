@@ -1972,8 +1972,11 @@ export interface AIAgentUsageView {
     readonly inputTokens: number;
     readonly outputTokens: number;
     readonly estimatedCostUsd: number;
-    /** `estimate` when priced from an admin snapshot; `none` when no price data exists (19-AI.13). */
-    readonly costLabel: 'estimate' | 'none';
+    /** `estimate` when priced from an admin snapshot; `none` when no price data exists (19-AI.13);
+     * `unknown` when provider ledger writes were dropped (19-AI.24). */
+    readonly costLabel: 'estimate' | 'none' | 'unknown';
+    /** 19-AI.24 — provider ledger writes the gateway had to drop. */
+    readonly ledgerWriteFailures: number;
   };
   readonly byAgent: readonly {
     readonly agentId: string;

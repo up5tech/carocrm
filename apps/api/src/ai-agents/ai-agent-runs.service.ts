@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { FeatureDisabledError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { FeatureDisabledError, NotFoundError, RateLimitError, ValidationError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
-import type { Updateable } from 'kysely';
+import { sql, type Updateable } from 'kysely';
 
 import { AuthService } from '../auth/auth.service.js';
 import type { AuthenticatedPrincipal, RequestScope } from '../common/request-scope.js';
@@ -12,6 +12,7 @@ import type {
   AIAgentApprovalsTable,
   AIAgentRunsTable,
   AIAgentToolCallsTable,
+  Db,
 } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { EntityCrudService } from '../entity/entity.service.js';
@@ -33,6 +34,7 @@ import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
+import { appendRunEvent } from './ai-agent-run-events.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from './ai-agent-tools.js';
 import { AIToolRegistry, expectedTargetVersionsOf } from './ai-agent-tools.js';
 import { type AgentStatus, aiAgentScheduleId, MAX_RUN_RECORD_REFS, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
@@ -291,7 +293,9 @@ export class AIAgentRunService {
       inputTokens: number;
       outputTokens: number;
       estimatedCostUsd: number;
-      costLabel: 'estimate' | 'none';
+      costLabel: 'estimate' | 'none' | 'unknown';
+      /** 19-AI.24 — provider ledger writes the gateway had to drop; each one may understate cost. */
+      ledgerWriteFailures: number;
     };
     byAgent: { agentId: string; agentName: string; runs: number; modelCalls: number; toolCalls: number; tokens: number }[];
     byProvider: {
@@ -331,6 +335,15 @@ export class AIAgentRunService {
       .select(['provider_key', 'model', 'outcome', 'input_tokens', 'output_tokens', 'latency_ms', 'estimated_cost_usd'])
       .execute();
     const pricedRequests = providerRows.filter((row) => row.estimated_cost_usd !== null).length;
+    // 19-AI.24 — every dropped ledger write left a `run.ledger_write_failed` marker on its run;
+    // while any exist the totals can understate spend, so the label says `unknown`, never a
+    // confident `estimate` or a misleading `none`.
+    const ledgerFailures = await this.database.db
+      .selectFrom('ai_agent_run_events')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('event_type', '=', 'run.ledger_write_failed')
+      .executeTakeFirst();
+    const ledgerWriteFailures = Number(ledgerFailures?.count ?? 0);
     const byProvider = new Map<
       string,
       {
@@ -369,7 +382,8 @@ export class AIAgentRunService {
         inputTokens: runs.reduce((sum, run) => sum + run.input_tokens, 0),
         outputTokens: runs.reduce((sum, run) => sum + run.output_tokens, 0),
         estimatedCostUsd: providerRows.reduce((sum, row) => sum + Number(row.estimated_cost_usd ?? 0), 0),
-        costLabel: pricedRequests === 0 ? 'none' : 'estimate',
+        costLabel: ledgerWriteFailures > 0 ? 'unknown' : pricedRequests === 0 ? 'none' : 'estimate',
+        ledgerWriteFailures,
       },
       byAgent: [...byAgent.values()].sort((left, right) => right.runs - left.runs),
       byProvider: [...byProvider.values()]
@@ -482,6 +496,10 @@ export class AIAgentRunService {
       agentId: agent.id,
       providerKey: config.provider?.key ?? '',
     });
+    // 19-AI.22: per-user creation fairness — a cheap pre-check so a refused run never leaves an
+    // empty conversation thread; the serialized re-check inside the insert transaction is the
+    // guarantee (two concurrent creates cannot both take the last slot of the window).
+    await this.assertUserRunRateAllowed(this.database.db, principal.userId, settings.limits.maxRunsPerUserPerMinute, false);
 
     // A conversation is resolved only after the concurrency gate, so a refused run never leaves an
     // empty thread behind. Ownership, agent match and expiry are enforced inside the memory service.
@@ -507,6 +525,7 @@ export class AIAgentRunService {
           agentId: agent.id,
           providerKey: config.provider?.key ?? '',
         });
+        await this.assertUserRunRateAllowed(trx, principal.userId, settings.limits.maxRunsPerUserPerMinute, true);
         await trx
           .insertInto('ai_agent_runs')
           .values({
@@ -753,11 +772,13 @@ export class AIAgentRunService {
         const category =
           error instanceof FeatureDisabledError
             ? 'feature_disabled'
-            : error instanceof ValidationError
-              ? 'validation'
-              : error instanceof NotFoundError
-                ? 'not_found'
-                : 'internal_error';
+            : error instanceof RateLimitError
+              ? 'rate_limited'
+              : error instanceof ValidationError
+                ? 'validation'
+                : error instanceof NotFoundError
+                  ? 'not_found'
+                  : 'internal_error';
         errors.push({ agent: agent.agent_key, category });
       }
     }
@@ -846,9 +867,11 @@ export class AIAgentRunService {
       const category =
         error instanceof FeatureDisabledError
           ? 'feature_disabled'
-          : error instanceof ValidationError
-            ? 'validation'
-            : 'internal_error';
+          : error instanceof RateLimitError
+            ? 'rate_limited'
+            : error instanceof ValidationError
+              ? 'validation'
+              : 'internal_error';
       if (category === 'internal_error') {
         log.warn({ agentId: agent.id, err: error instanceof Error ? error.message : String(error) }, 'scheduled trigger run failed');
       }
@@ -961,11 +984,13 @@ export class AIAgentRunService {
         const category =
           error instanceof FeatureDisabledError
             ? 'feature_disabled'
-            : error instanceof ValidationError
-              ? 'validation'
-              : error instanceof NotFoundError
-                ? 'not_found'
-                : 'internal_error';
+            : error instanceof RateLimitError
+              ? 'rate_limited'
+              : error instanceof ValidationError
+                ? 'validation'
+                : error instanceof NotFoundError
+                  ? 'not_found'
+                  : 'internal_error';
         errors.push({ agent: agent.agent_key, category });
       }
     }
@@ -1243,7 +1268,7 @@ export class AIAgentRunService {
     try {
       await this.scope.runAs(
         principal,
-        () => this.drive(fresh, leaseOwner, settings.limits.maxElapsedSeconds),
+        () => this.drive(fresh, leaseOwner, settings.limits.maxElapsedSeconds, settings.provider.fallbackEnabled),
         `aiAgentRun:${runId}`,
       );
     } catch (error) {
@@ -1299,7 +1324,12 @@ export class AIAgentRunService {
   // the loop
   // -----------------------------------------------------------------------
 
-  private async drive(row: AIAgentRunsTable, leaseOwner: string, maxElapsedSeconds: number): Promise<void> {
+  private async drive(
+    row: AIAgentRunsTable,
+    leaseOwner: string,
+    maxElapsedSeconds: number,
+    providerFallbackEnabled: boolean,
+  ): Promise<void> {
     const interrupted = await this.reconcileInterruptedToolCalls(row.id);
     if (interrupted > 0) {
       await this.finish(row.id, 'outcome_unknown', {
@@ -1350,6 +1380,7 @@ export class AIAgentRunService {
       await this.finish(row.id, 'failed', { failureCategory: 'invalid_version', failureMessage: 'No provider was captured.' });
       return;
     }
+    const providerConfig = config.provider;
     const grants = await this.definitions.versionGrants(version.id);
     const grantByKey = new Map(grants.map((grant) => [grant.tool_key, grant]));
     const toolSpecs = [];
@@ -1430,11 +1461,23 @@ export class AIAgentRunService {
         return;
       }
 
+      // 19-AI.26 — with `provider.fallbackEnabled` the published `fallbackModels` are tried in
+      // order on the same connection after the primary fails; every attempt is ledgered with its
+      // actual model, and the model-call budget still bounds the whole sequence.
+      const candidates =
+        providerFallbackEnabled && providerConfig.fallbackModels.length > 0
+          ? [
+              { key: providerConfig.key, model: providerConfig.model },
+              ...providerConfig.fallbackModels
+                .filter((model) => model !== providerConfig.model)
+                .map((model) => ({ key: providerConfig.key, model })),
+            ]
+          : [{ key: providerConfig.key, model: providerConfig.model }];
       await this.renewLease(row.id, leaseOwner, maxElapsedSeconds, steps, modelCalls, toolCalls, inputTokens, outputTokens);
       const step = steps + 1;
       let response;
       try {
-        response = await this.requestModel(config.provider.key, {
+        response = await this.requestModel(candidates, {
           model: config.provider.model,
           messages: transcript,
           ...(toolSpecs.length === 0 ? {} : { tools: toolSpecs }),
@@ -1556,34 +1599,53 @@ export class AIAgentRunService {
   // model calls and answers
   // -------------------------------------------------------------------------
 
+  /**
+   * One model step across the candidate list (primary first, then any configured fallbacks —
+   * 19-AI.26). Each candidate keeps the existing bounded-retry behaviour; a provider error that
+   * survives its retries moves to the next candidate and is recorded as `model.fallback` so both
+   * attempts stay visible in the run timeline and the provider ledger. Non-provider errors
+   * (validation, policy) never trigger a fallback.
+   */
   private async requestModel(
-    connectionKey: string,
+    candidates: readonly { readonly key: string; readonly model: string }[],
     request: AIProviderRequest,
     row: AIAgentRunsTable,
     step: number,
     maxRetries: number,
     countAttempt: () => Promise<void>,
   ) {
-    let attempt = 0;
-    for (;;) {
-      await countAttempt();
-      try {
-        return await this.gateway.complete({
-          connectionKey,
-          request,
-          run: { runId: row.id, step, agentId: row.agent_id, agentVersion: row.agent_version },
-        });
-      } catch (error) {
-        if (!(error instanceof AIProviderError) || !error.retryable || attempt >= maxRetries) throw error;
-        attempt += 1;
-        await this.appendEvent(row.id, 'model', 'model.retry', `Retrying model call ${String(step)} (${error.category}).`, {
-          step,
-          attempt,
-          category: error.category,
-        });
-        await sleep(Math.min(2_000, 250 * 2 ** attempt));
+    for (const [index, candidate] of candidates.entries()) {
+      const next = candidates[index + 1];
+      let attempt = 0;
+      for (;;) {
+        await countAttempt();
+        try {
+          return await this.gateway.complete({
+            connectionKey: candidate.key,
+            request: { ...request, model: candidate.model },
+            run: { runId: row.id, step, agentId: row.agent_id, agentVersion: row.agent_version },
+          });
+        } catch (error) {
+          if (!(error instanceof AIProviderError)) throw error;
+          if (!error.retryable || attempt >= maxRetries) {
+            if (next === undefined) throw error;
+            await this.appendEvent(row.id, 'model', 'model.fallback',
+              `Model "${candidate.model}" failed (${error.category}); falling back to "${next.model}".`,
+              { step, fromModel: candidate.model, toModel: next.model, category: error.category });
+            break;
+          }
+          attempt += 1;
+          await this.appendEvent(row.id, 'model', 'model.retry', `Retrying model call ${String(step)} (${error.category}).`, {
+            step,
+            attempt,
+            category: error.category,
+          });
+          await sleep(Math.min(2_000, 250 * 2 ** attempt));
+        }
       }
     }
+    // Unreachable: the last candidate either returns or throws.
+    throw new AIProviderError('unknown', 'The model call failed for an unknown reason.');
   }
 
   /**
@@ -2620,43 +2682,8 @@ export class AIAgentRunService {
     payload: Record<string, unknown>,
     visibility: 'user' | 'operator' | 'admin' = 'operator',
   ): Promise<void> {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const id = randomUUID();
-      const now = new Date();
-      try {
-        const last = await this.database.db
-          .selectFrom('ai_agent_run_events')
-          .select((eb) => eb.fn.max('seq').as('seq'))
-          .where('run_id', '=', runId)
-          .executeTakeFirst();
-        const seq = Number(last?.seq ?? 0) + 1;
-        await this.database.db
-          .insertInto('ai_agent_run_events')
-          .values({
-            id,
-            run_id: runId,
-            seq,
-            category,
-            event_type: type,
-            actor_type: 'system',
-            actor_id: null,
-            correlation_id: null,
-            causation_id: null,
-            summary: summary.slice(0, 500),
-            payload: JSON.stringify(boundPayload(payload)),
-            visibility,
-            redaction: 'summary',
-            created_at: now,
-          })
-          .execute();
-        return;
-      } catch (error) {
-        if (!isUniqueViolation(error) || attempt === 2) {
-          log.warn({ runId, error: error instanceof Error ? error.message : 'unknown' }, 'run event could not be written');
-          return;
-        }
-      }
-    }
+    // 19-AI.24: the shared helper also serves the provider gateway's ledger-failure marker.
+    await appendRunEvent(this.database.db, { runId, category, type, summary, payload, visibility });
   }
 
   private async normalizeInput(
@@ -2731,6 +2758,34 @@ export class AIAgentRunService {
       refs.push({ entity, id });
     }
     return refs;
+  }
+
+  /**
+   * 19-AI.22 — per-user run-creation fairness. `maxConcurrency` bounds the instance and the quota
+   * policies bound spend, but neither stops one principal from consuming the whole creation
+   * allowance. The unlocked pass runs before conversation resolution so a refused run leaves no
+   * thread behind; the serialized pass takes a per-user advisory lock inside the insert transaction
+   * so two concurrent creates cannot both observe the last free slot of the window.
+   */
+  private async assertUserRunRateAllowed(
+    db: Db,
+    userId: string,
+    perMinute: number,
+    serialize: boolean,
+  ): Promise<void> {
+    if (serialize) {
+      await sql`select pg_advisory_xact_lock(hashtext(${userId}))`.execute(db);
+    }
+    const since = new Date(Date.now() - 60_000);
+    const row = await db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('initiated_by_user_id', '=', userId)
+      .where('created_at', '>', since)
+      .executeTakeFirst();
+    if (Number(row?.count ?? 0) >= perMinute) {
+      throw new RateLimitError(`At most ${String(perMinute)} agent runs may be started per minute.`);
+    }
   }
 
   private async runPrincipal(row: AIAgentRunsTable): Promise<AuthenticatedPrincipal | undefined> {
@@ -2848,7 +2903,8 @@ function parseRawArguments(raw: string): { ok: true; value: unknown } | { ok: fa
   }
 }
 
-function hashArguments(args: unknown): string {
+/** 19-AI.23 — exported so the MCP direct-call door hashes arguments identically. */
+export function hashArguments(args: unknown): string {
   return hashText(stableJson(args));
 }
 
@@ -2895,17 +2951,6 @@ function safeJson(value: unknown, maxChars: number): string {
     text = '"[unserializable]"';
   }
   return text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
-}
-
-function boundPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    if (typeof value === 'string') out[key] = value.slice(0, 400);
-    else if (typeof value === 'number' || typeof value === 'boolean' || value === null) out[key] = value;
-    else if (Array.isArray(value)) out[key] = value.slice(0, 20);
-    else if (typeof value === 'object') out[key] = JSON.parse(safeJson(value, 1_200)) as unknown;
-  }
-  return out;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

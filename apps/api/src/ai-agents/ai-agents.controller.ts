@@ -27,10 +27,11 @@ import type { ApprovalStatusFilter } from './ai-agent-approvals.service.js';
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
+import { AIAgentMcpDirectService } from './ai-agent-mcp-direct.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
-import { AIAgentRunService } from './ai-agent-runs.service.js';
+import { AIAgentRunService, hashArguments } from './ai-agent-runs.service.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
@@ -92,6 +93,7 @@ export class AIAgentsController {
     @Inject(AIAgentQuotaService) private readonly quotas: AIAgentQuotaService,
     @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
+    @Inject(AIAgentMcpDirectService) private readonly mcpDirect: AIAgentMcpDirectService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -417,6 +419,11 @@ export class AIAgentsController {
       .object({
         name: z.string().trim().min(1).max(120),
         arguments: z.record(z.string(), z.unknown()).optional(),
+        /**
+         * 19-AI.23 — required for write-capable tools so a retry cannot duplicate the effect;
+         * optional for read tools, which keep a generated key and are never receipted.
+         */
+        idempotencyKey: z.string().trim().min(1).max(200).optional(),
       })
       .strict();
     const input = parse(schema, body);
@@ -437,14 +444,64 @@ export class AIAgentsController {
     }
     const validated = def.inputSchema.parse(input.arguments ?? {});
     const principal = this.scope.requirePrincipal();
-    const context = {
-      runId: 'mcp-direct',
-      step: 0,
-      actorUserId: principal.userId,
-      idempotencyKey: `mcp-${Date.now()}`,
-    };
-    const result = await def.execute(validated, context as never);
-    return { content: [{ type: 'text', text: JSON.stringify(result.result) }], isError: false };
+
+    // 19-AI.23 — a write-capable call must carry a client key; without one a retry duplicates the
+    // effect. Read tools keep the generated key: they have no effect to deduplicate.
+    const writeCapable = def.effectClass !== 'read';
+    if (writeCapable && input.idempotencyKey === undefined) {
+      throw new ValidationError(
+        `Tool "${input.name}" changes data; supply idempotencyKey so a retry cannot duplicate the effect.`,
+        { tool: input.name, code: 'AI_IDEMPOTENCY_KEY_REQUIRED' },
+      );
+    }
+
+    if (!writeCapable) {
+      const context = {
+        runId: 'mcp-direct',
+        step: 0,
+        actorUserId: principal.userId,
+        idempotencyKey: `mcp-${Date.now()}`,
+      };
+      const result = await def.execute(validated, context as never);
+      return { content: [{ type: 'text', text: JSON.stringify(result.result) }], isError: false };
+    }
+
+    const idempotencyKey = input.idempotencyKey as string;
+    const claim = await this.mcpDirect.claim({
+      principalId: principal.userId,
+      idempotencyKey,
+      toolKey: input.name,
+      argumentHash: hashArguments(validated),
+    });
+    if (claim.kind === 'replay') {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(claim.result) }],
+        isError: false,
+        toolCallId: claim.callId,
+      };
+    }
+    try {
+      const context = {
+        runId: 'mcp-direct',
+        step: 0,
+        actorUserId: principal.userId,
+        idempotencyKey,
+      };
+      const result = await def.execute(validated, context as never);
+      await this.mcpDirect.complete({
+        principalId: principal.userId,
+        idempotencyKey,
+        result: result.result,
+      });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result.result) }],
+        isError: false,
+        toolCallId: claim.callId,
+      };
+    } catch (error) {
+      await this.mcpDirect.release({ principalId: principal.userId, idempotencyKey });
+      throw error;
+    }
   }
 
   /**

@@ -148,6 +148,10 @@ event type or entity starts nothing; re-delivery starts no second run; the run's
 - Budget is reserved/checked before each provider and tool call; hard limits stop safely.
 - Repeated identical calls and no-progress steps are detected and stop the run.
 - Rate limits on run creation, messages, approvals and public/integration endpoints.
+- `limits.maxRunsPerUserPerMinute` (default 120) caps how many runs one principal may create per
+  minute; it is enforced inside run creation, so the manual door and every trigger door
+  (event/schedule/integration) share the same per-user budget and a refusal answers `429
+  RATE_LIMITED`. Trigger doors record the refusal as `rate_limited`, not an internal error.
 - A global kill switch stops new runs without deleting history.
 
 **Tests:** budget exhaustion yields a partial result with a clear reason; a looping fake provider

@@ -6,6 +6,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
+import { appendRunEvent } from './ai-agent-run-events.js';
 import type { DataClass } from './ai-agents-module.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import {
@@ -316,6 +317,24 @@ export class AIProviderGateway {
         },
         'ai provider request could not be recorded',
       );
+      // 19-AI.24 — a log line alone is not an operator-visible signal: mark the run so usage
+      // reporting can say `cost_unknown` instead of letting a dropped row read as a known 0.
+      const run = entry.input.run;
+      if (run !== undefined) {
+        await appendRunEvent(this.database.db, {
+          runId: run.runId,
+          category: 'run',
+          type: 'run.ledger_write_failed',
+          summary: `The provider ledger write failed for "${entry.providerKey}"; this call's usage is unknown.`,
+          payload: {
+            providerKey: entry.providerKey,
+            model: entry.providerModel,
+            outcome: entry.outcome,
+            error: error instanceof Error ? error.message.slice(0, 200) : 'unknown',
+          },
+          visibility: 'operator',
+        });
+      }
     }
   }
 }
