@@ -101,13 +101,16 @@ function baseConfig(tools: readonly { key: string }[]): Record<string, unknown> 
 }
 
 /** A published agent holding exactly the intelligence tools. */
-async function toolAgent(suffix: string): Promise<string> {
+async function toolAgent(
+  suffix: string,
+  tools: readonly { key: string }[] = INTELLIGENCE_TOOLS.map((key) => ({ key })),
+): Promise<string> {
   const key = `agent-test-${runId}-intel-${suffix}`;
   const created = await call('POST', '/api/v1/AIAgents/action/agents', ctx.adminToken, {
     key,
     name: `${MARKER} agent ${suffix}`,
     visibility: 'organization',
-    config: baseConfig(INTELLIGENCE_TOOLS.map((k) => ({ key: k }))),
+    config: baseConfig(tools),
   });
   expect(created.status, JSON.stringify(created.body)).toBe(201);
   agentKeys.push(key);
@@ -603,5 +606,37 @@ describe('module intelligence tools (19-CHAT.23)', () => {
     const agentId = await toolAgent('strict-input');
     const outcome = await runTool(agentId, 'crm_lead_score', { leadId: 'x', escalate: 'y' }, toolsToken);
     expect(outcome.status, JSON.stringify(outcome)).not.toBe('succeeded');
+  });
+
+  // 19-AI.27 — cross-tenant-through-tools: the restricted caller holds `Account: read 'own'`, so
+  // neither the search list nor a direct read may reach a record they do not own, even though the
+  // agent itself is organization-visible and the tool grant is legitimate.
+  it('a caller with own-scope read cannot reach another user\'s records through the read tools', async () => {
+    const agentId = await toolAgent('own-scope-tools', [
+      { key: 'crm_search_records' },
+      { key: 'crm_read_record' },
+    ]);
+    const foreign = await createEntityRecord('Account', { name: `${MARKER} foreign account` });
+    const mine = await createEntityRecord('Account', { name: `${MARKER} own account` }, restrictedToken);
+
+    const search = await runTool(
+      agentId,
+      'crm_search_records',
+      {
+        entity: 'Account',
+        criteria: [{ field: 'name', operator: 'contains', value: MARKER }],
+        maxSize: 25,
+      },
+      restrictedToken,
+    );
+    expect(search.status, JSON.stringify(search)).toBe('succeeded');
+    const records = (search.result?.['records'] ?? []) as Record<string, unknown>[];
+    const ids = records.map((record) => String(record['id']));
+    expect(ids, 'the caller\'s own record must be visible').toContain(mine);
+    expect(ids, 'another user\'s record must not leak through search').not.toContain(foreign);
+
+    const read = await runTool(agentId, 'crm_read_record', { entity: 'Account', id: foreign }, restrictedToken);
+    expect(read.status, JSON.stringify(read)).not.toBe('succeeded');
+    expect(read.result ?? {}).not.toHaveProperty('record');
   });
 });

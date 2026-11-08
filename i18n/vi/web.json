@@ -2480,7 +2480,10 @@
     "providerGroupHosted": "Nhà cung cấp lưu trữ",
     "providerGroupSelfHosted": "Runtime tự host và cục bộ",
     "providerGroupOther": "Khác",
-    "noAccess": "Bạn không có quyền xem phần đánh giá."
+    "noAccess": "Bạn không có quyền xem phần đánh giá.",
+    "costUnknown": "không rõ",
+    "usageCostUnknown": "Chi phí đã ghi: ${cost} — có thể thiếu do lỗi ghi sổ",
+    "ledgerWriteFailures": "${count} lần ghi sổ thất bại"
   },
   "adminLayout": {
     "entityTitle": "Bản ghi",

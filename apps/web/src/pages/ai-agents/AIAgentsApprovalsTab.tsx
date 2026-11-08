@@ -218,7 +218,8 @@ export function AIAgentsApprovalsTab({ capabilities }: ApprovalsTabProps) {
   );
 }
 
-function ProposalView({ approval }: { readonly approval: AIAgentApprovalView }) {
+/** Exported for `AIAgentsHardeningTabs.test.tsx`: the proposal detail is the review surface. */
+export function ProposalView({ approval }: { readonly approval: AIAgentApprovalView }) {
   const proposal = asRecord(approval.proposal);
   const detail = asRecord(proposal['detail']);
   const before = asRecord(detail['before']);

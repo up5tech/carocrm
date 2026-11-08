@@ -106,6 +106,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
 
   const view: AIAgentUsageView = usage.data;
   const costIsEstimate = view.totals.costLabel === 'estimate';
+  const costIsUnknown = view.totals.costLabel === 'unknown';
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Row gutter={[12, 12]}>
@@ -134,11 +135,22 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {costIsEstimate
                   ? t('web.aiAgents.usageCostEstimate', { cost: view.totals.estimatedCostUsd.toFixed(4) })
-                  : t('web.aiAgents.usageCostRecorded', { cost: view.totals.estimatedCostUsd.toFixed(4) })}
+                  : costIsUnknown
+                    ? t('web.aiAgents.usageCostUnknown', { cost: view.totals.estimatedCostUsd.toFixed(4) })
+                    : t('web.aiAgents.usageCostRecorded', { cost: view.totals.estimatedCostUsd.toFixed(4) })}
               </Typography.Text>
-              <Tag color={costIsEstimate ? 'blue' : 'default'} style={{ fontSize: 11 }}>
-                {costIsEstimate ? t('web.aiAgents.costEstimate') : t('web.aiAgents.costNone')}
+              <Tag color={costIsEstimate ? 'blue' : costIsUnknown ? 'orange' : 'default'} style={{ fontSize: 11 }}>
+                {costIsEstimate
+                  ? t('web.aiAgents.costEstimate')
+                  : costIsUnknown
+                    ? t('web.aiAgents.costUnknown')
+                    : t('web.aiAgents.costNone')}
               </Tag>
+              {view.totals.ledgerWriteFailures > 0 ? (
+                <Tag color="red" style={{ fontSize: 11 }}>
+                  {t('web.aiAgents.ledgerWriteFailures', { count: String(view.totals.ledgerWriteFailures) })}
+                </Tag>
+              ) : null}
             </Space>
           </Card>
         </Col>

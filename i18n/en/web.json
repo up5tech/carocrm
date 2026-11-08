@@ -2480,7 +2480,10 @@
     "providerGroupHosted": "Hosted providers",
     "providerGroupSelfHosted": "Self-hosted and local runtimes",
     "providerGroupOther": "Other",
-    "noAccess": "You do not have permission to view evaluations."
+    "noAccess": "You do not have permission to view evaluations.",
+    "costUnknown": "unknown",
+    "usageCostUnknown": "Recorded cost: ${cost} — ledger gaps may understate it",
+    "ledgerWriteFailures": "${count} ledger write(s) failed"
   },
   "adminLayout": {
     "entityTitle": "Entity",

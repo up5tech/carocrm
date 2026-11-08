@@ -7,7 +7,7 @@
 > (2026-11-06 morning), schedule and integration triggers (2026-11-06); 19-AI.18 is half delivered.**
 > **Post-release hardening 19-AI.21 → 19-AI.28 (audit 2026-11-07, §24 below; findings corrected the
 > same day after a source-level review): 19-AI.21 and 19-AI.28 shipped (21 on 2026-11-07, 28 on
-> 2026-11-08); 19-AI.22 → 19-AI.24 and 19-AI.26 are shipped; 19-AI.25 and 19-AI.27 are planned, not yet implemented.**
+> 2026-11-08); 19-AI.22 → 19-AI.24, 19-AI.26 and 19-AI.27 are shipped; 19-AI.25 is planned, not yet implemented.**
 > **Plan revision:** 2026-11-07 — §24 added, then corrected (see "Audit corrections" in §24), then
 > 19-AI.21 delivered (see the phase entry).
 > This header was corrected
@@ -1723,7 +1723,7 @@ They stay recorded so a later reader does not implement a fix for a bug that doe
 
 ---
 
-### Phase 19-AI.27 — Test Coverage Consolidation (P2)
+### Phase 19-AI.27 — Test Coverage Consolidation (P2) — **Shipped 2026-11-08**
 
 **Finding (corrected):** Coverage is **not missing** (see §24.1): MCP calls, the SSRF allowlist and prompt injection are already asserted in three suites. What is genuinely thin is the frontend — only `AIAgentsAgentsTab.test.ts` (48 lines) — and the self-approval decision has no case until 19-AI.21 lands. There is no single dedicated adversarial file, which makes §11.2 evidence hard to find, not absent. No `high_impact` tool is registered (`ai-agents-module.ts:170`); the class is reserved, and this phase must not register one just to populate it.
 

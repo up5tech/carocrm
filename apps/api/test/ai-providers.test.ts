@@ -5,7 +5,6 @@ import { AnthropicProviderAdapter } from '../src/ai-agents/ai-provider-anthropic
 import { FakeProviderAdapter } from '../src/ai-agents/ai-provider-fake.js';
 import { OpenAICompatibleProviderAdapter } from '../src/ai-agents/ai-provider-openai-compatible.js';
 import { AI_PROVIDER_PRESETS, presetForConnection, providerPresets } from '../src/ai-agents/ai-provider-presets.js';
-import { assertSafeProviderBaseUrl, isPrivateAddress } from '../src/ai-agents/ai-provider-url.js';
 
 /**
  * Phase 19-AI.4 — provider contract tests (plans/PLAN_Phase_19_AI_Agents.md §6, §17.3, §18.1).
@@ -154,34 +153,6 @@ describe('fake adapter', () => {
     );
     expect(response.finishReason).toBe('tool_calls');
     expect(response.toolCalls[0]?.name).toBe('search');
-  });
-});
-
-describe('provider URL safety', () => {
-  it('allows http and https and rejects credentials and cloud metadata', async () => {
-    await expect(assertSafeProviderBaseUrl('http://example.com', { allowLoopback: false })).resolves.toBeDefined();
-    await expect(assertSafeProviderBaseUrl('https://example.com', { allowLoopback: false })).resolves.toBeDefined();
-    await expect(assertSafeProviderBaseUrl('https://user:pass@example.com', { allowLoopback: false })).rejects.toThrow(
-      /credentials/,
-    );    await expect(
-      assertSafeProviderBaseUrl('https://169.254.169.254/latest', { allowLoopback: false }),
-    ).rejects.toThrow(/metadata/);
-  });
-
-  it('rejects loopback unless the connection explicitly allows it', async () => {
-    await expect(assertSafeProviderBaseUrl('https://127.0.0.1', { allowLoopback: false })).rejects.toThrow(/loopback/);
-    const allowed = await assertSafeProviderBaseUrl('https://127.0.0.1:11434', { allowLoopback: true });
-    expect(allowed.loopback).toBe(true);
-  });
-
-  it('classifies private and public addresses', () => {
-    expect(isPrivateAddress('10.0.0.1')).toBe(true);
-    expect(isPrivateAddress('172.16.0.1')).toBe(true);
-    expect(isPrivateAddress('192.168.1.1')).toBe(true);
-    expect(isPrivateAddress('169.254.1.1')).toBe(true);
-    expect(isPrivateAddress('::1')).toBe(true);
-    expect(isPrivateAddress('fd00::1')).toBe(true);
-    expect(isPrivateAddress('8.8.8.8')).toBe(false);
   });
 });
 
