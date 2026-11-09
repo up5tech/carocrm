@@ -292,9 +292,20 @@ async function rawRequest(path: string, init: RequestInit, token: string | null)
   return fetch(`/api/v1${path}`, { ...init, headers, credentials: 'same-origin' });
 }
 
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]*)`));
+  return match && match[1] !== undefined ? decodeURIComponent(match[1]) : null;
+}
+
 /** Rotates the access token using the HttpOnly CRM-REFRESH cookie set at login. */
 export async function refreshAccessToken(): Promise<string | null> {
-  const response = await fetch('/api/v1/Refresh', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  // Phase 23.1 (C5): the refresh route is cookie-driven and @Public(), so the double-submit
+  // CSRF token must travel with it. CRM-CSRF is deliberately non-HttpOnly so the SPA can read it.
+  const csrf = readCookie('CRM-CSRF');
+  if (csrf) headers['x-csrf-token'] = csrf;
+  const response = await fetch('/api/v1/Refresh', { method: 'POST', credentials: 'same-origin', headers, body: '{}' });
   if (!response.ok) return null;
   const payload = (await response.json()) as { accessToken?: string };
   const token = typeof payload.accessToken === 'string' ? payload.accessToken : null;

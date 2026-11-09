@@ -497,7 +497,7 @@ before 23.5's adversarial suite, because the adversarial suite needs the async m
 | Every control and finding has a source path, a test/command reference, a label, a severity and an owner | **Met** — §2, §4 and `docs/security/security-controls-matrix.md` |
 | All seven §2.3 contradictions have an explicit resolution or a documented hypothesis | **Met** — §3, all seven resolved with evidence (C5 and C6 additionally by execution) |
 | No business data was modified; no code, configuration or CI file changed during the audit | **Met** — documentation only; the API and the database were read-only except for test-owned records |
-| Owner decisions are recorded; the next sub-phase starts only after review | **Met** — §6; **23.1 awaits review** |
+| Owner decisions are recorded; the next sub-phase starts only after review | **Met** — §6; **23.1 implemented** (see `docs/quality/phase-23-security-test-evidence.md`) |
 
 **Honest limitations of this baseline:**
 

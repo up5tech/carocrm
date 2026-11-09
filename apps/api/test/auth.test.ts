@@ -354,3 +354,46 @@ describe('access token verification failures', () => {
     expect(res.json().userName).toBe('admin');
   });
 });
+
+describe('cookie-driven refresh CSRF (phase 23.1)', () => {
+  it('rejects a cookie refresh without an x-csrf-token header', async () => {
+    const login = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Authentication',
+      payload: { userName: 'admin', password: 'admin' },
+    });
+    const cookies = login.headers['set-cookie'] as unknown as string[];
+    const session = cookies.find((c) => c.startsWith('CRM-SESSION='))?.split(';')[0];
+    const refresh = cookies.find((c) => c.startsWith('CRM-REFRESH='))?.split(';')[0];
+    expect(session).toBeTruthy();
+    expect(refresh).toBeTruthy();
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Refresh',
+      headers: { cookie: `${session}; ${refresh}` },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('accepts a cookie refresh with the matching x-csrf-token header', async () => {
+    const login = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Authentication',
+      payload: { userName: 'admin', password: 'admin' },
+    });
+    const cookies = login.headers['set-cookie'] as unknown as string[];
+    const refresh = cookies.find((c) => c.startsWith('CRM-REFRESH='))?.split(';')[0];
+    const csrfCookie = cookies.find((c) => c.startsWith('CRM-CSRF='))?.split(';')[0];
+    const csrfValue = csrfCookie?.split('=')[1];
+    expect(refresh).toBeTruthy();
+    expect(csrfValue).toBeTruthy();
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Refresh',
+      headers: { cookie: `${refresh}; ${csrfCookie}`, 'x-csrf-token': csrfValue as string },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(201);
+  });
+});

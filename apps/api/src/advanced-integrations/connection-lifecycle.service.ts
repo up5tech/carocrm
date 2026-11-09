@@ -410,6 +410,7 @@ export class ConnectionLifecycleService {
         detail: { kind: credential.kind },
       });
     }
+    await sql`update integration_connections set credential_reference_id = null, modified_at = now() where id = ${id}`.execute(this.database.db);
     const view = await this.transition(id, 'revoked');
     await this.audit.record({
       action: 'connection.revoked',
@@ -509,7 +510,7 @@ export class ConnectionLifecycleService {
   }): Promise<IntegrationConnectionView> {
     await this.permissions.assert('credentialAdmin');
     await this.requireRow(input.connectionId);
-    await this.vault.store({
+    const stored = await this.vault.store({
       connectionId: input.connectionId,
       kind: input.kind,
       value: input.value,
@@ -517,7 +518,7 @@ export class ConnectionLifecycleService {
     });
     await sql`
       update integration_connections set
-        credential_reference_id = ${input.connectionId},
+        credential_reference_id = ${stored.id},
         modified_at = now(),
         modified_by_id = ${this.scope.userId ?? null}
       where id = ${input.connectionId}

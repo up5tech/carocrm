@@ -62,7 +62,7 @@
 | G49 | `deletionPolicy: 'archive'` behaves exactly like `unlink` | advanced-integrations | Low | Open (found 22.14) |
 | G50 | A mapping asked for "the connection for this provider" gets one picked by name order | advanced-integrations | Medium | Open (found 22.14) |
 | G51 | The OAuth callback never compares the redirect URI its own comment claims it checks | advanced-integrations | Medium | Open (found 22.14) |
-| G52 | A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential | advanced-integrations | Low | Open (found 22.14) |
+| G52 | A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential | advanced-integrations | Low | Fixed (23.1) |
 | G53 | A delivery deferred by a paused connection or a disabled module is never picked up again | advanced-integrations | Medium | Open (found 22.14) |
 | G54 | An unexpected error sent its own text to the browser inside `details.reason` | platform / SPA | High | Fixed (22.15) |
 | G55 | A rejected save never marked the fields the server named | platform / SPA | Medium | Fixed (22.15) |
@@ -558,7 +558,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Module / contract:** advanced-integrations — `OAuthFlowService.complete` failure branch; `ConnectionLifecycleService` credential bookkeeping.
 - **Impact:** when the provider returns an `error` on the callback, the refusal message interpolates the provider's string — and that string is the one place an OAuth error response sometimes carries a code or a token fragment, which then reaches the operator's browser and whatever logs the message. Separately, `credential_reference_id` is written as the **connection's own id** rather than the credential row it is meant to reference, and it is not cleared when the credential is revoked, so the "reference" is a pointer that never pointed at anything and keeps pointing after the thing is gone; the module's own `secretHint()` helper (first two characters, mask, last two) is exported and never used, so an operator sees the credential *kind* and no recognizable hint.
 - **Expected vs observed:** expected — a refusal that carries a stable code and never the provider's raw words; a reference that identifies the row it names, and a hint that helps an operator recognise it. Observed — provider text in a message, and a column that duplicates `connection_id`.
-- **Status:** Open (found 22.14) — both are small and both touch what an operator reads, so they are grouped here for one deliberate pass. The journey asserts the part that matters today: no credential value appears in the connection, detail, runs, logs, health, metrics or audit trail — the *values* are safe; it is the reference and the echo that are wrong.
+- **Status:** Fixed (23.1) — provider error text no longer echoed; credential_reference_id now points at the stored credential row and is cleared on revoke.
 - **Remaining risk:** an error-tracking pipeline that logs API messages can capture a provider error string containing something it should not keep.
 
 ## G53 — A delivery deferred by a paused connection or a disabled module is never picked up again
@@ -810,14 +810,14 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 | G83 | Three worker doors cannot be called by the worker — they lack `@Public()`, so the global guard answers 401 before the capability check | sales / marketing-automation | Medium | Open (reproduced 23.0) |
 | G84 | The OAuth callback never compares a redirect URI, although its own comment says it does | advanced-integrations | Medium | Open |
 | G86 | Four independent SSRF validators, and one outbound fetch that follows redirects | platform / voice | Medium | Open |
-| G87 | Half-configured S3 credentials are silently dropped and the SDK falls back to its default credential chain | platform / files | Low | Open |
+| G87 | Half-configured S3 credentials are silently dropped and the SDK falls back to its default credential chain | platform / files | Low | Fixed (23.1) |
 | G88 | Every module system principal carries `sysAdmin`, so record ACL is bypassed for worker and public-intake writes (the concrete shape of F1) | platform | Medium | Open |
 | G89 | The worker's BPM/workflow handlers write CRM records through the worker's own DB access, bypassing the API's ACL layer | worker | Medium | Open |
 | G90 | The generated OpenAPI document is served without authentication and exposes the whole route surface | platform | Low | Open |
 | G91 | Readiness returns database reachability to an anonymous caller | platform | Low | Open |
 | G92 | The DB-free CI lane contains no API authorization assertion; the only SSRF suite is not in the include list | platform (CI) | Medium | Open |
 | G93 | The Phase 22.17 §7/§9 exception list drifted from this register after the 2026-11-03 fixes | platform (docs) | Low | **Fixed (23.0)** |
-| G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Open |
+| G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
 
 ## G83 — Three worker doors cannot be called by the worker
 
@@ -882,7 +882,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   either is blank, **both are dropped** and the AWS SDK falls back to its default credential chain. `S3_BUCKET` and
   `S3_REGION` *do* throw at boot, so the object store fails closed for those and fails **open** for the credentials.
 - **Severity:** Low — a misconfiguration that silently uses ambient credentials is a surprise, not a leak.
-- **Status:** Open — target **23.1 / 23.6**.
+- **Status:** Fixed (23.1) — half-configured credentials now throw instead of falling back to the ambient chain.
 
 ## G88 — Module system principals bypass record-level ACL
 
@@ -962,5 +962,4 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   The impact is muted in the shipped SPA, which keeps a bearer token in `localStorage` and never uses the cookie path
   — but the endpoint is reachable and the contract is not closed.
 - **Severity:** Medium.
-- **Status:** Open — target **23.1**, as part of the CSRF contract work (see `docs/security/phase-23-security-baseline.md`
-  §3, contradiction C5).
+- **Status:** Fixed (23.1) — cookie-driven refresh now requires the double-submit CSRF token plus an Origin/SameSite check.

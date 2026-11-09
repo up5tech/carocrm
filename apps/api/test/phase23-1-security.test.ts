@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { randomCsrf } from '../src/auth/auth.controller.js';
@@ -55,5 +58,38 @@ describe('phase 23.1 fail-closed configuration', () => {
   it('JWT secret: allows the development default outside production', () => {
     process.env.NODE_ENV = 'development';
     expect(() => ConfigSchemaRefined.parse({})).not.toThrow();
+  });
+});
+
+describe('phase 23.1 API key compare', () => {
+  it('uses timingSafeEqual on the stored hash', () => {
+    const src = readFileSync(resolve(process.cwd(), 'apps/api/src/auth/auth.service.ts'), 'utf8');
+    expect(src).toContain('timingSafeEqual(Buffer.from(key.secret_hash');
+  });
+});
+
+describe('phase 23.1 G94', () => {
+  it('enforces CSRF on the cookie-driven refresh route', () => {
+    const src = readFileSync(resolve(process.cwd(), 'apps/api/src/auth/auth.guard.ts'), 'utf8');
+    expect(src).toContain("path.endsWith('/Refresh')");
+    expect(src).toContain('timingSafeEqualStrings(csrfCookie, csrfHeader)');
+  });
+});
+
+describe('phase 23.1 G52', () => {
+  it('does not echo provider error text', () => {
+    const src = readFileSync(resolve(process.cwd(), 'apps/api/src/advanced-integrations/oauth-flow.service.ts'), 'utf8');
+    expect(src).not.toContain('The provider refused the authorization: ${input.error}');
+    expect(src).toContain("The provider refused the authorization.");
+  });
+});
+
+describe('phase 23.1 CSP', () => {
+  it('does not permit unsafe-eval and declares the core directives', () => {
+    const src = readFileSync(resolve(process.cwd(), 'apps/api/src/bootstrap.ts'), 'utf8');
+    expect(src).not.toContain('unsafe-eval');
+    expect(src).toContain("defaultSrc:");
+    expect(src).toContain("scriptSrc:");
+    expect(src).toContain("objectSrc:");
   });
 });

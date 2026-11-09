@@ -232,7 +232,9 @@ export async function createApp(
     global: true,
     // Phase 23.1: a deliberate CSP instead of helmet's default. `style-src 'unsafe-inline'`
     // is required by the GrapesJS designer and Ant Design's runtime style injection; every
-    // other directive stays on 'self'. No `unsafe-eval` is permitted.
+    // other directive stays on 'self'. Dynamic code evaluation is not permitted.
+    // `img-src data:/blob:` supports inline previews/avatars; `font-src data:` supports icon
+    // fonts; `connect-src ws:/wss:` supports Vite HMR and live notification sockets.
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
