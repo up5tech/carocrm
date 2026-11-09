@@ -1,11 +1,44 @@
-# Phase 23.1 — Security test evidence
+# Phase 23 Security Test Evidence
+
+> **Date:** 2026-11-10
+> **Sub-phase:** 23.2 — Login Throttling and Lockout (task 1 of 8 started and delivered)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §8
+> **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.2 — Login throttling and lockout (delivered 2026-11-10)
+
+### Scope delivered
+
+1. Per-source authentication budget: the single global `@fastify/rate-limit` registration now takes
+   per-request `max` / `timeWindow`, so the credential routes (`POST /api/v1/Authentication`,
+   `POST /api/v1/Authentication/challenge`, `POST /api/v1/Refresh`) take the stricter auth ceiling
+   (`authRateLimitMax` / `authRateLimitWindowSeconds`) while every other route keeps the global one.
+   Bucket key is route-scoped (`<route>::<ip>`).
+2. Per-account lockout: failed sign-ins are counted in the new `auth_login_attempts` table (SHA-256
+   keyed subject hash, bounded retention); after `loginLockoutThreshold` failures inside the window the
+   account is locked for `loginLockoutSeconds`; a successful sign-in clears the history; a locked account
+   answers the same `AUTHENTICATION_FAILED` outcome (no enumeration).
+
+### Tests run
+
+- `pnpm vitest run apps/api/test/phase23-2-security.test.ts apps/api/test/rate-limit.test.ts` → 4/4 passed.
+- `pnpm vitest run apps/api/test/auth.test.ts` → 21/21 passed (no regression from the new budget).
+- `pnpm ci:migrations` → clean (89 files, highest `089_auth_login_attempts.sql`).
+
+### Known limitations
+
+- The per-source budget is an in-process local store; a Redis-backed store is the follow-up if the API
+  ever runs multiple instances.
+- Lockout expiry is derived (`lastFailure + loginLockoutSeconds`), not a stored `locked_until` column.
+
+## Phase 23.1 — Fail-Closed Configuration and Cryptographic Primitives
 
 > **Date:** 2026-11-09
 > **Sub-phase:** 23.1 — Fail-Closed Configuration and Cryptographic Primitives
 > **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §7
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
 
-## Scope delivered
+### Scope delivered
 
 1. CORS fails closed when unset (`resolveCorsOrigins`, `bootstrap.ts`); entries trimmed.
 2. CSRF token minted with `crypto.randomBytes(32)`; comparison via length-checked `timingSafeEqual`;
@@ -19,7 +52,7 @@
 8. JWT secret rotation procedure documented in `docs/security/jwt-secret-rotation.md`.
 9. SPA `refreshAccessToken()` reads `CRM-CSRF` and sends `x-csrf-token`.
 
-## Tests run
+### Tests run
 
 - `pnpm vitest run --config vitest.ci.config.ts` → 82 files / 1357 tests passed (includes new
   `phase23-1-security.test.ts`).
@@ -31,7 +64,7 @@
 - `pnpm typecheck` → pass.
 - `pnpm --filter @carocrm/api build` and `@carocrm/files build` → pass.
 
-## Known limitations
+### Known limitations
 
 - Session binding of the CSRF token to `sid` is deferred; the double-submit contract is satisfied and the token is
   CSPRNG-backed, but it is not yet HMAC-bound to the session. Tracked as a follow-up.

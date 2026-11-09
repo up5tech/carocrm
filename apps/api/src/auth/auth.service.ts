@@ -75,6 +75,14 @@ export class AuthService {
 
   async login(userName: string, password: string, ip?: string): Promise<LoginOutcome> {
     const db = this.database.db;
+    const subjectHash = this.accountFailureKey(userName);
+    // Phase 23.2 (PLAN §8 task 1): per-account lockout, derived from the bounded failed-login history.
+    const lockedUntil = await this.lockoutUntil(subjectHash);
+    if (lockedUntil !== null && lockedUntil.getTime() > Date.now()) {
+      // The same authentication outcome as a wrong password: a locked account is never named, so the
+      // refusal cannot be used to enumerate accounts (PLAN §0.1 evidence-over-assumption).
+      throw new AuthenticationFailedError();
+    }
     const user = await db
       .selectFrom('users')
       .selectAll()
@@ -82,6 +90,7 @@ export class AuthService {
       .where('is_deleted', '=', false)
       .executeTakeFirst();
     if (!user || !user.is_active || !user.password) {
+      await this.recordFailure(subjectHash);
       throw new AuthenticationFailedError();
     }
     let ok = false;
@@ -91,14 +100,58 @@ export class AuthService {
       ok = false;
     }
     if (!ok) {
+      await this.recordFailure(subjectHash);
       throw new AuthenticationFailedError();
     }
+    await this.clearFailures(subjectHash);
     const userType = user.type === 'admin' || user.is_admin ? 'admin' : user.type;
     if (user.totp_enabled && user.totp_secret) {
       // §4.9: the password was only the first factor — the session is issued by the challenge.
       return { kind: 'challenge', challengeId: await this.createChallenge(user.id) };
     }
     return { kind: 'ok', tokens: await this.createSession(user.id, userType, ip) };
+  }
+
+  /**
+   * Phase 23.2 (PLAN §8 task 1): the bucket key of one account — SHA-256 over the normalized user name,
+   * so counters are keyed without ever storing a raw account value.
+   */
+  private accountFailureKey(userName: string): string {
+    return createHash('sha256').update(userName.trim().toLowerCase()).digest('hex');
+  }
+
+  /**
+   * Phase 23.2 (PLAN §8 task 1): when the account must be locked, derived from the failed-login rows of
+   * the trailing auth window (`authRateLimitWindowSeconds`): `loginLockoutThreshold` failures inside the
+   * window end in a lockout of `loginLockoutSeconds`. `null` while the account is still inside its budget.
+   */
+  private async lockoutUntil(subjectHash: string): Promise<Date | null> {
+    const db = this.database.db;
+    const windowStart = new Date(Date.now() - this.config.authRateLimitWindowSeconds * 1000);
+    const failures = await db
+      .selectFrom('auth_login_attempts')
+      .select('failed_at')
+      .where('subject_hash', '=', subjectHash)
+      .where('failed_at', '>=', windowStart)
+      .orderBy('failed_at', 'desc')
+      .execute();
+    const lastFailureAt = failures[0]?.failed_at;
+    if (lastFailureAt === undefined) return null;
+    if (failures.length < this.config.loginLockoutThreshold) return null;
+    return new Date(lastFailureAt.getTime() + this.config.loginLockoutSeconds * 1000);
+  }
+
+  /** Phase 23.2 (PLAN §8 task 1): one failed sign-in, then drop the failure rows older than the policy retention. */
+  private async recordFailure(subjectHash: string): Promise<void> {
+    const db = this.database.db;
+    await db.insertInto('auth_login_attempts').values({ subject_hash: subjectHash, failed_at: new Date() }).execute();
+    const retentionCutoff = new Date(Date.now() - (this.config.authRateLimitWindowSeconds + this.config.loginLockoutSeconds) * 1000);
+    await db.deleteFrom('auth_login_attempts').where('failed_at', '<', retentionCutoff).execute();
+  }
+
+  /** Phase 23.2 (PLAN §8 task 1): a successful sign-in clears the account's failure history. */
+  private async clearFailures(subjectHash: string): Promise<void> {
+    await this.database.db.deleteFrom('auth_login_attempts').where('subject_hash', '=', subjectHash).execute();
   }
 
   /**

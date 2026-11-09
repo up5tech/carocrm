@@ -1628,11 +1628,19 @@ export interface UserRecoveryCodesTable {
   created_at: Date;
 }
 
+/** Phase 23.2 (PLAN §8 task 1) — one failed sign-in per account; drives the lockout counter. */
+export interface AuthLoginAttemptsTable {
+  id: Generated<number>;
+  subject_hash: string;
+  failed_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
   auth_challenges: AuthChallengesTable;
   user_recovery_codes: UserRecoveryCodesTable;
+  auth_login_attempts: AuthLoginAttemptsTable;
   api_users: ApiUsersTable;
   api_keys: ApiKeysTable;
   roles: RolesTable;

@@ -65,6 +65,22 @@ const ConfigSchema = z.object({
    */
   rateLimitMax: z.coerce.number().int().positive().default(600),
   /**
+   * Phase 23.2 (PLAN §8 task 1) — per-source ceiling on authentication attempts (login, 2FA challenge,
+   * refresh) per window, and the trailing window inside which failed sign-ins are counted for the
+   * per-account lockout. Default of 20 attempts / 900 seconds (15 minutes) per client IP is the
+   * brute-force budget for the credential endpoints.
+   */
+  authRateLimitMax: z.coerce.number().int().positive().default(20),
+  /** Phase 23.2 (PLAN §8 task 1) — the auth rate-limit / failure window in seconds (default: 15 minutes). */
+  authRateLimitWindowSeconds: z.coerce.number().int().min(1).max(3600).default(900),
+  /**
+   * Phase 23.2 (PLAN §8 task 1) — failed sign-in attempts allowed per account before it is locked
+   * (`loginLockoutThreshold`); `loginLockoutSeconds` is the lockout duration afterwards.
+   */
+  loginLockoutThreshold: z.coerce.number().int().min(1).max(30).default(5),
+  /** Phase 23.2 (PLAN §8 task 1) — how long a locked account stays rejected (seconds, default 30 min). */
+  loginLockoutSeconds: z.coerce.number().int().min(60).max(86400).default(1800),
+  /**
    * Fastify `trustProxy`. Behind nginx/Traefik every request arrives from the proxy's address, so
    * without this the limiter puts **all** users into one bucket. `false` (default) keeps the socket
    * address, which is the safe choice when the API is exposed directly; `true` trusts the left-most
@@ -196,6 +212,10 @@ export function buildConfig(): AppConfig {
     logLevel: process.env.LOG_LEVEL,
     corsOrigins: process.env.CORS_ORIGINS,
     rateLimitMax: process.env.RATE_LIMIT_MAX,
+    authRateLimitMax: process.env.AUTH_RATE_LIMIT_MAX,
+    authRateLimitWindowSeconds: process.env.AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    loginLockoutThreshold: process.env.LOGIN_LOCKOUT_THRESHOLD,
+    loginLockoutSeconds: process.env.LOGIN_LOCKOUT_SECONDS,
     trustProxy: process.env.TRUST_PROXY,
     storageDriver: process.env.STORAGE_DRIVER,
     s3Bucket: process.env.S3_BUCKET,

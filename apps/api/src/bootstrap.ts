@@ -142,6 +142,20 @@ export function resolveCorsOrigins(raw: string): string[] | false {
   return origins.length === 0 ? false : origins;
 }
 
+/**
+ * Phase 23.2 (PLAN §8 task 1): the credential endpoints that carry the stricter per-source auth
+ * attempt budget. Sub-path aware so `/api/v1/Authentication/challenge` matches the prefix without
+ * leaking into unrelated routes.
+ */
+function isAuthRoute(request: FastifyRequest): boolean {
+  const path = (request.url ?? '').split('?')[0] ?? '';
+  return (
+    path === '/api/v1/Authentication' ||
+    path.startsWith('/api/v1/Authentication/') ||
+    path === '/api/v1/Refresh'
+  );
+}
+
 export async function createApp(
   config: AppConfig = buildConfig(),
   options: CreateAppOptions = {},
@@ -251,8 +265,15 @@ export async function createApp(
     },
   });
   await app.register(asPlugin(rateLimit), {
-    max: config.rateLimitMax,
-    timeWindow: '1 minute',
+    // Phase 23.2 (PLAN §8 task 1): the single global limiter now derives its ceiling and window from
+    // the request, so the credential endpoints (`Authentication`, `Authentication/challenge`, `Refresh`)
+    // get the stricter auth budget while everything else keeps the global one. One registration, one
+    // error contract (`RateLimitError` / 429 + retry hint) — the auth ceiling is a policy of the same
+    // limiter, not a second one. The bucket key carries the normalized route so the stricter auth
+    // ceiling can sit under the global one without either clobbering the other.
+    keyGenerator: (request: FastifyRequest) => `${request.url.split('?')[0] ?? ''}::${request.ip}`,
+    max: (request: FastifyRequest) => (isAuthRoute(request) ? config.authRateLimitMax : config.rateLimitMax),
+    timeWindow: (request: FastifyRequest) => (isAuthRoute(request) ? config.authRateLimitWindowSeconds * 1000 : 60_000),
     global: true,
     // CORS preflights are browser bookkeeping, not API calls: counting them would halve the real
     // budget of every cross-origin deployment.
