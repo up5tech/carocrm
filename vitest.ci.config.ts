@@ -42,6 +42,7 @@ const PURE_API_TESTS = [
   'marketing-automation-template-render.test.ts',
   'phase19-module-declarations.test.ts',
   'phase22-provider-contract.test.ts',
+  'phase23-1-security.test.ts',
   'projects-domain.test.ts',
   'recurrence.test.ts',
   'reports.test.ts',

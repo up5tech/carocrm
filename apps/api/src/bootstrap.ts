@@ -125,6 +125,23 @@ export interface CreateAppOptions {
   extensions?: ExtensionHostType | undefined;
 }
 
+/**
+ * Phase 23.1 (C6): turn the raw `CORS_ORIGINS` setting into the value `@fastify/cors` expects.
+ *
+ * - An empty/unset allowlist fails closed (`false`): no CORS headers are emitted, so a browser
+ *   cannot read a cross-origin response and no origin is reflected. `credentials: true` is still
+ *   configured, but it is inert without an allowed origin.
+ * - Entries are trimmed and empties dropped, so `"http://a, http://b"` no longer produces a
+ *   never-matching `' http://b'`.
+ */
+export function resolveCorsOrigins(raw: string): string[] | false {
+  const origins = raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+  return origins.length === 0 ? false : origins;
+}
+
 export async function createApp(
   config: AppConfig = buildConfig(),
   options: CreateAppOptions = {},
@@ -201,14 +218,36 @@ export async function createApp(
     },
   });
   await app.register(asPlugin(cookie));
+  // Phase 23.1: fail closed when no origin is configured. An unset allowlist used to reflect
+  // any origin with credentials (C6), which is exploitable from a same-site sibling subdomain.
+  const corsOrigins = resolveCorsOrigins(config.corsOrigins);
   await app.register(asPlugin(cors), {
-    origin: config.corsOrigins === '' ? true : config.corsOrigins.split(','),
+    origin: corsOrigins,
     credentials: true,
     // The request id is the handle a user gives support after a failure. Without this the SPA
     // cannot read the header on a cross-origin deployment.
     exposedHeaders: ['x-request-id'],
   });
-  await app.register(asPlugin(helmet), { global: true });
+  await app.register(asPlugin(helmet), {
+    global: true,
+    // Phase 23.1: a deliberate CSP instead of helmet's default. `style-src 'unsafe-inline'`
+    // is required by the GrapesJS designer and Ant Design's runtime style injection; every
+    // other directive stays on 'self'. No `unsafe-eval` is permitted.
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        fontSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        frameSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
+  });
   await app.register(asPlugin(rateLimit), {
     max: config.rateLimitMax,
     timeWindow: '1 minute',

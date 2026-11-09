@@ -131,6 +131,16 @@ export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
         'JWT_SECRET must be set to a strong, unique secret in production; the development default ("dev-only-secret-change-me") is not allowed.',
     });
   }
+  // Phase 23.1: an unset encryption key must not silently disable secrets-at-rest in production.
+  // Features that store secrets (mail accounts, connector credentials) already fail at use; this
+  // makes the misconfiguration surface at boot instead of at first write.
+  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.encryptionKey.trim() === '') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['encryptionKey'],
+      message: 'ENCRYPTION_KEY must be set in production (openssl rand -hex 32); an empty key disables secrets-at-rest encryption.',
+    });
+  }
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;

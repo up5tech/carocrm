@@ -31,7 +31,9 @@ describe('config JWT secret production guard', () => {
 
   it('accepts an operator-supplied strong secret in production', () => {
     process.env.NODE_ENV = 'production';
-    expect(() => ConfigSchemaRefined.parse({ jwtSecret: 'a-strong-prod-secret-0123456789' })).not.toThrow();
+    expect(() =>
+      ConfigSchemaRefined.parse({ jwtSecret: 'a-strong-prod-secret-0123456789', encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }),
+    ).not.toThrow();
   });
 
   it('allows the development default secret outside production (dev/test)', () => {

@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { getRequestContext } from '@carocrm/core/context/index.js';
 import { AuthenticationRequiredError, AuthorizationDeniedError } from '@carocrm/core/errors/index.js';
 import { type CanActivate, type CustomDecorator, type ExecutionContext,Inject, SetMetadata } from '@nestjs/common';
@@ -25,12 +27,27 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const handler = context.getHandler();
     const controller = context.getClass();
-    if (Reflect.getMetadata(PUBLIC_KEY, handler) === true || Reflect.getMetadata(PUBLIC_KEY, controller) === true) {
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    const reply = context.switchToHttp().getResponse<FastifyReply>();
+    const isPublic = Reflect.getMetadata(PUBLIC_KEY, handler) === true || Reflect.getMetadata(PUBLIC_KEY, controller) === true;
+    if (isPublic) {
+      // Phase 23.1 (C5): `POST /api/v1/Refresh` is `@Public()` and cookie-driven, so it must
+      // not be reachable cross-site. Enforce the double-submit CSRF contract for that route.
+      const path = request.url.split('?')[0] ?? '';
+      if (request.method === 'POST' && path.endsWith('/Refresh') && typeof request.headers.cookie === 'string') {
+        const cookies = parseCookies(request.headers.cookie);
+        if (cookies['CRM-REFRESH']) {
+          const csrfCookie = cookies['CRM-CSRF'];
+          const csrfHeader = request.headers['x-csrf-token'];
+          if (!csrfCookie || typeof csrfHeader !== 'string' || !timingSafeEqualStrings(csrfCookie, csrfHeader)) {
+            throw new AuthorizationDeniedError('CSRF token mismatch.');
+          }
+          enforceSameOrigin(request);
+        }
+      }
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<FastifyRequest>();
-    const reply = context.switchToHttp().getResponse<FastifyReply>();
     // Keep the middleware's correlation id; only fall back to Fastify's id when none was supplied.
     this.scope.requestId = resolveRequestId(request.headers['x-correlation-id'], request.id);
 
@@ -68,9 +85,10 @@ export class AuthGuard implements CanActivate {
         if (UNSAFE_METHODS.has(request.method)) {
           const csrfCookie = cookies['CRM-CSRF'];
           const csrfHeader = request.headers['x-csrf-token'];
-          if (!csrfCookie || csrfHeader !== csrfCookie) {
+          if (!csrfCookie || typeof csrfHeader !== 'string' || !timingSafeEqualStrings(csrfCookie, csrfHeader)) {
             throw new AuthorizationDeniedError('CSRF token mismatch.');
           }
+          enforceSameOrigin(request);
         }
         const claims = await this.auth.verifyAccessToken(sessionToken);
         const principal = await this.auth.principalFromUser(claims.sub as string, typeof claims.sid === 'string' ? claims.sid : undefined);
@@ -97,6 +115,37 @@ function applyPrincipalPreferences(scope: RequestScope, principal: { locale?: st
   if (!context) return;
   if (context.locale === undefined || principal.locale) context.locale = principal.locale ?? context.locale;
   if (context.timezone === undefined || principal.timezone) context.timezone = principal.timezone ?? context.timezone;
+}
+
+function timingSafeEqualStrings(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Phase 23.1 (C5): best-effort same-origin check for cookie-authenticated state-changing
+ * requests. A cross-site Sec-Fetch-Site is always rejected; an explicit Origin that does not
+ * match the request's host is rejected. Missing headers are allowed (non-browser clients).
+ */
+function enforceSameOrigin(request: FastifyRequest): void {
+  const secFetchSite = request.headers['sec-fetch-site'];
+  if (typeof secFetchSite === 'string' && secFetchSite.toLowerCase() === 'cross-site') {
+    throw new AuthorizationDeniedError('Cross-site request rejected.');
+  }
+  const origin = request.headers.origin;
+  if (typeof origin === 'string' && origin !== '') {
+    try {
+      const originUrl = new URL(origin);
+      const host = request.headers.host;
+      if (typeof host === 'string' && host !== '' && originUrl.host !== host) {
+        throw new AuthorizationDeniedError('Cross-origin request rejected.');
+      }
+    } catch {
+      throw new AuthorizationDeniedError('Invalid Origin header.');
+    }
+  }
 }
 
 function parseCookies(header: string): Record<string, string> {

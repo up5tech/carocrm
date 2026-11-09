@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -325,9 +327,8 @@ function parseCookies(header: string): Record<string, string> {
   return out;
 }
 
-function randomCsrf(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let out = '';
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+export function randomCsrf(): string {
+  // Phase 23.1 (C5): CSPRNG-backed entropy. `Math.random()` is not a CSPRNG and was used
+  // to mint the double-submit CSRF token.
+  return randomBytes(32).toString('base64url');
 }

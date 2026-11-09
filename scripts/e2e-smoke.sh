@@ -32,6 +32,7 @@ export NODE_ENV=production
 export LOG_LEVEL=error
 export STORAGE_ROOT=".data/e2e-${RUN_ID}"
 export JWT_SECRET="e2e-se…tion"
+export ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 # seed.ts now refuses NODE_ENV=production without SEED_FORCE; this run deliberately targets the dev
 # database, so opt in (the DB name is confirmed non-prod by the operator who set E2E_ALLOW_PRIMARY_DB).
 export SEED_FORCE=1

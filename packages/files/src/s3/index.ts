@@ -203,6 +203,9 @@ export function parseS3Settings(input: S3SettingsInput): S3FileStorageOptions {
   if (endpoint !== '') options.endpoint = endpoint;
   const accessKeyId = input.accessKeyId.trim();
   const secretAccessKey = input.secretAccessKey.trim();
+  if (accessKeyId === '' !== (secretAccessKey === '')) {
+    throw new Error('S3 storage requires both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither.');
+  }
   if (accessKeyId !== '' && secretAccessKey !== '') {
     options.accessKeyId = accessKeyId;
     options.secretAccessKey = secretAccessKey;

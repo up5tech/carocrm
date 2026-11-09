@@ -1,4 +1,4 @@
-import { createHash, randomBytes,randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { AuthenticationFailedError, AuthenticationRequiredError, RecordNotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { hashString } from '@carocrm/core/utils/id.js';
@@ -405,7 +405,9 @@ export class AuthService {
     const db = this.database.db;
     const key = await db.selectFrom('api_keys').selectAll().where('id', '=', keyId).executeTakeFirst();
     if (!key || key.revoked_at !== null) return undefined;
-    if (key.secret_hash !== hashString(secret)) return undefined;
+    const providedHash = hashString(secret);
+    if (key.secret_hash.length !== providedHash.length) return undefined;
+    if (!timingSafeEqual(Buffer.from(key.secret_hash, 'utf8'), Buffer.from(providedHash, 'utf8'))) return undefined;
     const apiUser = await db.selectFrom('api_users').selectAll().where('id', '=', key.api_user_id).executeTakeFirst();
     if (!apiUser || !apiUser.is_active) return undefined;
     await db.updateTable('api_keys').set({ last_used_at: new Date() }).where('id', '=', keyId).execute();

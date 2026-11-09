@@ -187,7 +187,8 @@ export class OAuthFlowService {
    */
   async complete(input: { state: string; code: string; error?: string | null }): Promise<OAuthCallbackResult> {
     if (input.error !== undefined && input.error !== null && input.error !== '') {
-      throw new AuthenticationFailedError(`The provider refused the authorization: ${input.error}`);
+      // Phase 23.1 (G52): never echo the provider's raw error text into the response.
+      throw new AuthenticationFailedError('The provider refused the authorization.');
     }
     if (input.state.trim() === '') {
       throw new AuthenticationFailedError('The authorization response carried no state.');
