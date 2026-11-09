@@ -8,7 +8,7 @@
 | Decision | Value | Why |
 |---|---|---|
 | CI provider | **GitHub Actions** | The repository remote is GitHub; no other CI convention exists (`.github/` held only `copilot-instructions.md`). |
-| Trigger | **Scheduled + manual dispatch only** (`workflow_dispatch`) | Owner decision for 22.22. The gate is a nightly integrity check, not a per-PR gate. |
+| Trigger | **Scheduled + manual dispatch only** (`workflow_dispatch`) | Owner decision for 22.22. The gate is a nightly integrity check, not a per-PR gate. **Re-affirmed by the owner on 2026-11-09 (Phase 23.0 decision D3):** the nightly-only trigger stands; G78 is **not** closed. |
 | Integration layer | **Not in CI** | Owner decision. Layer 3 runs against the configured primary database under AGENTS.md §3; a hosted runner must not be handed that database, and CI must never provision another one. |
 | Browser layer | **Not in CI** | No Playwright browser is cached in this environment; 22.16 records functional evidence separately. A browser job needs an approved app environment and sanitized artifacts. |
 | Observability/metrics backend | Not part of CI | G77; the gate is test-based. |
@@ -101,7 +101,14 @@ A new flaky test must be entered here with an owner, a review date and whether i
 ## 8. What is still not covered
 
 - **OpenAPI schema diff** is not generated (G1): the public API contract is exercised by sandbox
-  integration tests, not by a machine-checked schema in CI.
+  integration tests, not by a machine-checked schema in CI. **Corrected (Phase 23.0, 2026-11-09):** a route-level
+  document *is* served at `GET /api/v1/OpenApi`, but it carries no DTO-derived schemas, no request/response
+  bodies and no security scheme — so the schema diff still cannot be generated. See
+  `docs/security/phase-23-security-baseline.md` §3, contradiction C1.
+- **No authorization assertion runs in CI** (G92): every DB-backed ACL/BOLA/injection suite is excluded from
+  `vitest.ci.config.ts`, and the trigger is nightly-only (G78, re-affirmed by the owner on 2026-11-09). The
+  DB-free security suites that *could* join the lane — notably `apps/api/test/ai-agent-adversarial.test.ts`, the
+  repository's only SSRF suite — are added in 23.8.
 - **Migrations are not executed in CI** (no DB). A static scan (`ci:migrations`) now guards numbering
   and destructive statements; the migration audit (22.5) and `db:migrate` on the configured
   environment remain the runtime check.

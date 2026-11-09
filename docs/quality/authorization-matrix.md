@@ -23,7 +23,7 @@ The authoritative identity is the `AuthenticatedPrincipal` carried in `RequestSc
 
 **Where the principal is established** — `apps/api/src/auth/auth.guard.ts` (the global `APP_GUARD`):
 - `Bearer <jwt>` → `auth.verifyAccessToken` → `auth.principalFromUser(sub)`.
-- `ApiKey <id>:<secret>` → `auth.authenticateApiKey` (constant-time compare).
+- `ApiKey <id>:<secret>` → `auth.authenticateApiKey` (the secret is hashed with `hashString` and compared against the stored hash). **Correction (Phase 23.0, 2026-11-09):** this comparison is **not** constant-time — `apps/api/src/auth/auth.service.ts:408` uses `key.secret_hash !== hashString(secret)`, a plain string comparison. The earlier "constant-time compare" wording in this document was wrong; the fix (a length-checked `timingSafeEqual`) is scheduled for 23.1.
 - Cookie `CRM-SESSION` + CSRF double-submit (`CRM-CSRF` cookie vs `x-csrf-token` header) for unsafe methods.
 - `@Public()` (`auth.guard.ts:12`, `SetMetadata`) opts a route out of auth — reviewed in §9.
 - Missing/invalid credentials throw `AuthenticationRequiredError` (→ 401); CSRF mismatch throws `AuthorizationDeniedError` (→ 403).

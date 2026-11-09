@@ -2857,6 +2857,40 @@ fails the content lint rather than a customer.
 
 ---
 
+## Phase 22 — Integration & E2E Hardening
+
+Scope, evidence and the release decision live in `plans/PLAN_Phase_22_Integration_E2E_Hardening.md`
+and `docs/quality/`; the Phase 22.24 review records **NO-GO for a production release** until the
+backup/restore blockers G80/G81 are closed or explicitly accepted.
+
+---
+
+## Phase 23 — Security Hardening
+
+Status: **In progress** — sub-phase **23.0 (security baseline audit) complete** on 2026-11-09; 23.1 is next and
+awaits review. Scope, work order, owner decisions and acceptance criteria live in
+`plans/PLAN_Phase_23_Security_Hardening.md`. The Phase 23.0 baseline, the §48 control matrix and the single
+exception list live in `docs/security/`.
+
+Phase 23 turns the §48 security controls into verified, continuously tested controls: fail-closed configuration
+and cryptographic primitives, login throttling/lockout, self-service password reset and enforceable MFA,
+authorization consistency across every surface (including async jobs, `@Public()` webhooks, attachments and
+exports), SSRF/injection/XSS and webhook-replay hardening, secrets and retention, security coverage in the
+nightly CI gate, encrypted off-host backup with a proven restore, and an incident-response runbook.
+
+**Owner decisions recorded at 23.0 (2026-11-09):** generic OIDC is **in scope for 23.3** (SAML/SCIM deferred);
+multi-tenancy is **documented, not delivered**; CI **stays nightly-only** (G78 remains open); the recovery
+environment and RPO/RTO are **not approved**, so **23.9 is Blocked**; the distribution-compliance review and the
+missing `LICENSE` stay release blockers; and no finding is accepted by default.
+
+Acceptance:
+
+The Phase 22 NO-GO blockers (G80/G81) are closed or explicitly accepted; no Critical/High security
+finding remains open without an owner-signed exception; the required (nightly) DB-free gate detects a
+demonstrated security regression; and the final review records an honest go/no-go with residual risks.
+
+---
+
 # 58. API Endpoint Inventory Plan
 
 Create a machine-readable endpoint registry:

@@ -125,7 +125,13 @@ Threat areas mapped to the security/regression coverage already landed in 22.4�
 
 ## 9. Exceptions (owner / scope / mitigation / review date)
 
-Open Medium findings assigned to this phase, dispositioned as documented exceptions (no High remains):
+> **Superseded (2026-11-09, Phase 23.0).** This table was the only exception list when this document was written.
+> Phase 23.0 moved every live exception into the single register
+> [`docs/security/exception-register.md`](../../docs/security/exception-register.md), reconciled the statuses below
+> against the 2026-11-03 fixes, and re-dated the survivors to one cadence (2026-12-09). This section is kept for
+> history only — **do not add a row here**; add it to the register.
+
+The register's reconciliation of this table, verified against source on 2026-11-09:
 
 | Finding | Severity | Owner | Scope | Mitigation | Review date |
 |---|---|---|---|---|---|
@@ -138,3 +144,9 @@ Open Medium findings assigned to this phase, dispositioned as documented excepti
 | G63 — no route guard in front of `/admin/*` | Medium | platform/SPA | client routes | Mitigation: server filters menu + data; fail-safe (data calls refused) | 2026-11-15 |
 | G64 — ~150 call sites render raw `error.message` | Medium | platform/SPA | catch sites | Mitigation: shared `errorMessage()` helper exists; new code uses it | 2026-11-30 |
 | G65 — home content chosen client-side from `principal.roles` | Low | platform/SPA | home components | Mitigation: server still enforces data access | 2026-11-15 |
+
+**Phase 23.0 reconciliation result:** G37, G38, G39 and G63 were **fixed on 2026-11-03** (commit `fe27adb`) and are
+closed; G47, G48, G49, G64 and G65 remain live and are carried forward with a new review date of 2026-12-09. The
+register additionally adds findings that this table never covered (G33, G50, G51, G52) and two Phase 23 release
+blockers (the missing `LICENSE`, the multi-tenancy decision).
+
