@@ -12,6 +12,7 @@ import { I18nService } from '../i18n/i18n.service.js';
 import { Public } from './auth.guard.js';
 import type { AuthTokens, PrincipalRecord } from './auth.service.js';
 import { AuthService } from './auth.service.js';
+import { PasswordResetService } from './password-reset.service.js';
 
 const LoginSchema = z.object({
   userName: z.string().min(1),
@@ -25,6 +26,16 @@ const RefreshSchema = z.object({
 
 const LogoutSchema = z.object({
   refreshToken: z.string().optional(),
+});
+
+/** Phase 23.2 (PLAN §8 task 2): self-service reset — identifier may be a user name or an email. */
+const PasswordResetRequestSchema = z.object({
+  identifier: z.string().min(1).max(255),
+});
+
+const PasswordResetConfirmSchema = z.object({
+  token: z.string().min(1).max(128),
+  newPassword: z.string().min(8).max(256),
 });
 
 /** §4.9: the second factor that finishes a sign-in the password started. */
@@ -71,6 +82,7 @@ const ChangePasswordSchema = z.object({
 export class AuthController {
   constructor(
     @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(PasswordResetService) private readonly passwordReset: PasswordResetService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(I18nService) private readonly i18n: I18nService,
   ) {}
@@ -131,6 +143,34 @@ export class AuthController {
       tokens = await this.auth.refresh(refreshToken);
     }
     return this.respond(tokens, request, reply);
+  }
+
+  /**
+   * Phase 23.2 (PLAN §8 task 2): request a self-service reset mail. The answer is identical for an
+   * unknown identifier — the endpoint never confirms whether an account exists. Rate-limited by the
+   * same per-source auth budget as the other credential routes.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('PasswordReset')
+  async requestPasswordReset(@Body() body: unknown): Promise<{ status: boolean }> {
+    const parsed = PasswordResetRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid password reset payload.', { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    return this.passwordReset.requestReset(parsed.data.identifier);
+  }
+
+  /** Consume the single-use token; success revokes every session the old password opened. */
+  @Public()
+  @HttpCode(200)
+  @Post('PasswordReset/confirm')
+  async confirmPasswordReset(@Body() body: unknown): Promise<{ status: boolean }> {
+    const parsed = PasswordResetConfirmSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid password reset payload.', { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    return this.passwordReset.confirmReset(parsed.data.token, parsed.data.newPassword);
   }
 
   @Post('Logout')

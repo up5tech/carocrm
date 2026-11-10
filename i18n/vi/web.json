@@ -372,6 +372,21 @@
     "twoFactorCode": "Mã xác thực",
     "backToPassword": "Quay lại mật khẩu"
   },
+  "passwordReset": {
+    "forgotLink": "Quên mật khẩu?",
+    "title": "Đặt lại mật khẩu",
+    "requestSubtitle": "Nhập tên đăng nhập hoặc email để nhận mã đặt lại.",
+    "identifier": "Tên đăng nhập hoặc email",
+    "sendToken": "Gửi mã đặt lại",
+    "requested": "Nếu tài khoản tồn tại, email đặt lại đang được gửi. Nhập mã trong email vào bên dưới.",
+    "token": "Mã đặt lại",
+    "newPassword": "Mật khẩu mới",
+    "minPassword": "Mật khẩu phải có ít nhất 8 ký tự.",
+    "confirm": "Đặt mật khẩu mới",
+    "success": "Đã cập nhật mật khẩu. Đăng nhập bằng mật khẩu mới.",
+    "backToLogin": "Quay lại đăng nhập",
+    "failed": "Không thể hoàn tất đặt lại mật khẩu."
+  },
   "home": {
     "greeting": {
       "morning": "Chào buổi sáng, {name}",

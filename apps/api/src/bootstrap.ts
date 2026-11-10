@@ -152,7 +152,9 @@ function isAuthRoute(request: FastifyRequest): boolean {
   return (
     path === '/api/v1/Authentication' ||
     path.startsWith('/api/v1/Authentication/') ||
-    path === '/api/v1/Refresh'
+    path === '/api/v1/Refresh' ||
+    path === '/api/v1/PasswordReset' ||
+    path.startsWith('/api/v1/PasswordReset/')
   );
 }
 
@@ -266,8 +268,9 @@ export async function createApp(
   });
   await app.register(asPlugin(rateLimit), {
     // Phase 23.2 (PLAN §8 task 1): the single global limiter now derives its ceiling and window from
-    // the request, so the credential endpoints (`Authentication`, `Authentication/challenge`, `Refresh`)
-    // get the stricter auth budget while everything else keeps the global one. One registration, one
+    // the request, so the credential endpoints (`Authentication`, `Authentication/challenge`, `Refresh`,
+    // `PasswordReset`, `PasswordReset/confirm`) get the stricter auth budget while everything else keeps
+    // the global one. One registration, one
     // error contract (`RateLimitError` / 429 + retry hint) — the auth ceiling is a policy of the same
     // limiter, not a second one. The bucket key carries the normalized route so the stricter auth
     // ceiling can sit under the global one without either clobbering the other.

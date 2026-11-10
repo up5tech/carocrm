@@ -1,9 +1,53 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-10
-> **Sub-phase:** 23.2 — Login Throttling and Lockout (task 1 of 8 started and delivered)
+> **Sub-phase:** 23.2 — Authentication Hardening (tasks 1–2 delivered)
 > **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §8
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.2 — Self-service password reset (delivered 2026-11-10)
+
+### Scope delivered
+
+1. `POST /api/v1/PasswordReset` and `POST /api/v1/PasswordReset/confirm` (`@Public()`, both under the
+   per-source auth rate budget). The request answers `{status:true}` for known and unknown identifiers
+   alike — no account enumeration. Identifier may be the user name or the account email.
+2. Token: `crypto.randomBytes(32)` (base64url), stored only as a SHA-256 hash in the new
+   `auth_password_resets` table (migration `090`), single-use, expiring (`PASSWORD_RESET_TTL_SECONDS`,
+   default 1 h), one live token per account, 60 s request cooldown, consumed/expired rows swept on
+   request. Delivery reuses `MAIL_TRANSPORT_TOKEN`; with `MAIL_TRANSPORT=none` or no `SMTP_FROM` no
+   token is minted (fail closed), and a transport failure never leaves an undelivered token stored.
+3. Confirmation applies the instance password policy, re-checks the token under a row lock, revokes
+   every session the old password opened, and clears the account's failed-login history. The admin
+   reset (`POST /User/:id/password-reset`) contract is unchanged; it now enforces the same policy via
+   `setPassword`, as does `changePassword`.
+4. The stored-but-unread `security` settings document is now enforced at the point of use
+   (`auth/security-policy.ts`): password minLength/uppercase/number/symbol.
+5. SPA: "Forgot password?" link on the sign-in page and a public `/password-reset` page (request step,
+   token + new-password step, `?token=` deep link), en + vi catalogs.
+
+### Tests run
+
+- `pnpm vitest run apps/api/test/phase23-2-password-reset.test.ts` → 8/8 passed (enumeration, hash-only
+  storage, cooldown, expiry, policy, single use, session revocation, rate budget). Memory mail transport;
+  no real email sent.
+- `pnpm vitest run apps/api/test/auth.test.ts` → 21/21 passed.
+- `pnpm vitest run apps/api/test/two-factor.test.ts` → 5/5 passed.
+- `pnpm vitest run apps/api/test/phase23-2-security.test.ts` → 3/3 passed.
+- `pnpm ci:migrations` → clean (90 files, highest `090_auth_password_resets.sql`).
+- `pnpm lint:changed`, `pnpm typecheck` → pass.
+- Browser (Vite dev + API, `MAIL_TRANSPORT=memory`): sign-in page shows the forgot-password link;
+  request step answers generically and advances to the token step; an invalid token shows the stable
+  error. Screenshots: `.data/screenshots/23-2-login-forgot-link.png`,
+  `.data/screenshots/23-2-reset-confirm-error.png`. The one pending reset row the browser check created
+  was deleted by exact user id + created-at window.
+
+### Known limitations
+
+- The reset email carries the token and instructions, not a deployment-specific absolute URL (no
+  public-base-URL setting exists); the SPA page accepts `?token=` deep links.
+- The happy path (consume a real token) is verified by the API suite; the browser check covered the
+  request/error surfaces because the memory transport holds messages in-process.
 
 ## Phase 23.2 — Login throttling and lockout (delivered 2026-11-10)
 

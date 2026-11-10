@@ -1635,12 +1635,22 @@ export interface AuthLoginAttemptsTable {
   failed_at: Date;
 }
 
+/** Phase 23.2 (PLAN §8 task 2) — single-use password-reset tokens, stored hashed. */
+export interface AuthPasswordResetsTable {
+  token_hash: string;
+  user_id: string;
+  expires_at: Date;
+  used_at: Date | null;
+  created_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
   auth_challenges: AuthChallengesTable;
   user_recovery_codes: UserRecoveryCodesTable;
   auth_login_attempts: AuthLoginAttemptsTable;
+  auth_password_resets: AuthPasswordResetsTable;
   api_users: ApiUsersTable;
   api_keys: ApiKeysTable;
   roles: RolesTable;

@@ -9,6 +9,7 @@ import { errors as joseErrors, type JWTPayload, jwtVerify, SignJWT } from 'jose'
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
 import { DatabaseService } from '../database/database.service.js';
+import { assertPasswordPolicy, readSecurityPolicy } from './security-policy.js';
 import { newRecoveryCodes, newTotpSecret, otpauthUri, totpVerify } from './totp.js';
 
 export interface AuthTokens {
@@ -579,10 +580,8 @@ export class AuthService {
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
-    if (newPassword.length < 8) {
-      throw new ValidationError('Password must be at least 8 characters.');
-    }
     const db = this.database.db;
+    assertPasswordPolicy(await readSecurityPolicy(db), newPassword);
     const user = await db.selectFrom('users').select(['password']).where('id', '=', userId).executeTakeFirst();
     if (!user?.password) throw new RecordNotFoundError('User', userId);
     const ok = await argon2.verify(user.password, oldPassword);
@@ -598,10 +597,9 @@ export class AuthService {
   }
 
   async setPassword(userId: string, newPassword: string): Promise<void> {
-    if (newPassword.length < 8) {
-      throw new ValidationError('Password must be at least 8 characters.');
-    }
+    const db = this.database.db;
+    assertPasswordPolicy(await readSecurityPolicy(db), newPassword);
     const hash = await argon2.hash(newPassword, { type: argon2.argon2id });
-    await this.database.db.updateTable('users').set({ password: hash, modified_at: new Date() }).where('id', '=', userId).execute();
+    await db.updateTable('users').set({ password: hash, modified_at: new Date() }).where('id', '=', userId).execute();
   }
 }

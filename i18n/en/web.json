@@ -372,6 +372,21 @@
     "twoFactorCode": "Authentication code",
     "backToPassword": "Back to password"
   },
+  "passwordReset": {
+    "forgotLink": "Forgot password?",
+    "title": "Reset your password",
+    "requestSubtitle": "Enter your user name or email and we will send a reset token.",
+    "identifier": "User name or email",
+    "sendToken": "Send reset token",
+    "requested": "If the account exists, a reset email is on its way. Enter the token from it below.",
+    "token": "Reset token",
+    "newPassword": "New password",
+    "minPassword": "Password must be at least 8 characters.",
+    "confirm": "Set new password",
+    "success": "Password updated. Sign in with your new password.",
+    "backToLogin": "Back to sign in",
+    "failed": "The reset could not be completed."
+  },
   "home": {
     "greeting": {
       "morning": "Good morning, {name}",

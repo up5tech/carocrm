@@ -601,6 +601,11 @@ export const api = {
     request<LoginResult | LoginChallengeResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
   completeLoginChallenge: (challengeId: string, code: string) =>
     request<LoginResult>('/Authentication/challenge', { method: 'POST', body: JSON.stringify({ challengeId, code }) }),
+  // Phase 23.2 (PLAN §8 task 2): self-service password reset — request a token, then consume it.
+  requestPasswordReset: (identifier: string) =>
+    request<{ status: boolean }>('/PasswordReset', post({ identifier })),
+  confirmPasswordReset: (token: string, newPassword: string) =>
+    request<{ status: boolean }>('/PasswordReset/confirm', post({ token, newPassword })),
   me: () => request<Principal>('/AppUser/me'),
   patchMyProfile: (input: ProfilePatch) => request<ProfileInfo>('/AppUser/me', { method: 'PATCH', body: JSON.stringify(input) }),
   changeMyPassword: (input: { currentPassword: string; newPassword: string }) =>

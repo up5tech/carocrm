@@ -20,6 +20,7 @@ import { AuthGuard } from './auth/auth.guard.js';
 import { AuthService } from './auth/auth.service.js';
 import { IdentityController } from './auth/identity.controller.js';
 import { IdentityService } from './auth/identity.service.js';
+import { PasswordResetService } from './auth/password-reset.service.js';
 import { CALENDAR_CONTROLLERS, CALENDAR_PROVIDERS } from './calendar/index.js';
 import { OutboxService } from './common/outbox.service.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
@@ -172,6 +173,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 7A (PLAN §41): catalog loader + translator, injected by metadata and error paths too.
     I18nService,
     AuthService,
+    PasswordResetService,
     IdentityService,
     OutboxService,
     ...ACL_PROVIDERS,

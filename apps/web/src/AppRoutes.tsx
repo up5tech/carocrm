@@ -38,6 +38,7 @@ const JourneyEditorPage = lazy(() =>
 );
 const LeadScorePage = lazy(() => import('./pages/LeadScorePage.js').then((m) => ({ default: m.LeadScorePage })));
 const LoginPage = lazy(() => import('./pages/LoginPage.js').then((m) => ({ default: m.LoginPage })));
+const PasswordResetPage = lazy(() => import('./pages/PasswordResetPage.js').then((m) => ({ default: m.PasswordResetPage })));
 const MarketingJourneysPage = lazy(() => import('./pages/MarketingJourneysPage.js').then((m) => ({ default: m.MarketingJourneysPage })));
 const MarketingPreferencesPage = lazy(() => import('./pages/MarketingPreferencesPage.js').then((m) => ({ default: m.MarketingPreferencesPage })));
 const MyProfilePage = lazy(() => import('./pages/MyProfilePage.js').then((m) => ({ default: m.MyProfilePage })));
@@ -87,6 +88,8 @@ export function AppRoutes() {
         {/* Phase 19-OM.9 — the public website chat widget: a visitor session cookie, no CRM login. */}
         <Route path="/chat" element={<WebChatPage />} />
         <Route path="/login" element={<LoginPage />} />
+        {/* Phase 23.2 — the self-service reset is token-based and works without a CRM session. */}
+        <Route path="/password-reset" element={<PasswordResetPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       </Suspense>

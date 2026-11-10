@@ -81,6 +81,11 @@ const ConfigSchema = z.object({
   /** Phase 23.2 (PLAN §8 task 1) — how long a locked account stays rejected (seconds, default 30 min). */
   loginLockoutSeconds: z.coerce.number().int().min(60).max(86400).default(1800),
   /**
+   * Phase 23.2 (PLAN §8 task 2) — lifetime of a self-service password-reset token (seconds).
+   * The token is single-use, stored hashed, and retired when a newer reset is requested.
+   */
+  passwordResetTtlSeconds: z.coerce.number().int().min(300).max(86_400).default(3600),
+  /**
    * Fastify `trustProxy`. Behind nginx/Traefik every request arrives from the proxy's address, so
    * without this the limiter puts **all** users into one bucket. `false` (default) keeps the socket
    * address, which is the safe choice when the API is exposed directly; `true` trusts the left-most
@@ -216,6 +221,7 @@ export function buildConfig(): AppConfig {
     authRateLimitWindowSeconds: process.env.AUTH_RATE_LIMIT_WINDOW_SECONDS,
     loginLockoutThreshold: process.env.LOGIN_LOCKOUT_THRESHOLD,
     loginLockoutSeconds: process.env.LOGIN_LOCKOUT_SECONDS,
+    passwordResetTtlSeconds: process.env.PASSWORD_RESET_TTL_SECONDS,
     trustProxy: process.env.TRUST_PROXY,
     storageDriver: process.env.STORAGE_DRIVER,
     s3Bucket: process.env.S3_BUCKET,

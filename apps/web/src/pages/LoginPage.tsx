@@ -82,6 +82,9 @@ export function LoginPage() {
           <Button type="primary" htmlType="submit" size="large" block loading={submitting || loading}>
             {t('web.login.submit')}
           </Button>
+          <Button type="link" block onClick={() => navigate('/password-reset')} style={{ marginTop: 8 }}>
+            {t('web.passwordReset.forgotLink')}
+          </Button>
         </Form>
       </div>
     </div>
