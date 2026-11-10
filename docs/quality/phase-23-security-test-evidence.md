@@ -1,9 +1,75 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-10
-> **Sub-phase:** 23.2 — Authentication Hardening (tasks 1–2 delivered)
+> **Sub-phase:** 23.2 — Authentication Hardening (tasks 1–6 delivered)
 > **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §8
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.2 — MFA policy, sessions and API-key lifecycle (delivered 2026-11-10)
+
+### Scope delivered
+
+1. **MFA policy enforcement (task 3).** `security.mfa.required` (`off`/`admins`/`all`) is evaluated at
+   login (`mfaRequiredFor`): a covered account without TOTP receives an `mfa_pending` session instead of
+   a usable one. `AuthGuard.enforceMfaPending` confines that session to `GET /AppUser/me`,
+   `POST /AppUser/me/totp/setup`, `POST /AppUser/me/totp/enable` and `POST /Logout` — the flag is
+   enforced, not advisory. `principalFromUser` re-checks the policy on every request, so tightening the
+   setting confines sessions issued before the change. `enableTotp` binds the second factor to the
+   enrolling session (`two_factor_verified`) and revokes the account's other unverified sessions;
+   `disableTotp` refuses to go below the policy floor. `/AppUser/me` now reports `mfaPending` and
+   `sessionId`; the SPA routes a pending session to an enrollment-only profile view.
+2. **Session management (task 4).** `GET /AppUser/me/sessions` lists the caller's own live sessions
+   (marked `current`); `DELETE /AppUser/me/sessions/:sessionId` revokes one, ownership-scoped (another
+   user's session answers 404). Refresh rotation keeps the family id, the factor state and the absolute
+   expiry; replaying a rotated token revokes the whole family (`reuse-detected`). Idle timeout is
+   enforced on use in `principalFromUser`, not only at refresh. `Secure` cookies now follow
+   `request.protocol`, which honours the `TRUST_PROXY` setting — a client-supplied
+   `x-forwarded-proto` is only believed from a trusted peer. The profile page shows the session list
+   with per-row revoke.
+3. **API-key lifecycle (task 5, PLAN §17.2).** Migration `092` adds `scopes` and `allowed_ips` JSONB
+   columns (NULL/empty = the pre-23.2 unrestricted behaviour). Keys carry `read`/`write` scopes
+   (`write` implies `read`) enforced in the guard for every request the key authenticates, and an
+   optional IP/CIDR allowlist checked in `authenticateApiKey` before the key is honoured (a mismatch
+   answers the same 401 as a wrong secret — the restriction is not enumerable). `POST
+   /ApiKey/:keyId/rotate` issues a replacement inheriting the restrictions and revokes the old key;
+   the secret is shown once and only `hashString` hashes are stored. `last_used_at` updates on every
+   successful authentication. The admin UI gained rotate, scope and IP fields plus a restrictions
+   column; the key list never returns secret material.
+4. **Tests (task 6).** New `apps/api/test/phase23-2-sessions-apikeys.test.ts` (9 tests) plus a
+   lockout-expiry case in `phase23-2-security.test.ts`. No real email, SMS or provider call anywhere —
+   the MFA test writes the `security` settings row directly and restores it.
+
+### Tests run
+
+- `pnpm exec vitest run apps/api/test/phase23-2-sessions-apikeys.test.ts apps/api/test/phase23-2-security.test.ts` → 13/13 passed.
+- `pnpm exec vitest run apps/api/test/phase23-2-password-reset.test.ts apps/api/test/two-factor.test.ts apps/api/test/auth.test.ts` → 34/34 passed.
+- `pnpm verify` → `pnpm lint` clean (UI conventions 5175 keys, eslint 0 problems), `pnpm typecheck` pass,
+  `pnpm test:web` 79/79, `pnpm test` 3570/3570 across 273 files.
+- `pnpm ci:migrations` → clean (92 files, highest `092_api_key_lifecycle.sql`).
+
+Notes on the full-suite runs:
+
+- `apps/api/test/module-test-app.ts` was repaired in this change: `AuthController` gained a
+  `PasswordResetService` dependency in task 2, but the throwaway module harness never provided it, so
+  every module-barrel suite aborted the vitest worker during Nest init (`abortOnError: true` masked the
+  DI error). The harness now provides `PasswordResetService` + `MAIL_TRANSPORT_TOKEN` and uses
+  `abortOnError: false` so a future DI break fails the test instead of killing the worker.
+- `apps/api/test/esignature-provider-catalog.test.ts` was made self-sufficient: `prepareEnvelope`
+  requires the `send` feature, which the suite previously inherited from leftover shared-database
+  settings; `beforeAll` now enables it explicitly.
+- `apps/api/test/ai-agent-triggers.test.ts` flaked once inside `pnpm verify` (`started: 0` instead of
+  `1` on the event-trigger door — shared-primary-database state, unrelated to this change): it passes
+  standalone (15/15) and passed on the `pnpm test` rerun (3570/3570). Worth a follow-up look at the
+  per-user run cap / published-agent fan-out ordering under a shared database.
+
+### Known limitations
+
+- API-key scopes are method-level (`read` = safe methods, `write` = unsafe), not per-entity; finer
+  scopes are a later refinement if a consumer needs them.
+- The `mfa_pending` route allowlist is a fixed set in `auth.guard.ts`; new self-service enrollment
+  routes must be added there deliberately.
+- Lockout expiry is derived from the bounded failure window (failures age out), not a stored
+  `locked_until` column — documented since task 1.
 
 ## Phase 23.2 — Self-service password reset (delivered 2026-11-10)
 

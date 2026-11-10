@@ -22,11 +22,13 @@ import { seed } from '../../../database/seed.js';
 import { AuthController } from '../src/auth/auth.controller.js';
 import { AuthGuard } from '../src/auth/auth.guard.js';
 import { AuthService } from '../src/auth/auth.service.js';
+import { PasswordResetService } from '../src/auth/password-reset.service.js';
 import { GlobalExceptionFilter } from '../src/common/global-exception.filter.js';
 import { REQUEST_SCOPE_TOKEN,RequestScope } from '../src/common/request-scope.js';
 import type { AppConfig } from '../src/config.js';
 import { buildConfig, CONFIG_TOKEN } from '../src/config.js';
 import { DatabaseService } from '../src/database/database.service.js';
+import { createMailTransportFromConfig, MAIL_TRANSPORT_TOKEN } from '../src/email/index.js';
 import { I18nService } from '../src/i18n/i18n.service.js';
 
 export const ADMIN_LOGIN = 'admin';
@@ -73,6 +75,12 @@ export async function bootModuleTestApp(overrides: ModuleTestOverrides = {}): Pr
       DatabaseService,
       { provide: REQUEST_SCOPE_TOKEN, useClass: RequestScope },
       AuthService,
+      PasswordResetService,
+      {
+        provide: MAIL_TRANSPORT_TOKEN,
+        inject: [CONFIG_TOKEN],
+        useFactory: (cfg: AppConfig) => createMailTransportFromConfig(cfg),
+      },
       // `AuthController` translates its responses, so the throwaway root module has to own the
       // catalog service just like AppModule does; without it the module cannot be instantiated.
       I18nService,
@@ -83,7 +91,8 @@ export async function bootModuleTestApp(overrides: ModuleTestOverrides = {}): Pr
   })(ModuleTestRootModule);
 
   const adapter = new FastifyAdapter({ logger: false, bodyLimit: 32 * 1024 * 1024 });
-  const app = await NestFactory.create<NestFastifyApplication>(ModuleTestRootModule, adapter, { abortOnError: true, logger: false });
+  // abortOnError:false so a DI failure surfaces as a test error instead of silently aborting the worker.
+  const app = await NestFactory.create<NestFastifyApplication>(ModuleTestRootModule, adapter, { abortOnError: false, logger: false });
   await app.register(asPlugin(multipart), { limits: { fileSize: 25 * 1024 * 1024, files: 10 } });
   app.useGlobalFilters(new GlobalExceptionFilter());
   await app.init();

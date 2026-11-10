@@ -1,6 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { AuthorizationDeniedError, DuplicateRecordError,RecordNotFoundError, ValidationError  } from '@carocrm/core/errors/index.js';
+import { hashString } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -608,7 +609,7 @@ export class IdentityService {
     return { success: true };
   }
 
-  async createApiUser(payload: { userName: string; assignedRoleIds?: string[] }) {
+  async createApiUser(payload: { userName: string; assignedRoleIds?: string[] | undefined; scopes?: string[] | undefined; allowedIps?: string[] | undefined }) {
     this.requireAdmin();
     const id = randomUUID();
     await this.db
@@ -622,7 +623,7 @@ export class IdentityService {
         modified_at: new Date(),
       })
       .execute();
-    const key = await this.auth.issueApiKey(id);
+    const key = await this.auth.issueApiKey(id, { scopes: payload.scopes, allowedIps: payload.allowedIps });
     return { id, userName: payload.userName, keyId: key.keyId, secret: key.secret };
   }
 
@@ -651,19 +652,55 @@ export class IdentityService {
   }
 
   /** Issue another key for an API account. The secret is returned once and stored only as a hash. */
-  async issueApiKey(apiUserId: string) {
+  async issueApiKey(apiUserId: string, opts: { scopes?: string[] | undefined; allowedIps?: string[] | undefined } = {}) {
     this.requireAdmin();
     const account = await this.db.selectFrom('api_users').select(['id', 'user_name']).where('id', '=', apiUserId).executeTakeFirst();
     if (!account) throw new RecordNotFoundError('ApiUser', apiUserId);
-    const key = await this.auth.issueApiKey(account.id);
+    const key = await this.auth.issueApiKey(account.id, opts);
     return { id: account.id, userName: account.user_name, keyId: key.keyId, secret: key.secret };
+  }
+
+  /**
+   * Phase 23.2 (PLAN §8 task 5 / PLAN §17.2): rotate a key in place — a replacement carrying the
+   * same scope and IP restrictions is issued and the old key revoked inside one transaction, so a
+   * caller can swap credentials without a window where both work or neither does. The new secret
+   * is returned once and only its hash is stored.
+   */
+  async rotateApiKey(keyId: string) {
+    this.requireAdmin();
+    const key = await this.db.selectFrom('api_keys').selectAll().where('id', '=', keyId).executeTakeFirst();
+    if (!key) throw new RecordNotFoundError('ApiKey', keyId);
+    const account = await this.db.selectFrom('api_users').select(['id', 'user_name']).where('id', '=', key.api_user_id).executeTakeFirst();
+    if (!account) throw new RecordNotFoundError('ApiUser', key.api_user_id);
+    const scopes = jsonStringList(key.scopes);
+    const allowedIps = jsonStringList(key.allowed_ips);
+    const rotated = await this.db.transaction().execute(async (tx) => {
+      const newKeyId = `key_${randomBytes(6).toString('hex')}`;
+      const secret = randomBytes(32).toString('hex');
+      await tx
+        .insertInto('api_keys')
+        .values({
+          id: newKeyId,
+          api_user_id: account.id,
+          secret_hash: hashString(secret),
+          created_at: new Date(),
+          last_used_at: null,
+          revoked_at: null,
+          scopes: scopes.length > 0 ? JSON.stringify(scopes) : null,
+          allowed_ips: allowedIps.length > 0 ? JSON.stringify(allowedIps) : null,
+        })
+        .execute();
+      await tx.updateTable('api_keys').set({ revoked_at: new Date() }).where('id', '=', keyId).execute();
+      return { keyId: newKeyId, secret };
+    });
+    return { id: account.id, userName: account.user_name, keyId: rotated.keyId, secret: rotated.secret };
   }
 
   async listApiKeys(apiUserId: string) {
     this.requireAdmin();
     const rows = await this.db
       .selectFrom('api_keys')
-      .select(['id', 'api_user_id', 'created_at', 'last_used_at', 'revoked_at'])
+      .select(['id', 'api_user_id', 'created_at', 'last_used_at', 'revoked_at', 'scopes', 'allowed_ips'])
       .where('api_user_id', '=', apiUserId)
       .execute();
     return {
@@ -673,6 +710,8 @@ export class IdentityService {
         createdAt: r.created_at.toISOString(),
         lastUsedAt: r.last_used_at ? r.last_used_at.toISOString() : null,
         revokedAt: r.revoked_at ? r.revoked_at.toISOString() : null,
+        scopes: jsonStringList(r.scopes),
+        allowedIps: jsonStringList(r.allowed_ips),
       })),
     };
   }
@@ -712,6 +751,19 @@ export function leavesNoAdministrator(rows: readonly AccountRow[], targetId: str
     row.is_active && (row.is_admin || row.type === 'admin' || roleListOf(row.assigned_role_ids).includes(SYS_ADMIN_ROLE));
   if (rows.some((row) => row.id !== targetId && administrative(row))) return false;
   return !administrative({ is_admin: after.isAdmin, type: after.type, assigned_role_ids: after.roleIds, is_active: after.isActive });
+}
+
+/** Read a JSONB string-list column back as strings; a JSON string is parsed first. */
+function jsonStringList(value: unknown): string[] {
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function roleListOf(value: unknown): string[] {

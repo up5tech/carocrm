@@ -85,6 +85,10 @@ export interface ApiKeysTable {
   last_used_at: Date | null;
   revoked_at: Date | null;
   created_at: Date;
+  /** Phase 23.2 (PLAN §17.2): scope restriction — NULL/[] = unrestricted, else a subset of {'read','write'}. */
+  scopes: unknown;
+  /** Phase 23.2 (PLAN §17.2): optional IP restriction — NULL/[] = any source, else IPs/CIDRs. */
+  allowed_ips: unknown;
 }
 
 export interface RolesTable {

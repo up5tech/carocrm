@@ -177,6 +177,22 @@ export interface ApiKeyRow {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  /** Phase 23.2 (PLAN §17.2): scope restriction; empty = unrestricted. */
+  scopes: string[];
+  /** Phase 23.2 (PLAN §17.2): source-IP allowlist; empty = any. */
+  allowedIps: string[];
+}
+
+/** Phase 23.2 (PLAN §8 task 4): one row of `GET /AppUser/me/sessions`. */
+export interface MySession {
+  id: string;
+  createdAt: string;
+  lastAccessAt: string | null;
+  expiresAt: string | null;
+  ip: string | null;
+  twoFactorVerified: boolean;
+  mfaPending: boolean;
+  current: boolean;
 }
 
 /**
@@ -402,6 +418,10 @@ export interface ProfileInfo {
   timezone: string | null;
   /** §4.9: whether sign-in still owes a TOTP code after the password. */
   twoFactorEnabled: boolean;
+  /** Phase 23.2: this session must enroll TOTP before it can do anything else. */
+  mfaPending: boolean;
+  /** Phase 23.2: the caller's own session id — marks the current row in the session list. */
+  sessionId: string | null;
 }
 
 /** What the signed-in user may change about themselves; `null` clears a value. */

@@ -60,6 +60,7 @@ export class AuthGuard implements CanActivate {
       if (scheme?.toLowerCase() === 'bearer') {
         const claims = await this.auth.verifyAccessToken(value);
         const principal = await this.auth.principalFromUser(claims.sub as string, typeof claims.sid === 'string' ? claims.sid : undefined);
+        enforceMfaPending(principal, request);
         this.scope.principal = principal;
         applyPrincipalPreferences(this.scope, principal);
         return true;
@@ -69,8 +70,9 @@ export class AuthGuard implements CanActivate {
         if (separator < 0) throw new AuthenticationRequiredError('Invalid API key format.');
         const keyId = value.slice(0, separator);
         const secret = value.slice(separator + 1);
-        const principal = await this.auth.authenticateApiKey(keyId, secret);
+        const principal = await this.auth.authenticateApiKey(keyId, secret, request.ip);
         if (!principal) throw new AuthenticationRequiredError('Invalid API key.');
+        enforceApiKeyScopes(principal, request);
         this.scope.principal = principal;
         applyPrincipalPreferences(this.scope, principal);
         return true;
@@ -92,6 +94,7 @@ export class AuthGuard implements CanActivate {
         }
         const claims = await this.auth.verifyAccessToken(sessionToken);
         const principal = await this.auth.principalFromUser(claims.sub as string, typeof claims.sid === 'string' ? claims.sid : undefined);
+        enforceMfaPending(principal, request);
         this.scope.principal = principal;
         applyPrincipalPreferences(this.scope, principal);
         return true;
@@ -115,6 +118,42 @@ function applyPrincipalPreferences(scope: RequestScope, principal: { locale?: st
   if (!context) return;
   if (context.locale === undefined || principal.locale) context.locale = principal.locale ?? context.locale;
   if (context.timezone === undefined || principal.timezone) context.timezone = principal.timezone ?? context.timezone;
+}
+
+/**
+ * Phase 23.2 (PLAN §8 task 3): a session opened while the instance MFA policy is unsatisfied
+ * (`mfa_pending`) may only reach the enrollment surface — TOTP setup/enable, the profile read the
+ * SPA needs to render it, and logout. Everything else is refused until the factor is confirmed;
+ * without this check the flag would be advisory only and the policy bypassable.
+ */
+const MFA_PENDING_ROUTES = new Set([
+  'GET /api/v1/AppUser/me',
+  'POST /api/v1/AppUser/me/totp/setup',
+  'POST /api/v1/AppUser/me/totp/enable',
+  'POST /api/v1/Logout',
+]);
+
+function enforceMfaPending(principal: { mfaPending?: boolean | undefined }, request: FastifyRequest): void {
+  if (principal.mfaPending !== true) return;
+  const path = request.url.split('?')[0] ?? '';
+  if (!MFA_PENDING_ROUTES.has(`${request.method} ${path}`)) {
+    throw new AuthorizationDeniedError('Two-factor enrollment is required to continue.');
+  }
+}
+
+/**
+ * Phase 23.2 (PLAN §8 task 5 / PLAN §17.2): an API key's scope restriction is enforced at the door.
+ * `write` implies `read`; a key whose scopes are unset (NULL) is unrestricted, which is the
+ * pre-23.2 behaviour every existing key keeps.
+ */
+function enforceApiKeyScopes(principal: { keyScopes?: readonly string[] | undefined }, request: FastifyRequest): void {
+  const scopes = principal.keyScopes;
+  if (scopes === undefined) return;
+  const has = (scope: string) => scopes.includes(scope);
+  const allowed = UNSAFE_METHODS.has(request.method) ? has('write') : has('read') || has('write');
+  if (!allowed) {
+    throw new AuthorizationDeniedError('This API key does not allow the requested operation.', { scopes: [...scopes] });
+  }
 }
 
 function timingSafeEqualStrings(a: string, b: string): boolean {

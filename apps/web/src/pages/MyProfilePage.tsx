@@ -1,12 +1,13 @@
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
-import { App as AntApp, Avatar, Button, Card, Col, Form, Input, Row, Select, Space, Typography, Upload } from 'antd';
-import { useCallback, useMemo, useState } from 'react';
+import { Alert, App as AntApp, Avatar, Button, Card, Col, Form, Input, Popconfirm, Row, Select, Space, Table, Tag, Typography, Upload } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client.js';
+import type { MySession } from '../api/types.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { timezoneOptions } from '../components/timezones.js';
-import { activeLocaleName, localesEnabled, t } from '../state/i18n.js';
+import { activeLocaleName, formatDateTime, localesEnabled, t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 
 interface ProfileForm {
@@ -36,6 +37,8 @@ export function MyProfilePage() {
   const [totpSetup, setTotpSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [totpBusy, setTotpBusy] = useState(false);
+  const [sessions, setSessions] = useState<MySession[] | null>(null);
+  const [sessionRevoking, setSessionRevoking] = useState<string | null>(null);
   const locale = activeLocaleName();
 
   const zones = useMemo(() => timezoneOptions(), []);
@@ -169,6 +172,35 @@ export function MyProfilePage() {
     }
   };
 
+  // Phase 23.2 (PLAN §8 task 4): the caller's own sessions — list and revoke, marked with the
+  // session this browser is using so "sign out other devices" stays an informed choice.
+  const loadSessions = useCallback(async () => {
+    try {
+      setSessions((await api.mySessions()).list);
+    } catch {
+      setSessions([]);
+    }
+  }, []);
+
+  const mfaPending = principal?.mfaPending === true;
+  useEffect(() => {
+    // An mfa-pending session cannot list sessions (the server refuses it), so don't ask.
+    if (!mfaPending) void loadSessions();
+  }, [loadSessions, mfaPending]);
+
+  const revokeMySession = async (sessionId: string): Promise<void> => {
+    setSessionRevoking(sessionId);
+    try {
+      await api.revokeMySession(sessionId);
+      await loadSessions();
+      void message.success(t('web.profile.sessionRevoked'));
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.profile.sessionRevokeFailed'));
+    } finally {
+      setSessionRevoking(null);
+    }
+  };
+
   const regenerateRecovery = async (): Promise<void> => {
     if (totpCode.trim() === '') return;
     setTotpBusy(true);
@@ -185,6 +217,94 @@ export function MyProfilePage() {
   };
 
   if (!principal) return null;
+
+  // The enrollment card is shared by the full profile and the mfa-pending gate below — the
+  // pending session's only permitted surface besides sign-out.
+  const totpCard = (
+    <Card className="carocrm-card" title={t('web.profile.twoFactorTitle')}>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+        {principal.twoFactorEnabled ? t('web.profile.twoFactorEnabledHint') : t('web.profile.twoFactorDisabledHint')}
+      </Typography.Paragraph>
+      {principal.twoFactorEnabled ? (
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Password
+            placeholder={t('web.profile.twoFactorCodePlaceholder')}
+            value={totpCode}
+            onChange={(event) => setTotpCode(event.target.value)}
+            autoComplete="one-time-code"
+          />
+          <Space wrap>
+            <Button danger onClick={() => void disableTotp()} loading={totpBusy}>
+              {t('web.profile.twoFactorDisable')}
+            </Button>
+            <Button onClick={() => void regenerateRecovery()} loading={totpBusy}>
+              {t('web.profile.twoFactorRegenerate')}
+            </Button>
+          </Space>
+          {recoveryCodes !== null ? (
+            <div>
+              <Typography.Text strong>{t('web.profile.recoveryCodesTitle')}</Typography.Text>
+              <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
+                {t('web.profile.recoveryCodesHint')}
+              </Typography.Paragraph>
+              <pre className="carocrm-kpi-context" style={{ whiteSpace: 'pre-wrap' }}>{recoveryCodes.join('\n')}</pre>
+            </div>
+          ) : null}
+        </Space>
+      ) : (
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          {totpSetup === null ? (
+            <Button type="primary" onClick={() => void beginTotpSetup()} loading={totpBusy}>
+              {t('web.profile.twoFactorBegin')}
+            </Button>
+          ) : (
+            <>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('web.profile.twoFactorSecretLabel')}: <code>{totpSetup.secret}</code>
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                {totpSetup.otpauthUri}
+              </Typography.Text>
+              <Input
+                placeholder={t('web.profile.twoFactorCodePlaceholder')}
+                value={totpCode}
+                onChange={(event) => setTotpCode(event.target.value)}
+                autoComplete="one-time-code"
+              />
+              <Button type="primary" onClick={() => void enableTotp()} loading={totpBusy}>
+                {t('web.profile.twoFactorEnable')}
+              </Button>
+            </>
+          )}
+          {recoveryCodes !== null ? (
+            <div>
+              <Typography.Text strong>{t('web.profile.recoveryCodesTitle')}</Typography.Text>
+              <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
+                {t('web.profile.recoveryCodesHint')}
+              </Typography.Paragraph>
+              <pre style={{ whiteSpace: 'pre-wrap' }}>{recoveryCodes.join('\n')}</pre>
+            </div>
+          ) : null}
+        </Space>
+      )}
+    </Card>
+  );
+
+  // Phase 23.2 (PLAN §8 task 3): the server restricts an mfa-pending session to the enrollment
+  // routes, so the page offers exactly that card plus a way out — every other card would only
+  // produce authorization errors.
+  if (principal.mfaPending) {
+    return (
+      <div style={{ maxWidth: 720, margin: '48px auto', padding: '0 16px' }}>
+        <PageHeader title={t('web.profile.title')} subtitle={t('web.profile.mfaPendingSubtitle')} />
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={t('web.profile.mfaPendingHint')} />
+        {totpCard}
+        <Button style={{ marginTop: 16 }} onClick={() => void signOut().then(() => navigate('/login', { replace: true }))}>
+          {t('web.profile.signOut')}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -345,72 +465,63 @@ export function MyProfilePage() {
         </Form>
       </Card>
 
-      <Card className="carocrm-card" title={t('web.profile.twoFactorTitle')} style={{ marginTop: 16 }}>
+      {totpCard}
+
+      <Card className="carocrm-card" title={t('web.profile.sessionsTitle')} style={{ marginTop: 16 }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          {principal.twoFactorEnabled ? t('web.profile.twoFactorEnabledHint') : t('web.profile.twoFactorDisabledHint')}
+          {t('web.profile.sessionsHint')}
         </Typography.Paragraph>
-        {principal.twoFactorEnabled ? (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Input.Password
-              placeholder={t('web.profile.twoFactorCodePlaceholder')}
-              value={totpCode}
-              onChange={(event) => setTotpCode(event.target.value)}
-              autoComplete="one-time-code"
-            />
-            <Space wrap>
-              <Button danger onClick={() => void disableTotp()} loading={totpBusy}>
-                {t('web.profile.twoFactorDisable')}
-              </Button>
-              <Button onClick={() => void regenerateRecovery()} loading={totpBusy}>
-                {t('web.profile.twoFactorRegenerate')}
-              </Button>
-            </Space>
-            {recoveryCodes !== null ? (
-              <div>
-                <Typography.Text strong>{t('web.profile.recoveryCodesTitle')}</Typography.Text>
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
-                  {t('web.profile.recoveryCodesHint')}
-                </Typography.Paragraph>
-                <pre className="carocrm-kpi-context" style={{ whiteSpace: 'pre-wrap' }}>{recoveryCodes.join('\n')}</pre>
-              </div>
-            ) : null}
-          </Space>
-        ) : (
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            {totpSetup === null ? (
-              <Button type="primary" onClick={() => void beginTotpSetup()} loading={totpBusy}>
-                {t('web.profile.twoFactorBegin')}
-              </Button>
-            ) : (
-              <>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('web.profile.twoFactorSecretLabel')}: <code>{totpSetup.secret}</code>
-                </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-all' }}>
-                  {totpSetup.otpauthUri}
-                </Typography.Text>
-                <Input
-                  placeholder={t('web.profile.twoFactorCodePlaceholder')}
-                  value={totpCode}
-                  onChange={(event) => setTotpCode(event.target.value)}
-                  autoComplete="one-time-code"
-                />
-                <Button type="primary" onClick={() => void enableTotp()} loading={totpBusy}>
-                  {t('web.profile.twoFactorEnable')}
-                </Button>
-              </>
-            )}
-            {recoveryCodes !== null ? (
-              <div>
-                <Typography.Text strong>{t('web.profile.recoveryCodesTitle')}</Typography.Text>
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
-                  {t('web.profile.recoveryCodesHint')}
-                </Typography.Paragraph>
-                <pre style={{ whiteSpace: 'pre-wrap' }}>{recoveryCodes.join('\n')}</pre>
-              </div>
-            ) : null}
-          </Space>
-        )}
+        <Table<MySession>
+          size="small"
+          rowKey="id"
+          loading={sessions === null}
+          dataSource={sessions ?? []}
+          locale={{ emptyText: t('web.profile.sessionsEmpty') }}
+          pagination={false}
+          columns={[
+            {
+              title: t('web.profile.sessionsSignedIn'),
+              dataIndex: 'createdAt',
+              render: (value: string) => formatDateTime(value),
+            },
+            {
+              title: t('web.profile.sessionsLastActive'),
+              dataIndex: 'lastAccessAt',
+              render: (value: string | null) => (value === null ? '---' : formatDateTime(value)),
+            },
+            { title: t('web.profile.sessionsIp'), dataIndex: 'ip', render: (value: string | null) => value ?? '---' },
+            {
+              title: t('web.profile.sessionsStatus'),
+              key: 'status',
+              width: 160,
+              render: (_: unknown, row) =>
+                row.current ? (
+                  <Tag color="green">{t('web.profile.sessionsCurrent')}</Tag>
+                ) : row.twoFactorVerified ? (
+                  <Tag>{t('web.profile.sessionsVerified')}</Tag>
+                ) : (
+                  <Tag>{t('web.profile.sessionsPasswordOnly')}</Tag>
+                ),
+            },
+            {
+              title: '',
+              key: 'actions',
+              width: 130,
+              render: (_: unknown, row) =>
+                row.current ? null : (
+                  <Popconfirm
+                    title={t('web.profile.sessionRevokeConfirm')}
+                    okText={t('web.common.remove')}
+                    onConfirm={() => void revokeMySession(row.id)}
+                  >
+                    <Button size="small" danger loading={sessionRevoking === row.id}>
+                      {t('web.profile.sessionRevoke')}
+                    </Button>
+                  </Popconfirm>
+                ),
+            },
+          ]}
+        />
       </Card>
     </Space>
   );

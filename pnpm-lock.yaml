@@ -172,6 +172,9 @@ importers:
       ioredis:
         specifier: ^5.4.0
         version: 5.11.1
+      ipaddr.js:
+        specifier: 2.5.0
+        version: 2.5.0
       jose:
         specifier: ^6.0.0
         version: 6.2.10

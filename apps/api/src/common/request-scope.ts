@@ -6,9 +6,13 @@ export interface AuthenticatedPrincipal {
   userType: 'admin' | 'regular' | 'api' | 'portal' | 'system';
   roles: string[];
   teams: string[];
-  sessionId?: string;
+  sessionId?: string | undefined;
   /** Phase 23.2: the session may only enroll TOTP until the instance MFA policy is satisfied. */
   mfaPending?: boolean | undefined;
+  /** Phase 23.2 (PLAN §17.2): the presenting API key's scope restriction; undefined = unrestricted. */
+  keyScopes?: readonly string[] | undefined;
+  /** Phase 23.2 (PLAN §17.2): the id of the API key that authenticated this principal. */
+  keyId?: string | undefined;
   /** Phase 18: the portal this principal belongs to (portal users only, PLAN §37). */
   portalId?: string | undefined;
   /** Phase 18: the Contact record a portal user is (PLAN §37 contact/account relation). */

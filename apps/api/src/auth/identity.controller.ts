@@ -98,15 +98,25 @@ export class IdentityController {
   }
 
   @Post('ApiUser')
-  createApiUser(@Body() body: { userName: string; assignedRoleIds?: string[] }) {
-    return this.identity.createApiUser(body);
+  createApiUser(@Body() body: unknown) {
+    return this.identity.createApiUser(parseApiUserPayload(body));
   }
 
-  /** Issue an additional key. The secret appears in this response only; a rotation is a new key plus a revoke. */
+  /** Issue an additional key. The secret appears in this response only; prefer rotate for replacing one. */
   @HttpCode(201)
   @Post('ApiUser/:apiUserId/key')
-  issueApiKey(@Param('apiUserId') apiUserId: string) {
-    return this.identity.issueApiKey(apiUserId);
+  issueApiKey(@Param('apiUserId') apiUserId: string, @Body() body: unknown) {
+    return this.identity.issueApiKey(apiUserId, parseApiKeyOptions(body));
+  }
+
+  /**
+   * Phase 23.2 (PLAN §8 task 5): rotate a key — the replacement inherits its scope and IP
+   * restrictions, the old key stops working immediately, and the new secret is shown once.
+   */
+  @HttpCode(201)
+  @Post('ApiKey/:keyId/rotate')
+  rotateApiKey(@Param('keyId') keyId: string) {
+    return this.identity.rotateApiKey(keyId);
   }
 
   @Get('ApiKey/:apiUserId')
@@ -147,6 +157,40 @@ export class IdentityController {
 }
 
 const ResetPasswordSchema = z.object({ password: z.string().min(8).max(512) });
+
+/** Phase 23.2 (PLAN §17.2): optional scope/IP restriction carried by an API-key issue request. */
+const ApiKeyOptionsSchema = z
+  .object({
+    scopes: z.array(z.string().min(1).max(32)).max(8).optional(),
+    allowedIps: z.array(z.string().min(1).max(64)).max(64).optional(),
+  })
+  .strict();
+
+const CreateApiUserSchema = z
+  .object({
+    userName: z.string().min(1).max(100),
+    assignedRoleIds: z.array(z.string()).optional(),
+    scopes: z.array(z.string().min(1).max(32)).max(8).optional(),
+    allowedIps: z.array(z.string().min(1).max(64)).max(64).optional(),
+  })
+  .strict();
+
+function parseApiKeyOptions(body: unknown): { scopes?: string[] | undefined; allowedIps?: string[] | undefined } {
+  if (body === undefined || body === null) return {};
+  const parsed = ApiKeyOptionsSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new InvalidQueryError('Invalid API key options.', { issues: parsed.error.issues.map((issue) => issue.message) });
+  }
+  return parsed.data;
+}
+
+function parseApiUserPayload(body: unknown): { userName: string; assignedRoleIds?: string[] | undefined; scopes?: string[] | undefined; allowedIps?: string[] | undefined } {
+  const parsed = CreateApiUserSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new InvalidQueryError('Invalid API user payload.', { issues: parsed.error.issues.map((issue) => issue.message) });
+  }
+  return parsed.data;
+}
 
 /**
  * The boolean and enum filters are validated rather than guessed: a misspelt value would otherwise

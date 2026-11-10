@@ -4,6 +4,7 @@ import { AuthenticationFailedError, AuthenticationRequiredError, RecordNotFoundE
 import { hashString } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 import argon2 from 'argon2';
+import ipaddr from 'ipaddr.js';
 import { errors as joseErrors, type JWTPayload, jwtVerify, SignJWT } from 'jose';
 
 import type { AppConfig } from '../config.js';
@@ -33,6 +34,10 @@ export interface PrincipalRecord {
   sessionId?: string | undefined;
   /** Phase 23.2: the session may only enroll TOTP until the instance MFA policy is satisfied. */
   mfaPending?: boolean | undefined;
+  /** Phase 23.2 (PLAN §17.2): the presenting API key's scope restriction; undefined = unrestricted. */
+  keyScopes?: readonly string[] | undefined;
+  /** Phase 23.2 (PLAN §17.2): the id of the API key that authenticated this principal. */
+  keyId?: string | undefined;
   /** Phase 18: portal assignment (PLAN §37). */
   portalId?: string | undefined;
   /** Phase 18: the Contact record a portal user is. */
@@ -570,32 +575,57 @@ export class AuthService {
     return result;
   }
 
-  async issueApiKey(apiUserId: string): Promise<{ keyId: string; secret: string }> {
+  /**
+   * Phase 23.2 (PLAN §8 task 5 / PLAN §17.2): issue a key with an optional scope restriction
+   * (`read`/`write`; `write` implies `read`) and an optional source-IP allowlist (IPs or CIDRs).
+   * Omitted options store NULL — the pre-23.2 unrestricted behaviour.
+   */
+  async issueApiKey(
+    apiUserId: string,
+    opts: { scopes?: readonly string[] | undefined; allowedIps?: readonly string[] | undefined } = {},
+  ): Promise<{ keyId: string; secret: string }> {
     const db = this.database.db;
     const keyId = `key_${randomBytes(6).toString('hex')}`;
     const secret = randomBytes(32).toString('hex');
+    const scopes = normalizeApiKeyScopes(opts.scopes);
+    const allowedIps = normalizeApiKeyAllowedIps(opts.allowedIps);
     await db
       .insertInto('api_keys')
-      .values({ id: keyId, api_user_id: apiUserId, secret_hash: hashString(secret), created_at: new Date(), last_used_at: null, revoked_at: null })
+      .values({
+        id: keyId,
+        api_user_id: apiUserId,
+        secret_hash: hashString(secret),
+        created_at: new Date(),
+        last_used_at: null,
+        revoked_at: null,
+        scopes: scopes === null ? null : JSON.stringify(scopes),
+        allowed_ips: allowedIps === null ? null : JSON.stringify(allowedIps),
+      })
       .execute();
     return { keyId, secret };
   }
 
-  async authenticateApiKey(keyId: string, secret: string): Promise<PrincipalRecord | undefined> {
+  async authenticateApiKey(keyId: string, secret: string, ip?: string): Promise<PrincipalRecord | undefined> {
     const db = this.database.db;
     const key = await db.selectFrom('api_keys').selectAll().where('id', '=', keyId).executeTakeFirst();
     if (!key || key.revoked_at !== null) return undefined;
     const providedHash = hashString(secret);
     if (key.secret_hash.length !== providedHash.length) return undefined;
     if (!timingSafeEqual(Buffer.from(key.secret_hash, 'utf8'), Buffer.from(providedHash, 'utf8'))) return undefined;
+    // Phase 23.2 (PLAN §17.2): the optional IP restriction is checked before the key is honoured.
+    // A key that names sources and is used from anywhere else simply does not authenticate — the
+    // same outcome as a wrong secret, so the restriction itself is not enumerable.
+    if (!apiKeyIpAllowed(key.allowed_ips, ip)) return undefined;
     const apiUser = await db.selectFrom('api_users').selectAll().where('id', '=', key.api_user_id).executeTakeFirst();
     if (!apiUser || !apiUser.is_active) return undefined;
     await db.updateTable('api_keys').set({ last_used_at: new Date() }).where('id', '=', keyId).execute();
     const roles = Array.isArray(apiUser.assigned_role_ids) ? (apiUser.assigned_role_ids as string[]) : [];
+    const keyScopes = apiKeyScopesOf(key.scopes);
+    const keyFields = { keyId, ...(keyScopes !== null ? { keyScopes } : {}) };
     if (roles.includes('sysAdmin')) {
-      return { userId: apiUser.id, userName: apiUser.user_name, userType: 'admin', roles, teams: [] };
+      return { userId: apiUser.id, userName: apiUser.user_name, userType: 'admin', roles, teams: [], ...keyFields };
     }
-    return { userId: apiUser.id, userName: apiUser.user_name, userType: 'api', roles, teams: [] };
+    return { userId: apiUser.id, userName: apiUser.user_name, userType: 'api', roles, teams: [], ...keyFields };
   }
 
   async principalFromUser(userId: string, sessionId?: string): Promise<PrincipalRecord> {
@@ -636,7 +666,10 @@ export class AuthService {
       if (user.totp_enabled && !session.two_factor_verified) {
         throw new AuthenticationFailedError('Session has not completed two-factor authentication.');
       }
-      mfaPending = session.mfa_pending;
+      // The flag written at sign-in is not the whole story: the policy may have been tightened
+      // since. A covered account that never enrolled is pending on every session it holds, so the
+      // guard restricts it to enrollment until the factor exists — same outcome as a fresh login.
+      mfaPending = session.mfa_pending || (mfaRequiredFor(policy, user) && !user.totp_enabled);
       await db.updateTable('user_sessions').set({ last_access_at: new Date() }).where('id', '=', sessionId).execute();
     }
     const directRoles = Array.isArray(user.assigned_role_ids) ? (user.assigned_role_ids as string[]) : [];
@@ -749,4 +782,79 @@ export class AuthService {
     const hash = await argon2.hash(newPassword, { type: argon2.argon2id });
     await db.updateTable('users').set({ password: hash, modified_at: new Date() }).where('id', '=', userId).execute();
   }
+}
+
+/** Phase 23.2 (PLAN §17.2): the only scopes an API key may carry. `write` implies `read`. */
+const API_KEY_SCOPES = new Set(['read', 'write']);
+
+function normalizeApiKeyScopes(scopes: readonly string[] | undefined): string[] | null {
+  if (scopes === undefined) return null;
+  const unique = [...new Set(scopes.map((scope) => scope.trim().toLowerCase()).filter((scope) => scope !== ''))];
+  const invalid = unique.filter((scope) => !API_KEY_SCOPES.has(scope));
+  if (invalid.length > 0) {
+    throw new ValidationError('Unknown API key scope.', { scopes: invalid, allowed: [...API_KEY_SCOPES] });
+  }
+  return unique.length === 0 ? null : unique;
+}
+
+function apiKeyScopesOf(value: unknown): string[] | null {
+  const list = jsonStringList(value);
+  return list.length === 0 ? null : list;
+}
+
+function normalizeApiKeyAllowedIps(ips: readonly string[] | undefined): string[] | null {
+  if (ips === undefined) return null;
+  const entries = [...new Set(ips.map((entry) => entry.trim()).filter((entry) => entry !== ''))];
+  for (const entry of entries) {
+    const valid = entry.includes('/') ? ipaddr.isValidCIDR(entry) : ipaddr.isValid(entry);
+    if (!valid) {
+      throw new ValidationError('Invalid API key IP restriction entry; use an IP address or CIDR range.', { entry });
+    }
+  }
+  return entries.length === 0 ? null : entries;
+}
+
+function apiKeyAllowedIpsOf(value: unknown): string[] | null {
+  const list = jsonStringList(value);
+  return list.length === 0 ? null : list;
+}
+
+function jsonStringList(value: unknown): string[] {
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+}
+
+/**
+ * Phase 23.2 (PLAN §17.2): whether the request's source address satisfies the key's optional IP
+ * restriction. No restriction (NULL/[]) allows any source; a restricted key used from an unnamed or
+ * non-matching source does not authenticate.
+ */
+function apiKeyIpAllowed(allowedIps: unknown, ip: string | undefined): boolean {
+  const entries = apiKeyAllowedIpsOf(allowedIps);
+  if (entries === null) return true;
+  if (ip === undefined || ip.trim() === '') return false;
+  let addr: ReturnType<typeof ipaddr.process>;
+  try {
+    addr = ipaddr.process(ip.trim());
+  } catch {
+    return false;
+  }
+  return entries.some((entry) => {
+    try {
+      if (entry.includes('/')) {
+        return addr.match(ipaddr.parseCIDR(entry));
+      }
+      const other = ipaddr.parse(entry);
+      return addr.kind() === other.kind() && addr.toNormalizedString() === other.toNormalizedString();
+    } catch {
+      return false;
+    }
+  });
 }

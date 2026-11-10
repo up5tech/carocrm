@@ -76,7 +76,9 @@ beforeAll(async () => {
   baseline = row?.data ?? null;
   const enabled = await patchSettings({
     enabled: true,
-    features: { connections: true, requests: true },
+    // `send` gates prepareEnvelope/sendEnvelope probes below; the stored baseline may have it off,
+    // so the suite enables it explicitly rather than depending on leftover settings state.
+    features: { connections: true, requests: true, send: true },
     provider: { clients: { docusign: { demo: DEMO_CLIENT_ID, production: '' } } },
   });
   expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);

@@ -122,6 +122,20 @@ export function AppRoutes() {
     );
   }
 
+  // Phase 23.2 (PLAN §8 task 3): an mfa-pending session may only enroll TOTP — the server refuses
+  // every other route, so the SPA offers exactly that surface (the profile page renders only the
+  // enrollment card in this state, plus sign-out) until the factor is confirmed.
+  if (principal.mfaPending) {
+    return (
+      <Suspense fallback={<LoadingSkeleton rows={8} />}>
+        <Routes>
+          <Route path="/profile" element={<MyProfilePage />} />
+          <Route path="*" element={<Navigate to="/profile" replace />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   return (
     <AppShell>
       <Suspense fallback={<LoadingSkeleton rows={8} />}>

@@ -306,6 +306,26 @@ export class AuthController {
     return { status: true };
   }
 
+  /**
+   * Phase 23.2 (PLAN §8 task 4): the caller's own live sessions. `sessionId` marks which row is
+   * this request's session so the client can label "this device" without trusting anything else.
+   */
+  @Get('AppUser/me/sessions')
+  async mySessions(): Promise<{ list: unknown[] }> {
+    const principal = this.scope.requirePrincipal();
+    const list = await this.auth.listSessions(principal.userId);
+    return {
+      list: list.map((session) => ({ ...session, current: session.id === principal.sessionId })),
+    };
+  }
+
+  /** Revoke one of the caller's own sessions; a session that is not theirs answers 404. */
+  @Delete('AppUser/me/sessions/:sessionId')
+  async revokeMySession(@Param('sessionId') sessionId: string): Promise<{ success: boolean }> {
+    const principal = this.scope.requirePrincipal();
+    return this.auth.revokeSession(principal.userId, sessionId);
+  }
+
   @Get('AppUser/current')
   async current(@Query('view') view?: string): Promise<unknown> {
     void view;
@@ -333,13 +353,19 @@ export class AuthController {
       teams: principal.teams,
       locale: principal.locale ?? null,
       timezone: principal.timezone ?? null,
+      // Phase 23.2: the SPA routes an mfa-pending session to TOTP enrollment and marks the current
+      // row in the session list; both are facts about the caller's own session, never a secret.
+      mfaPending: principal.mfaPending === true,
+      sessionId: principal.sessionId ?? null,
     };
   }
 
   private async respond(tokens: AuthTokens, request: FastifyRequest, reply: FastifyReply): Promise<LoginResult> {
     const principal = await this.auth.principalFromUser((await this.auth.verifyAccessToken(tokens.accessToken)).sub as string);
     const csrf = randomCsrf();
-    const secure = request.headers['x-forwarded-proto'] === 'https';
+    // `request.protocol` honours the configured trustProxy setting: a client-supplied
+    // x-forwarded-proto is only believed when the peer is a trusted proxy (PLAN §8 task 4).
+    const secure = request.protocol === 'https';
     const cookies = [
       `CRM-SESSION=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}; Max-Age=${tokens.expiresIn}`,
       `CRM-REFRESH=${tokens.refreshToken}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}; Max-Age=1209600`,

@@ -17,7 +17,6 @@ import { errorMessage, useRolesQuery } from './identity.js';
  * server stores a hash and has nothing to hand back.
  */
 export function ApiKeysTab() {
-  const { message } = AntApp.useApp();
   const client = useQueryClient();
   const roles = useRolesQuery();
   const accounts = useQuery({
@@ -26,18 +25,11 @@ export function ApiKeysTab() {
     staleTime: 30_000,
   });
   const [creating, setCreating] = useState(false);
+  const [issuingFor, setIssuingFor] = useState<ApiUserRow | null>(null);
   const [secret, setSecret] = useState<ApiKeySecret | null>(null);
 
   const roleNames = new Map((roles.data?.list ?? []).map((role) => [role.id, role.name]));
   const reload = () => void client.invalidateQueries({ queryKey: ['identity'] });
-
-  const issue = async (row: ApiUserRow) => {
-    try {
-      setSecret(await api.issueApiKey(row.id));
-    } catch (error) {
-      void message.error(errorMessage(error, t('web.adminApiKeys.issueFailed')));
-    }
-  };
 
   return (
     <div className="carocrm-admin-records">
@@ -106,7 +98,7 @@ export function ApiKeysTab() {
               key: 'actions',
               width: 150,
               render: (_: unknown, row) => (
-                <Button size="small" icon={<KeyOutlined />} onClick={() => void issue(row)}>
+                <Button size="small" icon={<KeyOutlined />} onClick={() => setIssuingFor(row)}>
                   {t('web.adminApiKeys.issue')}
                 </Button>
               ),
@@ -121,6 +113,17 @@ export function ApiKeysTab() {
           onCreated={(created) => {
             setCreating(false);
             setSecret(created);
+            reload();
+          }}
+        />
+      ) : null}
+      {issuingFor !== null ? (
+        <IssueKeyModal
+          apiUser={issuingFor}
+          onClose={() => setIssuingFor(null)}
+          onIssued={(issued) => {
+            setIssuingFor(null);
+            setSecret(issued);
             reload();
           }}
         />
@@ -150,11 +153,14 @@ function KeysPanel({ apiUserId, onChanged, onIssued }: { readonly apiUserId: str
     }
   };
 
-  const rotate = async () => {
+  // Phase 23.2: rotation replaces this key in place — the replacement inherits its scope and IP
+  // restrictions and the old secret stops working the moment the call returns.
+  const rotate = async (key: ApiKeyRow) => {
     try {
-      onIssued(await api.issueApiKey(apiUserId));
+      onIssued(await api.rotateApiKey(key.id));
+      void keys.refetch();
     } catch (error) {
-      void message.error(errorMessage(error, t('web.adminApiKeys.issueFailed')));
+      void message.error(errorMessage(error, t('web.adminApiKeys.rotateFailed')));
     }
   };
 
@@ -181,6 +187,26 @@ function KeysPanel({ apiUserId, onChanged, onIssued }: { readonly apiUserId: str
           render: (value: string | null) => (value === null ? '---' : formatDateTime(value)),
         },
         {
+          title: t('web.adminApiKeys.restrictions'),
+          key: 'restrictions',
+          width: 220,
+          responsive: ['md'],
+          render: (_: unknown, row) => (
+            <Space size={4} wrap>
+              {row.scopes.length === 0 ? (
+                <Tag>{t('web.adminApiKeys.unrestricted')}</Tag>
+              ) : (
+                row.scopes.map((scope) => (
+                  <Tag key={scope} color={scope === 'write' ? 'blue' : 'default'}>
+                    {scope}
+                  </Tag>
+                ))
+              )}
+              {row.allowedIps.length > 0 ? <Tag>{row.allowedIps.join(', ')}</Tag> : null}
+            </Space>
+          ),
+        },
+        {
           title: t('web.adminUsers.colStatus'),
           key: 'status',
           width: 120,
@@ -193,7 +219,7 @@ function KeysPanel({ apiUserId, onChanged, onIssued }: { readonly apiUserId: str
           render: (_: unknown, row) =>
             row.revokedAt === null ? (
               <Space size={4}>
-                <Button size="small" icon={<KeyOutlined />} onClick={() => void rotate()}>
+                <Button size="small" icon={<KeyOutlined />} onClick={() => void rotate(row)}>
                   {t('web.adminApiKeys.rotate')}
                 </Button>
                 <Popconfirm title={t('web.adminApiKeys.revokeConfirm')} description={t('web.adminApiKeys.revokeHint')} okText={t('web.common.remove')} onConfirm={() => void revoke(row)}>
@@ -209,8 +235,62 @@ function KeysPanel({ apiUserId, onChanged, onIssued }: { readonly apiUserId: str
   );
 }
 
+/**
+ * Phase 23.2 (PLAN §17.2): an additional key may carry a scope restriction (`read`/`write`) and a
+ * source-IP allowlist. Both are optional — leaving them empty keeps the unrestricted behaviour.
+ */
+function KeyOptionsFields() {
+  return (
+    <>
+      <Form.Item name="scopes" label={t('web.adminApiKeys.scopes')} extra={t('web.adminApiKeys.scopesHint')}>
+        <Select
+          mode="multiple"
+          allowClear
+          placeholder={t('web.adminApiKeys.unrestricted')}
+          options={[
+            { value: 'read', label: t('web.adminApiKeys.scopeRead') },
+            { value: 'write', label: t('web.adminApiKeys.scopeWrite') },
+          ]}
+        />
+      </Form.Item>
+      <Form.Item name="allowedIps" label={t('web.adminApiKeys.allowedIps')} extra={t('web.adminApiKeys.allowedIpsHint')}>
+        <Select mode="tags" allowClear tokenSeparators={[',', ' ']} placeholder={t('web.adminApiKeys.anyAddress')} />
+      </Form.Item>
+    </>
+  );
+}
+
+function IssueKeyModal({ apiUser, onClose, onIssued }: { readonly apiUser: ApiUserRow; readonly onClose: () => void; readonly onIssued: (secret: ApiKeySecret) => void }) {
+  const [form] = Form.useForm<{ scopes?: string[]; allowedIps?: string[] }>();
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const submit = async () => {
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) return;
+    setSaving(true);
+    setFailed(null);
+    try {
+      onIssued(await api.issueApiKey(apiUser.id, { scopes: values.scopes, allowedIps: values.allowedIps }));
+    } catch (error) {
+      setFailed(errorMessage(error, t('web.adminApiKeys.issueFailed')));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open width={520} title={t('web.adminApiKeys.issueTitle', { name: apiUser.userName })} okText={t('web.adminApiKeys.issue')} confirmLoading={saving} onCancel={onClose} onOk={() => void submit()} destroyOnHidden>
+      {failed !== null ? <Alert type="error" showIcon style={{ marginBottom: 16 }} message={failed} role="alert" /> : null}
+      <Form form={form} layout="vertical">
+        <KeyOptionsFields />
+      </Form>
+    </Modal>
+  );
+}
+
 function CreateApiUserModal({ onClose, onCreated }: { readonly onClose: () => void; readonly onCreated: (created: ApiKeySecret) => void }) {
-  const [form] = Form.useForm<{ userName: string; assignedRoleIds: string[] }>();
+  const [form] = Form.useForm<{ userName: string; assignedRoleIds: string[]; scopes?: string[]; allowedIps?: string[] }>();
   const roles = useRolesQuery();
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -221,7 +301,14 @@ function CreateApiUserModal({ onClose, onCreated }: { readonly onClose: () => vo
     setSaving(true);
     setFailed(null);
     try {
-      onCreated(await api.createApiUser({ userName: values.userName.trim(), assignedRoleIds: values.assignedRoleIds }));
+      onCreated(
+        await api.createApiUser({
+          userName: values.userName.trim(),
+          assignedRoleIds: values.assignedRoleIds,
+          scopes: values.scopes,
+          allowedIps: values.allowedIps,
+        }),
+      );
     } catch (error) {
       setFailed(errorMessage(error, t('web.adminApiKeys.createFailed')));
     } finally {
@@ -239,6 +326,7 @@ function CreateApiUserModal({ onClose, onCreated }: { readonly onClose: () => vo
         <Form.Item name="assignedRoleIds" label={t('web.adminUsers.roles')} extra={t('web.adminApiKeys.rolesHint')}>
           <Select mode="multiple" allowClear optionFilterProp="label" options={(roles.data?.list ?? []).map((role) => ({ value: role.id, label: role.name }))} />
         </Form.Item>
+        <KeyOptionsFields />
       </Form>
     </Modal>
   );

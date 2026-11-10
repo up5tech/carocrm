@@ -77,6 +77,33 @@ describe('phase 23.2 — login throttling and lockout', () => {
     }
   });
 
+  it('releases the lockout once the failures age out of the policy window', async () => {
+    const userName = `agentlockexp-${Date.now().toString(36)}`;
+    const subjectHash = createHash('sha256').update(userName.trim().toLowerCase()).digest('hex');
+    const { DatabaseService } = await import('../src/database/database.service.js');
+    const db = ctx.app.get(DatabaseService).db;
+    try {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await ctx.app.inject({ method: 'POST', url: '/api/v1/Authentication', payload: { userName, password: 'agent-wrong-password' } });
+      }
+      const locked = await ctx.app.inject({ method: 'POST', url: '/api/v1/Authentication', payload: { userName, password: 'agent-wrong-password' } });
+      expect(locked.statusCode).toBe(401);
+      const before = await failureRows(subjectHash);
+      expect(before).toBe(5);
+
+      // The lockout is derived from the trailing window, not a permanent flag: once the failures
+      // are older than the window they no longer count, so the next attempt records a fresh failure
+      // instead of being refused silently. Aging the rows stands in for waiting out the window.
+      const aged = new Date(Date.now() - (ctx.config.authRateLimitWindowSeconds + 60) * 1000);
+      await db.updateTable('auth_login_attempts').set({ failed_at: aged }).where('subject_hash', '=', subjectHash).execute();
+      const after = await ctx.app.inject({ method: 'POST', url: '/api/v1/Authentication', payload: { userName, password: 'agent-wrong-password' } });
+      expect(after.statusCode).toBe(401);
+      expect(await failureRows(subjectHash)).toBe(6);
+    } finally {
+      await db.deleteFrom('auth_login_attempts').where('subject_hash', '=', subjectHash).execute();
+    }
+  });
+
   it('clears the failure history after a successful sign-in', async () => {
     const token = await getAdminToken();
     const userName = `agentclear-${Date.now().toString(36)}`;

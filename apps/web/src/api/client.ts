@@ -134,6 +134,7 @@ import type {
   MassResult,
   Metadata,
   ModuleSettingsView,
+  MySession,
   NavigationTree,
   OmnichannelAnalytics,
   OmnichannelCallView,
@@ -1069,10 +1070,18 @@ export const api = {
   deleteTeam: (id: string) => request<{ success: boolean }>(`/Team/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   apiUsers: () => request<{ list: ApiUserRow[]; total: number }>('/ApiUser'),
-  createApiUser: (input: { userName: string; assignedRoleIds?: string[] }) => request<ApiKeySecret>('/ApiUser', post(input)),
-  issueApiKey: (apiUserId: string) => request<ApiKeySecret>(`/ApiUser/${encodeURIComponent(apiUserId)}/key`, { method: 'POST' }),
+  createApiUser: (input: { userName: string; assignedRoleIds?: string[] | undefined; scopes?: string[] | undefined; allowedIps?: string[] | undefined }) =>
+    request<ApiKeySecret>('/ApiUser', post(input)),
+  issueApiKey: (apiUserId: string, options?: { scopes?: string[] | undefined; allowedIps?: string[] | undefined }) =>
+    request<ApiKeySecret>(`/ApiUser/${encodeURIComponent(apiUserId)}/key`, post(options ?? {})),
+  rotateApiKey: (keyId: string) => request<ApiKeySecret>(`/ApiKey/${encodeURIComponent(keyId)}/rotate`, { method: 'POST' }),
   apiKeys: (apiUserId: string) => request<{ list: ApiKeyRow[] }>(`/ApiKey/${encodeURIComponent(apiUserId)}`),
   revokeApiKey: (keyId: string) => request<{ success: boolean }>(`/ApiKey/${encodeURIComponent(keyId)}`, { method: 'DELETE' }),
+
+  // Phase 23.2 (PLAN §8 task 4): the signed-in user's own sessions — list and revoke.
+  mySessions: () => request<{ list: MySession[] }>('/AppUser/me/sessions'),
+  revokeMySession: (sessionId: string) =>
+    request<{ success: boolean }>(`/AppUser/me/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
 
   // Phase 20.9 — security, messaging and internal administration. Mailboxes and webhook endpoints are
   // existing APIs; the internal routes are the guarded danger zone, each requiring a typed confirmation.
