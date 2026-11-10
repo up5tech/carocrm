@@ -9,7 +9,7 @@ import { errors as joseErrors, type JWTPayload, jwtVerify, SignJWT } from 'jose'
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
 import { DatabaseService } from '../database/database.service.js';
-import { assertPasswordPolicy, readSecurityPolicy } from './security-policy.js';
+import { assertPasswordPolicy, mfaRequiredFor, readSecurityPolicy } from './security-policy.js';
 import { newRecoveryCodes, newTotpSecret, otpauthUri, totpVerify } from './totp.js';
 
 export interface AuthTokens {
@@ -29,6 +29,10 @@ export interface PrincipalRecord {
   userType: 'admin' | 'regular' | 'api' | 'portal' | 'system';
   roles: string[];
   teams: string[];
+  /** Phase 23.2: the server-side session this token belongs to, when there is one. */
+  sessionId?: string | undefined;
+  /** Phase 23.2: the session may only enroll TOTP until the instance MFA policy is satisfied. */
+  mfaPending?: boolean | undefined;
   /** Phase 18: portal assignment (PLAN §37). */
   portalId?: string | undefined;
   /** Phase 18: the Contact record a portal user is. */
@@ -110,7 +114,12 @@ export class AuthService {
       // §4.9: the password was only the first factor — the session is issued by the challenge.
       return { kind: 'challenge', challengeId: await this.createChallenge(user.id) };
     }
-    return { kind: 'ok', tokens: await this.createSession(user.id, userType, ip) };
+    // Phase 23.2 (PLAN §8 task 3): when the instance requires MFA and the account has not enrolled,
+    // the password opens an enrollment-only session, never a usable one. The guard restricts it to
+    // the TOTP setup/enable routes until the factor is confirmed.
+    const policy = await readSecurityPolicy(db);
+    const mfaPending = mfaRequiredFor(policy, user);
+    return { kind: 'ok', tokens: await this.createSession(user.id, userType, ip, { mfaPending }) };
   }
 
   /**
@@ -232,7 +241,7 @@ export class AuthService {
         .where('code_hash', '=', usedRecoveryHash)
         .execute();
     }
-    return this.createSession(user.id, user.type === 'admin' || user.is_admin ? 'admin' : user.type, ip);
+    return this.createSession(user.id, user.type === 'admin' || user.is_admin ? 'admin' : user.type, ip, { twoFactorVerified: true });
   }
 
   /** §4.9: hand out a pending secret; nothing is enforced until `enableTotp` confirms it. */
@@ -249,7 +258,7 @@ export class AuthService {
   }
 
   /** Confirm enrollment with a code from the app, then issue the one-time recovery codes. */
-  async enableTotp(userId: string, code: string): Promise<string[]> {
+  async enableTotp(userId: string, code: string, sessionId?: string): Promise<string[]> {
     const db = this.database.db;
     if (!(await this.totpCodeOk(userId, code, false))) {
       throw new AuthenticationFailedError('That code does not match the authenticator.');
@@ -258,6 +267,24 @@ export class AuthService {
       .updateTable('users')
       .set({ totp_enabled: true, totp_confirmed_at: new Date(), modified_at: new Date() })
       .where('id', '=', userId)
+      .execute();
+    // Phase 23.2 (PLAN §8 task 3): the second factor is bound to the session. The enrolling session
+    // proved the factor with the code above; every other session that never completed a second
+    // factor ends here, so enabling 2FA cannot leave password-only sessions alive.
+    if (sessionId !== undefined) {
+      await db
+        .updateTable('user_sessions')
+        .set({ two_factor_verified: true, mfa_pending: false, modified_at: new Date() })
+        .where('id', '=', sessionId)
+        .where('user_id', '=', userId)
+        .execute();
+    }
+    await db
+      .updateTable('user_sessions')
+      .set({ revoked_at: new Date(), revoked_reason: 'mfa-enrolled' })
+      .where('user_id', '=', userId)
+      .where('revoked_at', 'is', null)
+      .where('two_factor_verified', '=', false)
       .execute();
     return this.replaceRecoveryCodes(userId);
   }
@@ -268,6 +295,12 @@ export class AuthService {
       throw new AuthenticationFailedError('That code is not valid.');
     }
     const db = this.database.db;
+    // Phase 23.2: an account covered by the instance MFA policy cannot opt out below it; the
+    // administrator reset path remains the deliberate escape hatch.
+    const user = await db.selectFrom('users').select(['type', 'is_admin']).where('id', '=', userId).executeTakeFirst();
+    if (user && mfaRequiredFor(await readSecurityPolicy(db), user)) {
+      throw new ValidationError('Two-factor authentication is required by the instance policy and cannot be turned off here.');
+    }
     await db
       .updateTable('users')
       .set({ totp_enabled: false, totp_secret: null, totp_confirmed_at: null, modified_at: new Date() })
@@ -320,12 +353,35 @@ export class AuthService {
     return codes;
   }
 
-  async createSession(userId: string, userType: PrincipalRecord['userType'], ip?: string): Promise<AuthTokens> {
+  /**
+   * Phase 23.2 (PLAN §8 tasks 3–4): a session carries its rotation family, sign-in source and
+   * second-factor state. A fresh sign-in starts a new family and honours the single-session policy;
+   * a rotation (familyId given) continues the existing one and never extends the absolute expiry.
+   */
+  async createSession(
+    userId: string,
+    userType: PrincipalRecord['userType'],
+    ip?: string,
+    opts: { familyId?: string; twoFactorVerified?: boolean; mfaPending?: boolean; expiresAt?: Date } = {},
+  ): Promise<AuthTokens> {
     const db = this.database.db;
     const sessionId = randomUUID();
     const refreshToken = randomBytes(32).toString('hex');
     const user = await db.selectFrom('users').select(['user_name']).where('id', '=', userId).executeTakeFirst();
     if (!user) throw new RecordNotFoundError('User', userId);
+
+    const isRotation = opts.familyId !== undefined;
+    if (!isRotation) {
+      const policy = await readSecurityPolicy(db);
+      if (policy.session.singleSession) {
+        await db
+          .updateTable('user_sessions')
+          .set({ revoked_at: new Date(), revoked_reason: 'single-session' })
+          .where('user_id', '=', userId)
+          .where('revoked_at', 'is', null)
+          .execute();
+      }
+    }
 
     await db
       .insertInto('user_sessions')
@@ -338,11 +394,15 @@ export class AuthService {
         created_at: new Date(),
         modified_at: new Date(),
         last_access_at: new Date(),
-        expired_at: new Date(Date.now() + this.config.refreshTokenTtlSeconds * 1000),
+        expired_at: opts.expiresAt ?? new Date(Date.now() + this.config.refreshTokenTtlSeconds * 1000),
+        family_id: opts.familyId ?? randomUUID(),
+        ip_address: ip ?? null,
+        two_factor_verified: opts.twoFactorVerified ?? false,
+        mfa_pending: opts.mfaPending ?? false,
+        revoked_reason: null,
       })
       .execute();
 
-    void ip;
     const accessToken = await this.signAccessToken({
       sub: userId,
       sid: sessionId,
@@ -352,7 +412,7 @@ export class AuthService {
     return { accessToken, refreshToken, expiresIn: this.config.accessTokenTtlSeconds };
   }
 
-  async refresh(refreshToken: string): Promise<AuthTokens> {
+  async refresh(refreshToken: string, ip?: string): Promise<AuthTokens> {
     const db = this.database.db;
     const hashed = hashString(refreshToken);
     const session = await db
@@ -360,8 +420,33 @@ export class AuthService {
       .selectAll()
       .where('refresh_token', '=', hashed)
       .executeTakeFirst();
-    if (!session || session.revoked_at !== null || (session.expired_at && session.expired_at.getTime() < Date.now())) {
+    if (!session) {
       throw new AuthenticationFailedError('Session is invalid or expired.');
+    }
+    if (session.revoked_at !== null) {
+      // Reuse detection: a token that was already rotated must never work again. Presenting one
+      // means the chain leaked, so the whole family is revoked — the legitimate holder signs in
+      // again, and the replayed copy dies with it. Logout/password revocations are not replays.
+      if (session.revoked_reason === 'rotation' && session.family_id !== null) {
+        await db
+          .updateTable('user_sessions')
+          .set({ revoked_at: new Date(), revoked_reason: 'reuse-detected' })
+          .where('family_id', '=', session.family_id)
+          .where('revoked_at', 'is', null)
+          .execute();
+      }
+      throw new AuthenticationFailedError('Session is invalid or expired.');
+    }
+    if (session.expired_at && session.expired_at.getTime() < Date.now()) {
+      throw new AuthenticationFailedError('Session is invalid or expired.');
+    }
+    const policy = await readSecurityPolicy(db);
+    if (policy.session.idleLogoutMinutes > 0 && session.last_access_at) {
+      const idleMs = policy.session.idleLogoutMinutes * 60_000;
+      if (Date.now() - session.last_access_at.getTime() > idleMs) {
+        await db.updateTable('user_sessions').set({ revoked_at: new Date(), revoked_reason: 'idle-timeout' }).where('id', '=', session.id).execute();
+        throw new AuthenticationFailedError('Session expired due to inactivity.');
+      }
     }
     const user = await db.selectFrom('users').select(['id', 'type', 'is_admin', 'is_active', 'is_deleted'])
       .where('id', '=', session.user_id)
@@ -371,10 +456,16 @@ export class AuthService {
     }
     await db
       .updateTable('user_sessions')
-      .set({ revoked_at: new Date() })
+      .set({ revoked_at: new Date(), revoked_reason: 'rotation' })
       .where('id', '=', session.id)
       .execute();
-    return this.createSession(user.id, user.type === 'admin' || user.is_admin ? 'admin' : user.type);
+    // Rotation keeps the family, the factor state and the absolute expiry of the original sign-in.
+    return this.createSession(user.id, user.type === 'admin' || user.is_admin ? 'admin' : user.type, ip, {
+      ...(session.family_id !== null ? { familyId: session.family_id } : {}),
+      twoFactorVerified: session.two_factor_verified,
+      mfaPending: session.mfa_pending,
+      ...(session.expired_at !== null ? { expiresAt: session.expired_at } : {}),
+    });
   }
 
   async logout(accessToken: string | undefined, refreshToken?: string): Promise<void> {
@@ -382,7 +473,7 @@ export class AuthService {
     if (refreshToken) {
       await db
         .updateTable('user_sessions')
-        .set({ revoked_at: new Date() })
+        .set({ revoked_at: new Date(), revoked_reason: 'logout' })
         .where('refresh_token', '=', hashString(refreshToken))
         .execute();
       return;
@@ -392,12 +483,47 @@ export class AuthService {
         const payload = await this.verifyAccessToken(accessToken);
         const sid = payload.sid;
         if (typeof sid === 'string') {
-          await db.updateTable('user_sessions').set({ revoked_at: new Date() }).where('id', '=', sid).execute();
+          await db.updateTable('user_sessions').set({ revoked_at: new Date(), revoked_reason: 'logout' }).where('id', '=', sid).execute();
         }
       } catch {
         // token is not valid; logging out a stale token is a no-op
       }
     }
+  }
+
+  /** Phase 23.2 (PLAN §8 task 4): the caller's own active sessions — never another account's. */
+  async listSessions(userId: string): Promise<
+    { id: string; createdAt: string; lastAccessAt: string | null; expiresAt: string | null; ip: string | null; twoFactorVerified: boolean; mfaPending: boolean }[]
+  > {
+    const rows = await this.database.db
+      .selectFrom('user_sessions')
+      .select(['id', 'created_at', 'last_access_at', 'expired_at', 'ip_address', 'two_factor_verified', 'mfa_pending'])
+      .where('user_id', '=', userId)
+      .where('revoked_at', 'is', null)
+      .orderBy('created_at', 'desc')
+      .execute();
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at.toISOString(),
+      lastAccessAt: row.last_access_at ? row.last_access_at.toISOString() : null,
+      expiresAt: row.expired_at ? row.expired_at.toISOString() : null,
+      ip: row.ip_address,
+      twoFactorVerified: row.two_factor_verified,
+      mfaPending: row.mfa_pending,
+    }));
+  }
+
+  /** Revoke one of the caller's own sessions; the ownership predicate is the authorization. */
+  async revokeSession(userId: string, sessionId: string): Promise<{ success: boolean }> {
+    const result = await this.database.db
+      .updateTable('user_sessions')
+      .set({ revoked_at: new Date(), revoked_reason: 'revoked' })
+      .where('id', '=', sessionId)
+      .where('user_id', '=', userId)
+      .where('revoked_at', 'is', null)
+      .executeTakeFirst();
+    if (result.numUpdatedRows === 0n) throw new RecordNotFoundError('Session', sessionId);
+    return { success: true };
   }
 
   async signAccessToken(claims: { sub: string; sid?: string; typ: string; scope: string; keyId?: string }): Promise<string> {
@@ -482,15 +608,35 @@ export class AuthService {
     if (!user || !user.is_active || user.is_deleted) {
       throw new AuthenticationFailedError('User is not active.');
     }
+    let mfaPending = false;
     if (sessionId) {
       const session = await db
         .selectFrom('user_sessions')
-        .select(['revoked_at'])
+        .select(['revoked_at', 'expired_at', 'last_access_at', 'two_factor_verified', 'mfa_pending'])
         .where('id', '=', sessionId)
         .executeTakeFirst();
       if (!session || session.revoked_at !== null) {
         throw new AuthenticationFailedError('Session has been revoked.');
       }
+      // Absolute expiry: rotation never extends the original sign-in's lifetime.
+      if (session.expired_at && session.expired_at.getTime() < Date.now()) {
+        throw new AuthenticationFailedError('Session is invalid or expired.');
+      }
+      // Phase 23.2 (PLAN §8 task 4): the idle policy is enforced on use, not only at refresh.
+      const policy = await readSecurityPolicy(db);
+      if (policy.session.idleLogoutMinutes > 0 && session.last_access_at) {
+        const idleMs = policy.session.idleLogoutMinutes * 60_000;
+        if (Date.now() - session.last_access_at.getTime() > idleMs) {
+          await db.updateTable('user_sessions').set({ revoked_at: new Date(), revoked_reason: 'idle-timeout' }).where('id', '=', sessionId).execute();
+          throw new AuthenticationFailedError('Session expired due to inactivity.');
+        }
+      }
+      // Phase 23.2 (PLAN §8 task 3): the 2FA state is bound to the session — a password-only
+      // session cannot serve an account whose second factor is enabled.
+      if (user.totp_enabled && !session.two_factor_verified) {
+        throw new AuthenticationFailedError('Session has not completed two-factor authentication.');
+      }
+      mfaPending = session.mfa_pending;
       await db.updateTable('user_sessions').set({ last_access_at: new Date() }).where('id', '=', sessionId).execute();
     }
     const directRoles = Array.isArray(user.assigned_role_ids) ? (user.assigned_role_ids as string[]) : [];
@@ -514,6 +660,7 @@ export class AuthService {
       roles,
       teams,
       ...(sessionId !== undefined ? { sessionId } : {}),
+      ...(mfaPending ? { mfaPending: true } : {}),
       ...(portal ? { portalId: user.portal_id ?? undefined } : {}),
       ...(portal ? { contactId: user.contact_id ?? undefined } : {}),
       ...(user.locale ? { locale: user.locale } : {}),
@@ -590,7 +737,7 @@ export class AuthService {
     await db.updateTable('users').set({ password: hash, modified_at: new Date() }).where('id', '=', userId).execute();
     await db
       .updateTable('user_sessions')
-      .set({ revoked_at: new Date() })
+      .set({ revoked_at: new Date(), revoked_reason: 'password-change' })
       .where('user_id', '=', userId)
       .where('revoked_at', 'is', null)
       .execute();

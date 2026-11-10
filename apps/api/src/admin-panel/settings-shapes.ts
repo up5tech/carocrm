@@ -131,8 +131,8 @@ export const I18N_DOCUMENT_SCHEMA = z.object({
 export type I18nDocument = z.infer<typeof I18N_DOCUMENT_SCHEMA>;
 
 /**
- * Authentication policy (PLAN §4.8). Stored and displayed by the registry; the enforcement points in
- * `auth.service.ts` are Phase 20.9 work, so nothing here changes login behavior yet.
+ * Authentication policy (PLAN §4.8). Enforced at the point of use since Phase 23.2: the password
+ * rules in `auth/security-policy.ts`, the MFA requirement and the session rules in `auth.service.ts`.
  */
 export const SecuritySettingsSchema = z
   .object({
@@ -149,6 +149,13 @@ export const SecuritySettingsSchema = z
       .object({
         idleLogoutMinutes: z.number().int().min(0).max(10080).default(0),
         singleSession: z.boolean().default(false),
+      })
+      .strict()
+      .prefault({}),
+    /** Phase 23.2 (PLAN §8 task 3): who must have a second factor. */
+    mfa: z
+      .object({
+        required: z.enum(['off', 'admins', 'all']).default('off'),
       })
       .strict()
       .prefault({}),

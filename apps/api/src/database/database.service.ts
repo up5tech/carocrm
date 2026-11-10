@@ -57,6 +57,16 @@ export interface UserSessionsTable {
   modified_at: Date;
   last_access_at: Date | null;
   expired_at: Date | null;
+  /** Phase 23.2: rotation chain — a replayed rotated token revokes the whole family. */
+  family_id: string | null;
+  /** Phase 23.2: sign-in source shown in the session list. */
+  ip_address: string | null;
+  /** Phase 23.2: the session completed the second factor (challenge or enrollment). */
+  two_factor_verified: boolean;
+  /** Phase 23.2: the session may only enroll TOTP until the MFA policy is satisfied. */
+  mfa_pending: boolean;
+  /** Phase 23.2: why the session ended — 'rotation' replays trigger reuse detection. */
+  revoked_reason: string | null;
 }
 
 export interface ApiUsersTable {

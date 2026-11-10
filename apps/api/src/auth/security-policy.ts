@@ -40,3 +40,11 @@ export function assertPasswordPolicy(policy: SecuritySettings, password: string)
     throw new ValidationError('Password must contain a symbol.');
   }
 }
+
+/** Phase 23.2 (PLAN §8 task 3): whether the instance MFA policy covers this account. */
+export function mfaRequiredFor(policy: SecuritySettings, user: { type: string; is_admin: boolean }): boolean {
+  const isAdmin = user.type === 'admin' || user.is_admin;
+  if (policy.mfa.required === 'all') return true;
+  if (policy.mfa.required === 'admins') return isAdmin;
+  return false;
+}

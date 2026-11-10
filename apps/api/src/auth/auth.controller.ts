@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -135,12 +135,12 @@ export class AuthController {
     const parsed = RefreshSchema.safeParse(body);
     let tokens: AuthTokens;
     if (parsed.success) {
-      tokens = await this.auth.refresh(parsed.data.refreshToken);
+      tokens = await this.auth.refresh(parsed.data.refreshToken, request.ip);
     } else {
       const cookies = parseCookies(request.headers.cookie ?? '');
       const refreshToken = cookies['CRM-REFRESH'];
       if (!refreshToken) throw new ValidationError('Missing refresh token.');
-      tokens = await this.auth.refresh(refreshToken);
+      tokens = await this.auth.refresh(refreshToken, request.ip);
     }
     return this.respond(tokens, request, reply);
   }
@@ -264,7 +264,7 @@ export class AuthController {
     if (!parsed.success) {
       throw new ValidationError('An authenticator code is required.', { issues: parsed.error.issues.map((i) => i.message) });
     }
-    return { recoveryCodes: await this.auth.enableTotp(principal.userId, parsed.data.code) };
+    return { recoveryCodes: await this.auth.enableTotp(principal.userId, parsed.data.code, principal.sessionId) };
   }
 
   /** Turning 2FA off requires a current factor — never a silent security downgrade. */

@@ -7,6 +7,8 @@ export interface AuthenticatedPrincipal {
   roles: string[];
   teams: string[];
   sessionId?: string;
+  /** Phase 23.2: the session may only enroll TOTP until the instance MFA policy is satisfied. */
+  mfaPending?: boolean | undefined;
   /** Phase 18: the portal this principal belongs to (portal users only, PLAN §37). */
   portalId?: string | undefined;
   /** Phase 18: the Contact record a portal user is (PLAN §37 contact/account relation). */

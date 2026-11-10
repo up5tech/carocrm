@@ -123,7 +123,7 @@ export class PasswordResetService {
       await tx.deleteFrom('auth_password_resets').where('user_id', '=', user.id).where('token_hash', '!=', tokenHash).execute();
       // A reset invalidates every session the old password opened, and clears any lockout the
       // forgotten password caused — the owner has just proven control of the account's mailbox.
-      await tx.updateTable('user_sessions').set({ revoked_at: now }).where('user_id', '=', user.id).where('revoked_at', 'is', null).execute();
+      await tx.updateTable('user_sessions').set({ revoked_at: now, revoked_reason: 'password-reset' }).where('user_id', '=', user.id).where('revoked_at', 'is', null).execute();
       const subjectHash = createHash('sha256').update(user.user_name.trim().toLowerCase()).digest('hex');
       await tx.deleteFrom('auth_login_attempts').where('subject_hash', '=', subjectHash).execute();
     });
