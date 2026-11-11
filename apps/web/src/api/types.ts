@@ -466,6 +466,17 @@ export interface LoginChallengeResult {
   challengeId: string;
 }
 
+/**
+ * Phase 23.3 (PLAN §17.3): one configured OpenID Connect provider.
+ *
+ * Only a key and a display name — the sign-in screen never sees a client secret, a client id or
+ * an endpoint.
+ */
+export interface OidcProvider {
+  key: string;
+  displayName: string;
+}
+
 /** Phase 14 — extension packages (PLAN §38). */
 export interface ExtensionNavItem {
   route: string;

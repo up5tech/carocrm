@@ -6,6 +6,7 @@ import { ConnectionLifecycleService,CREDENTIAL_VAULT } from './connection-lifecy
 import type { ConnectorAdapter, ConnectorContext } from './connector-adapter.port.js';
 import type { CredentialVaultPort } from './credential-vault.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
+import { needsRefresh,OAuthFlowService } from './oauth-flow.service.js';
 import { ProviderError } from './provider-error.js';
 import {
   type CircuitOptions,
@@ -52,6 +53,7 @@ export class ConnectorExecutor {
     @Inject(ProviderRateLimiter) private readonly limiter: ProviderRateLimiter,
     @Inject(ProviderCircuitBreaker) private readonly breaker: ProviderCircuitBreaker,
     @Inject(CREDENTIAL_VAULT) private readonly vault: CredentialVaultPort,
+    @Inject(OAuthFlowService) private readonly oauth: OAuthFlowService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -109,7 +111,12 @@ export class ConnectorExecutor {
     }
     await this.breaker.beforeRequest(circuitKey);
 
-    const context = await this.buildContext(
+    // Phase 23.3 (G47): the credential the connector receives must be usable. A token that is
+    // already expired is refreshed **before** the call, so a long-idle connection does not fail on
+    // its first use.
+    await this.refreshIfExpiring(connectionId);
+
+    let context = await this.buildContext(
       connectionId,
       connection.providerKey,
       connection.tenantRef,
@@ -117,12 +124,73 @@ export class ConnectorExecutor {
       connection.grantedScopes,
     );
     try {
-      const value = await operation(context, adapter);
+      let value: T;
+      try {
+        value = await operation(context, adapter);
+      } catch (error) {
+        // A provider that rejects the credential gets exactly **one** second attempt with a fresh
+        // token. The retry is bounded: a second failure is the failure.
+        if (!isAuthorizationFailure(error)) throw error;
+        const refreshed = await this.refreshAfterRefusal(connectionId, context.credential.accessToken);
+        if (!refreshed) throw error;
+        context = await this.buildContext(
+          connectionId,
+          connection.providerKey,
+          connection.tenantRef,
+          connection.connectionOptions,
+          connection.grantedScopes,
+        );
+        value = await operation(context, adapter);
+      }
       await this.breaker.recordSuccess(circuitKey);
       return value;
     } catch (error) {
       await this.breaker.recordFailure(circuitKey, error, options.circuit ?? DEFAULT_CIRCUIT_OPTIONS);
       throw error;
+    }
+  }
+
+  /**
+   * Refresh the connection's token when it is expired or about to expire.
+   *
+   * Best effort: a refresh that fails must not replace the provider's own error with a platform
+   * one, and a connection that holds no OAuth token is simply not refreshed.
+   */
+  private async refreshIfExpiring(connectionId: string): Promise<boolean> {
+    const access = await this.vault.describe({ connectionId, kind: 'oauth_access_token' });
+    if (access === null) return false;
+    if (!needsRefresh(access.expiresAt)) return false;
+    return this.refreshIfNeeded(connectionId);
+  }
+
+  /** One bounded refresh attempt. */
+  private async refreshIfNeeded(connectionId: string): Promise<boolean> {
+    try {
+      const result = await this.oauth.refresh(connectionId);
+      return result.refreshed;
+    } catch {
+      // The refresh failed — the connection moves to `reauthorization_required` inside the flow,
+      // and the caller sees the provider's own failure.
+      return false;
+    }
+  }
+
+  /**
+   * Phase 23.3 (G47): refresh after the provider **refused** the credential.
+   *
+   * The refusal is the signal that the token is unusable, whatever the clock says — a revoked
+   * token can still look valid. The refresh is forced for that reason, and it is bound to the
+   * token that was refused, so a credential another worker already replaced is not rotated twice.
+   */
+  private async refreshAfterRefusal(connectionId: string, refusedAccessToken: string | null): Promise<boolean> {
+    try {
+      const result = await this.oauth.refresh(connectionId, {
+        force: true,
+        expectedAccessToken: refusedAccessToken,
+      });
+      return result.refreshed;
+    } catch {
+      return false;
     }
   }
 
@@ -161,4 +229,9 @@ export class ConnectorExecutor {
       grantedScopes,
     };
   }
+}
+
+/** A provider failure that says the credential was refused. */
+function isAuthorizationFailure(error: unknown): boolean {
+  return error instanceof ProviderError && error.category === 'authorization';
 }

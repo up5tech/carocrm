@@ -370,7 +370,10 @@
     "failed": "Đăng nhập thất bại.",
     "twoFactorSubtitle": "Nhập mã từ ứng dụng xác thực của bạn",
     "twoFactorCode": "Mã xác thực",
-    "backToPassword": "Quay lại mật khẩu"
+    "backToPassword": "Quay lại mật khẩu",
+    "externalDivider": "hoặc tiếp tục với",
+    "externalAction": "Đăng nhập bằng {provider}",
+    "externalFailed": "Đăng nhập không hoàn tất. Vui lòng thử lại."
   },
   "passwordReset": {
     "forgotLink": "Quên mật khẩu?",

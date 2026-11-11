@@ -370,7 +370,10 @@
     "failed": "Login failed.",
     "twoFactorSubtitle": "Enter the code from your authenticator app",
     "twoFactorCode": "Authentication code",
-    "backToPassword": "Back to password"
+    "backToPassword": "Back to password",
+    "externalDivider": "or continue with",
+    "externalAction": "Sign in with {provider}",
+    "externalFailed": "That sign-in did not complete. Please try again."
   },
   "passwordReset": {
     "forgotLink": "Forgot password?",

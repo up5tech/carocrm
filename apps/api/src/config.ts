@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { PLATFORM_VERSION } from '@carocrm/extension-sdk';
 import { z } from 'zod';
 
+import { parseOidcProfiles } from './auth/oidc/oidc-profile.js';
+
 const ConfigSchema = z.object({
   port: z.coerce.number().int().default(3030),
   host: z.string().default('127.0.0.1'),
@@ -126,6 +128,34 @@ const ConfigSchema = z.object({
    * two installations — or two connections of one installation — never share a secret.
    */
   integrationOauthClientIds: z.string().default('{}'),
+  /**
+   * Phase 23.3 (PLAN §17.3) — the OpenID Connect profiles, as a JSON array.
+   *
+   * A profile describes one external identity provider: its issuer, its endpoints, its client id
+   * and the rules for linking an external identity to a local account. Google, Microsoft and every
+   * other provider are **configuration**, not code — the identity service speaks the standard
+   * protocol and reads the values here.
+   *
+   * Empty (the default) means the installation has no external identity provider, which is the
+   * safe state. A malformed profile refuses the boot, because a sign-in that fails on the first
+   * attempt is worse than a deployment that does not start.
+   */
+  oidcProfiles: z.string().default('[]'),
+  /** How long a sign-in attempt stays usable. */
+  oidcStateTtlSeconds: z.coerce.number().int().min(60).max(3600).default(600),
+  /**
+   * Where the browser goes after an external sign-in, and where it goes when the sign-in is
+   * refused. Both are **relative paths**: an absolute URL here would be an open redirect, so the
+   * schema refuses one.
+   */
+  oidcPostLoginRedirect: z
+    .string()
+    .default('/')
+    .refine((value) => value.startsWith('/') && !value.startsWith('//'), 'must be a relative path'),
+  oidcLoginPath: z
+    .string()
+    .default('/login')
+    .refine((value) => value.startsWith('/') && !value.startsWith('//'), 'must be a relative path'),
   /** Version extensions are checked against; mirrors the platform release. */
   platformVersion: z.string().default(PLATFORM_VERSION),
 });
@@ -160,6 +190,17 @@ export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
       code: z.ZodIssueCode.custom,
       path: ['encryptionKey'],
       message: 'ENCRYPTION_KEY must be set in production (openssl rand -hex 32); an empty key disables secrets-at-rest encryption.',
+    });
+  }
+  // Phase 23.3 (PLAN §17.3): a malformed OIDC profile refuses the boot. A profile that only fails
+  // on the first sign-in would leave the deployment half-configured and the failure hard to read.
+  try {
+    parseOidcProfiles(value.oidcProfiles);
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['oidcProfiles'],
+      message: error instanceof Error ? error.message : 'OIDC_PROFILES is not valid.',
     });
   }
 });
@@ -243,6 +284,10 @@ export function buildConfig(): AppConfig {
     encryptionKey: process.env.ENCRYPTION_KEY,
     extensionsDir: process.env.EXTENSIONS_DIR,
     integrationOauthClientIds: process.env.INTEGRATION_OAUTH_CLIENT_IDS,
+    oidcProfiles: process.env.OIDC_PROFILES,
+    oidcStateTtlSeconds: process.env.OIDC_STATE_TTL_SECONDS,
+    oidcPostLoginRedirect: process.env.OIDC_POST_LOGIN_REDIRECT,
+    oidcLoginPath: process.env.OIDC_LOGIN_PATH,
     platformVersion: process.env.PLATFORM_VERSION,
   });
 }

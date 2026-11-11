@@ -338,6 +338,30 @@ Close the OAuth correctness gaps and, if approved at 23.0, add a bounded generic
 - No test uses real provider credentials or a live token endpoint.
 - The compatibility matrix states exactly what is implemented, what is deferred, and why.
 
+### Status — delivered 2026-11-11
+
+All seven tasks are **done**. G51, G52 (closed in 23.1), G50 and G47 are closed; the generic OIDC sign-in is
+built behind a provider **profile** (`OIDC_PROFILES`), not behind provider-specific logic. Evidence:
+`docs/quality/phase-23-security-test-evidence.md` §"Phase 23.3".
+
+| Task | Outcome |
+|---|---|
+| 1 — G51 | The callback carries the echoed `redirect_uri`; the flow compares it with the platform's own value (constant-time) **before** the code is exchanged. A tampered state row is refused. The same rule was applied to the new OIDC callback. |
+| 2 — G52 | Closed in 23.1 — the provider's error text is no longer echoed into a 401. |
+| 3 — G50 | A mapping may name its `connectionId`; a provider with more than one connection is **refused** rather than resolved by name order. |
+| 4 — G47 | The executor refreshes an expired token **before** the call and retries **once** with a fresh token after a provider refusal. The forced refresh is bound to the token that was refused, so a rotating refresh token is never rotated twice. |
+| 5 — Generic OIDC | `apps/api/src/auth/oidc/*`. Single-use hashed state, nonce, PKCE S256, exact redirect matching, `jose` id_token verification (RS/PS/ES only), an explicit four-branch account-linking rule, and session issuance that reuses 23.2 (`sessionForExternalSignIn`). |
+| 6 — Fake provider | `apps/api/test/phase23-3-oidc-signin.test.ts` runs against a fake token/JWKS endpoint; `phase23-3-oauth-connector.test.ts` against a deterministic fake connector. No live endpoint, no billable API. |
+| 7 — Documentation | `docs/reference/compatibility-matrix.md` (the OIDC row now states what is built), `docs/runbooks/advanced-integrations.md` §15 (how to configure a profile, how to deploy, how to defer it, and the **written rationale** for deferring SAML and SCIM). |
+
+**SAML, SCIM and enterprise directory sync are deferred, with the rationale written down** — they are different
+protocols with a different trust model (SAML would be a second identity stack; SCIM is a provisioning protocol, not
+an authentication one). The deferral is stated, not silent.
+
+**Verification:** `pnpm ci:gate` → exit 0 (DB-free gate) and `pnpm verify` → exit 0 against the configured primary
+database (lint, typecheck, `test` 276 files / 3617 tests, `test:web` 15 files / 86 tests). The browser layer
+(Playwright) and the restore drill were **not** run; the restore drill stays blocked by D4 and belongs to 23.9.
+
 ---
 
 ## 10. Phase 23.4 — Authorization Consistency Across Every Surface

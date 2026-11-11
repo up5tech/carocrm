@@ -188,6 +188,41 @@ export class AuthService {
     return id;
   }
 
+  /**
+   * Phase 23.3 (PLAN §17.3): the session an **external** sign-in earns.
+   *
+   * An external identity provider authenticates the person; the account's own second factor and the
+   * instance MFA policy still stand. So the rules are exactly the password path's rules:
+   *
+   *  - an account that has enrolled a second factor must still present it, so the sign-in ends in a
+   *    challenge rather than a session;
+   *  - an account that has not enrolled one, on an instance that requires MFA, gets an
+   *    **enrollment-only** session (`mfaPending`), which the guard restricts to the TOTP routes.
+   *
+   * One definition, so an external sign-in can never be laxer than a password sign-in.
+   */
+  async sessionForExternalSignIn(
+    userId: string,
+    userType: PrincipalRecord['userType'],
+    ip?: string,
+  ): Promise<{ kind: 'challenge'; challengeId: string } | { kind: 'session'; tokens: AuthTokens }> {
+    const db = this.database.db;
+    const user = await db
+      .selectFrom('users')
+      .select(['id', 'type', 'is_admin', 'is_active', 'is_deleted', 'totp_enabled', 'totp_secret'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    if (!user || !user.is_active || user.is_deleted) {
+      throw new AuthenticationFailedError();
+    }
+    if (user.totp_enabled && user.totp_secret) {
+      return { kind: 'challenge', challengeId: await this.createChallenge(user.id) };
+    }
+    const policy = await readSecurityPolicy(db);
+    const mfaPending = mfaRequiredFor(policy, user);
+    return { kind: 'session', tokens: await this.createSession(user.id, userType, ip, { mfaPending }) };
+  }
+
   async verifyChallenge(challengeId: string, code: string, ip?: string): Promise<AuthTokens> {
     const db = this.database.db;
     const challenge = await db

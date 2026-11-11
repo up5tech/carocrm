@@ -43,6 +43,9 @@ const PURE_API_TESTS = [
   'phase19-module-declarations.test.ts',
   'phase22-provider-contract.test.ts',
   'phase23-1-security.test.ts',
+  // Phase 23.3 (G51/G84): the OIDC profile parser and the id_token verifier are DB-free, so they
+  // belong in the gate. The DB-backed sign-in and connector suites stay out.
+  'phase23-3-oidc-token.test.ts',
   'projects-domain.test.ts',
   'recurrence.test.ts',
   'reports.test.ts',

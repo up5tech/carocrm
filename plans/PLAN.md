@@ -2868,9 +2868,12 @@ backup/restore blockers G80/G81 are closed or explicitly accepted.
 ## Phase 23 — Security Hardening
 
 Status: **In progress** — sub-phase **23.0 (security baseline audit) complete** on 2026-11-09; **23.1 implemented**
-on 2026-11-09 (fail-closed configuration and cryptographic primitives); **23.2 tasks 1–2 delivered** on 2026-11-10
-(per-source auth rate budget + per-account failed-login lockout; self-service email-token password reset with
-single-use/expiring tokens, no enumeration, session revocation, and the stored password policy now enforced). Scope, work
+on 2026-11-09 (fail-closed configuration and cryptographic primitives); **23.2 delivered** on 2026-11-10
+(tasks 1–6: per-source auth rate budget + per-account failed-login lockout; self-service email-token password
+reset; enforceable MFA policy; session management and revocation; API-key lifecycle — see
+`docs/quality/phase-23-security-test-evidence.md`); **23.3 delivered** on 2026-11-11 (external identity and
+OAuth correctness: the generic OpenID Connect sign-in as a **provider profile** rather than provider-specific
+code, with G47, G50, G51 and G84 closed — SAML and SCIM deferred with a written rationale). Scope, work
 order, owner decisions and acceptance criteria live in
 `plans/PLAN_Phase_23_Security_Hardening.md`. The Phase 23.0 baseline, the §48 control matrix and the single
 exception list live in `docs/security/`.

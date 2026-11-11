@@ -5,6 +5,112 @@
 > **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §8
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
 
+## Phase 23.3 — External identity and OAuth correctness (delivered 2026-11-11)
+
+### Scope delivered
+
+1. **Generic OIDC sign-in (new).** A provider is a **profile**, not code (`apps/api/src/auth/oidc/oidc-profile.ts`,
+   configured through `OIDC_PROFILES`): issuer, endpoints, client id, client secret, scopes, and the
+   `linkByEmail` / `autoProvision` / `defaultRoleIds` switches. The protocol is the platform's: the state
+   is single-use and stored **hashed**, the nonce is checked, PKCE S256 is always used, the redirect URI
+   is compared **exactly** with the value the platform sent *before* the code is exchanged, and the
+   `id_token` is verified with `jose` (`createLocalJWKSet` + `jwtVerify`) — **RS/PS/ES only**, so `none`
+   and HMAC are refused. The account-linking rule is explicit: an existing link wins → link by a
+   **verified** email when exactly one account matches → provision when the profile allows → otherwise
+   refuse. The sign-in ends in `AuthService.sessionForExternalSignIn`, the **same** session issuance as
+   the password sign-in, so every 23.2 rule (single-session policy, MFA policy, revocation, rotation)
+   applies unchanged. The session cookie strings moved to `apps/api/src/auth/session-cookies.ts` so the
+   two paths cannot drift.
+2. **G51 / G84 — the redirect URI is compared.** The advanced-integrations callback now accepts the
+   echoed `redirect_uri` and the flow compares it with the value the platform sent (constant-time),
+   **before** the authorization code is exchanged; a state row whose stored redirect URI is not the
+   platform's own constant is refused as a tampered row. The code comment now describes a check that
+   exists.
+3. **G50 — a mapping names its connection.** `POST action/mappings` accepts an optional `connectionId`.
+   A named connection must exist **and** belong to the named provider; a provider with exactly one
+   connection still resolves without naming it; a provider with **more than one** is refused. The
+   "first connection whose provider key matches, ordered by name" pick is gone.
+4. **G47 — the connector refreshes its credential.** The executor refreshes an expired (or nearly
+   expired) token **before** the provider call, and a provider that **refuses** the credential gets
+   exactly **one** second attempt with a fresh token. The retry is bounded. Because a provider can
+   revoke a token whose clock has not run out, the retry uses a **forced** refresh that is bound to the
+   token that was refused: a credential another worker already replaced is not rotated twice, and the
+   per-connection advisory lock still serialises concurrent refreshes. `needsRefresh` was lifted out of
+   `oauth-flow.service.ts` so the executor and the refresh ask the same question.
+5. **SPA.** The sign-in screen offers every configured provider (`GET /api/v1/Oidc/providers` is
+   `@Public()`), and the browser leaves for the provider and comes back to the same cookies the password
+   sign-in issues. The callback's `?oidc_error=` and `?oidc_challenge=` are read once and then removed
+   from the address bar — the challenge id is a single-use credential and must not survive a reload or
+   leak through the browser's history or a shared link.
+
+### Tests run
+
+- `pnpm vitest run apps/api/test/phase23-3-oidc-token.test.ts` → **22/22 passed** (DB-free: profile parsing,
+  endpoint validation, id_token verification — valid / expired / wrong issuer / wrong audience / wrong
+  `azp` / wrong nonce / `none` / HMAC / unknown `kid`).
+- `pnpm vitest run apps/api/test/phase23-3-oidc-signin.test.ts` → **13/13 passed** (DB-backed, against a
+  **fake** provider: valid sign-in issues the session cookies, stale state, replayed state, mismatched
+  redirect URI, exact redirect URI, malformed callback, provider error not echoed, wrong nonce, wrong
+  audience, linking by a verified email, an unverified email refused).
+- `pnpm vitest run apps/api/test/phase23-3-oauth-connector.test.ts` → **12/12 passed** (DB-backed, against a
+  deterministic fake connector: refresh before the call, one bounded retry after a refusal, no retry
+  when the provider keeps refusing, no refresh for a valid token, a forced refresh skipped when the
+  credential was already replaced; a mapping refused for an ambiguous provider, a mapping bound to the
+  named connection, a connection from another provider refused, the single-connection case; three
+  redirect-URI cases).
+- `pnpm vitest run apps/api/test/advanced-integrations.test.ts` → **26/26 passed** (no regression).
+- `pnpm vitest run --config vitest.web.config.ts apps/web/src/pages/login-oidc.test.ts` → **7/7 passed**.
+- `pnpm typecheck` → pass (API and SPA).
+- `pnpm ci:gate` → **exit 0** (lint, architecture rules, typecheck, build, migration check, the DB-free test
+  split, the web tests and the secret scan).
+- `pnpm verify` (lint + typecheck + `test` + `test:web`, in parallel) → **exit 0** against the configured
+  primary database: `lint` exit 0, `typecheck` exit 0, `test` **276 files / 3617 tests passed**
+  (302 s), `test:web` **15 files / 86 tests passed**.
+
+No live provider, no network and no billable API is involved: the OIDC token endpoint and the JWKS
+endpoint are replaced by a fake, and the connector is the deterministic fake the advanced-integrations
+suite already used. Every row the suites create carries a run marker and is deleted by id.
+
+### Known limitations
+
+- **SAML and SCIM are not implemented.** They are deferred on purpose, with the rationale recorded in
+  `docs/runbooks/advanced-integrations.md` §15 "Deferred: SAML and SCIM".
+- The OIDC endpoint allowlist is a **misconfiguration** check (https, no credentials in the URL, no
+  private or loopback literal). SSRF for user-supplied URLs belongs to 23.5, where the four divergent
+  validators (G86) become one helper.
+- The browser layer was **not** run: no Playwright browser is available in this environment, so the
+  sign-in button, the callback redirect and the challenge hand-off are covered by unit tests and by
+  reading the markup, not by a browser spec.
+- The full DB-backed `pnpm verify` **was** run as a single command against the configured primary
+  database and exits 0 (276 test files / 3617 tests, plus the web lane). `pnpm ci:gate` (the DB-free
+  gate) was run as well and exits 0.
+- **The shared database carried test artifacts from earlier runs.** The first full-gate run failed in
+  seven assertions across four suites that 23.3 does not touch (`esignature`, `esignature-entities`,
+  `esignature-reporting`, `ai-agent-triggers`). The cause was residue of an **interrupted** test run
+  whose `afterAll` never executed: two `AGENT_TEST_es8_*` ESignature connections, fourteen signature
+  requests and twenty-two published AI agents with an `AGENT_TEST` marker, all of which the
+  esignature and AI-agent suites count. The residue was removed by its exact marker
+  (`AGENT_TEST_es8_*` / `agent_key like 'agent-test-%' and name like 'AGENT_TEST%'`), never by a broad
+  predicate, and the settings pointers that named a now-deleted test agent were cleared the way the
+  owning suite (`phase22-journey-ai-controlled-actions.test.ts`) clears them. No business record was
+  touched: every removed row carried a test marker this repository writes.
+- **One real defect surfaced through that residue**, and it is recorded as **G95** in
+  `docs/quality/known-gaps.md`: the AI-agent trigger door selects its candidates with
+  `order by id asc limit 20` over the published agents, and the agent id is a random UUID — so with
+  more than 20 published agents an agent that matches an event can be outside the window and never
+  run. It fails closed (no run is started) and it is **not** fixed by 23.3, which is external identity
+  and OAuth correctness.
+- **The shared database keeps test users by design of the existing suites, and 23.3 does not change
+  that.** After the final `pnpm verify`, roughly 4 289 `users` rows in the database carry a test
+  marker this repository writes (`sd_owner_*`, `ma_owner_*`, `acl_all_*`, `modtest-*`, `tmpadmin-*`,
+  …); about 310 of them were added by the runs of this session. The 23.3 suites leave **nothing**
+  behind: `oidc_identities`, `oidc_signin_states` and every user, identity and state row the OIDC
+  suites create are gone after the run. The accumulated rows are **not** deleted here — they are not
+  owned by this sub-phase, their ownership cannot be proven for a shared database that other work also
+  touches, and a broad delete is exactly what the database policy forbids. One older artifact is
+  visible in the same shape: the integration connection `AGENT_TEST_zz_mvs50z63` (2026-10-28), left
+  untouched for the same reason.
+
 ## Phase 23.2 — MFA policy, sessions and API-key lifecycle (delivered 2026-11-10)
 
 ### Scope delivered

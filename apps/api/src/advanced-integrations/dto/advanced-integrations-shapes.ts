@@ -75,13 +75,20 @@ export const AuthorizeSchema = z
 
 export const EmptyBodySchema = z.object({}).strict();
 
-/** The OAuth callback's query string. */
+/**
+ * The OAuth callback's query string.
+ *
+ * `redirect_uri` is the value the provider echoes back. It is **compared** against the exact value
+ * the platform sent (Phase 23.3 / G51) — it is never used as the redirect URI itself, because the
+ * platform's redirect URI is a constant of the platform.
+ */
 export const OAuthCallbackSchema = z
   .object({
     state: z.string().min(1).max(512),
     code: z.string().min(1).max(4096).optional(),
     error: z.string().max(512).optional(),
     error_description: z.string().max(1024).optional(),
+    redirect_uri: z.string().min(1).max(2048).optional(),
   })
   .strict();
 
@@ -105,6 +112,15 @@ const FieldMappingSchema = z
 export const MappingCreateSchema = z
   .object({
     providerKey: z.string().trim().min(1).max(64),
+    /**
+     * Phase 23.3 (G50): the connection the mapping belongs to.
+     *
+     * It is optional for one reason only: an installation with a single connection per provider
+     * does not have to name it. When a provider has **more than one** connection, the platform
+     * refuses to guess — it used to pick the alphabetically first name, which made the target of a
+     * mapping depend on an ordering nobody chose.
+     */
+    connectionId: z.string().trim().min(1).max(64).optional(),
     objectType: z.string().trim().min(1).max(64),
     crmEntityType: z.string().trim().min(1).max(64),
     direction: z.enum(['inbound', 'outbound', 'bidirectional']).default('inbound'),

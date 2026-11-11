@@ -13,6 +13,7 @@ import { Public } from './auth.guard.js';
 import type { AuthTokens, PrincipalRecord } from './auth.service.js';
 import { AuthService } from './auth.service.js';
 import { PasswordResetService } from './password-reset.service.js';
+import { applySessionCookies } from './session-cookies.js';
 
 const LoginSchema = z.object({
   userName: z.string().min(1),
@@ -366,12 +367,7 @@ export class AuthController {
     // `request.protocol` honours the configured trustProxy setting: a client-supplied
     // x-forwarded-proto is only believed when the peer is a trusted proxy (PLAN §8 task 4).
     const secure = request.protocol === 'https';
-    const cookies = [
-      `CRM-SESSION=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}; Max-Age=${tokens.expiresIn}`,
-      `CRM-REFRESH=${tokens.refreshToken}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}; Max-Age=1209600`,
-      `CRM-CSRF=${csrf}; Path=/; SameSite=Lax${secure ? '; Secure' : ''}`,
-    ];
-    reply.header('set-cookie', cookies);
+    applySessionCookies(reply, tokens, secure, csrf);
     return {
       ...tokens,
       userId: principal.userId,

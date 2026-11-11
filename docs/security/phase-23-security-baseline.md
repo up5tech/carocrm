@@ -233,7 +233,7 @@ still in the future on 2026-11-09, so nothing has expired. But the register itse
 | G38 | Medium exception | Fixed 2026-11-03 | No | **Closed** — `crm-chat.controller.ts:247,385` |
 | G39 | Low exception | Fixed 2026-11-03 | No | **Closed** — `crm-chat-citations.service.ts:410` |
 | G63 | Medium exception | Fixed 2026-11-03 | No | **Closed** — `apps/web/src/admin/RequireAdministration.tsx`, `AppRoutes.tsx:212-221` |
-| G47 | Medium, review 2026-11-30 | Open | Yes | **Carried forward**, review 2026-12-09 |
+| G47 | Medium, review 2026-11-30 | Open | Yes | **Carried forward** — **fixed 2026-11-11** in 23.3 (see §10) |
 | G48 | Medium, review 2026-11-30 | Open | Yes | **Carried forward**, review 2026-12-09 |
 | G49 | Low, review 2026-11-30 | Open | Yes | **Carried forward**, review 2026-12-09 |
 | G64 | Medium, review 2026-11-30 | Open | Yes | **Carried forward**, review 2026-12-09 |
@@ -453,7 +453,7 @@ sequence is not renumbered, so it carries one deliberate gap.
 | ID | Finding | Severity | Target |
 |---|---|---|---|
 | G83 | Three worker doors are unreachable by the worker — `Sales/action/generate-subscription-invoices`, `MarketingAutomation/action/delivery/run-scheduled-batch`, `MarketingAutomation/action/journey/run-batch` lack `@Public()`, so the global guard answers 401 before the capability check (reproduced 2026-11-09) | Medium (availability; fails closed) | 23.4 |
-| G84 | The OAuth callback **never compares a redirect URI**, although its own comment says it does. The strict callback schema rejects `redirect_uri` outright, so the provider's echoed value is never read; the exchange sends the platform constant (the safe direction, but the code comment is false) | Medium | 23.3 |
+| G84 | The OAuth callback **never compares a redirect URI**, although its own comment says it does. The strict callback schema rejects `redirect_uri` outright, so the provider's echoed value is never read; the exchange sends the platform constant (the safe direction, but the code comment is false) | Medium | 23.3 — **Fixed 2026-11-11** (see §10) |
 | G86 | Four independent SSRF validators exist (`ai-provider-url.ts`, `media-url.ts`, `provider-http-client.ts`, `modules/webhook-integration/src/shared.ts`) and `voice-media.service.ts:167` is the only outbound fetch that **follows redirects**, so an allowlisted host can redirect to a private address | Medium | 23.5 |
 | G87 | `s3AccessKeyId` / `s3SecretAccessKey` are silently **dropped** when only one is set, and the SDK falls back to its default credential chain — a half-configured object store does not fail closed | Low | 23.1 / 23.6 |
 | G88 | Every module system principal carries `roles: ['sysAdmin']`, so `AclApiService.canAccessRecord` returns `allowed: true` unconditionally for every worker and every public-intake write; the authority files' comments assert the opposite (this is the concrete shape of F1) | Medium | 23.4 |
@@ -512,3 +512,32 @@ before 23.5's adversarial suite, because the adversarial suite needs the async m
 - The G83 worker-door defect was found by reading the route decorators and **reproduced by execution**; the other
   new findings (G84–G91) are reproduced statically and are labelled as such until their sub-phase writes the
   regression test.
+
+---
+
+## 10. Status after Phase 23.3 — external identity and OAuth correctness
+
+Phase 23.3 closed **G47**, **G50**, **G51** and **G84**, and added the **generic OpenID Connect sign-in** the plan
+called for (§8 of `plans/PLAN_Phase_23_Security_Hardening.md`). The evidence is in
+`docs/quality/phase-23-security-test-evidence.md`.
+
+| Finding | What changed | Where |
+|---|---|---|
+| G47 | The connector executor refreshes an expired (or nearly expired) token **before** the provider call, and a provider that refuses the credential gets exactly **one** bounded retry with a fresh token. The refresh question is now one shared function (`needsRefresh`), and the forced refresh is bound to the token that was refused, so a credential another worker already replaced is not rotated twice | `apps/api/src/advanced-integrations/connector-executor.service.ts`; `oauth-flow.service.ts` |
+| G50 | A mapping may name the connection it belongs to. A named connection must exist and belong to the named provider; one connection per provider still resolves without naming it; **more than one is refused** — the alphabetical pick is gone | `advanced-integrations.controller.ts` (`resolveConnectionId`); `dto/advanced-integrations-shapes.ts` |
+| G51 / G84 | The callback carries the echoed `redirect_uri` and the flow compares it with the value the platform sent, **before** the code is exchanged. A state row whose stored redirect URI is not the platform's constant is refused as a tampered row. The code comment now describes a check that exists | `oauth-flow.service.ts` (`complete`); `oauth-callback.controller.ts`; `dto/advanced-integrations-shapes.ts` |
+| — | **Generic OIDC sign-in.** A provider is a **profile** (`OIDC_PROFILES`), not code: issuer, endpoints, client id, redirect URI, the linking and provisioning switches. The state is single-use and stored hashed, the nonce is checked, PKCE is always used, the id_token is verified with `jose` (RS/PS/ES only — `none` and HMAC are refused), and the sign-in ends in the **same** session issuance as the password sign-in | `apps/api/src/auth/oidc/*`; `apps/api/src/auth/session-cookies.ts`; `apps/api/src/auth/auth.service.ts` (`sessionForExternalSignIn`) |
+
+**One new finding was raised while verifying 23.3, and it is recorded rather than fixed.** The AI-agent
+trigger door (`apps/api/src/ai-agents/runs/triggers.ts`) selects its candidates with `order by id asc limit 20`
+over the published agents — and the agent id is a random UUID, so the window is arbitrary. With more than 20
+published agents, a matching agent can be outside it and a matching event can never start it. It surfaced as a
+failing suite under the full parallel gate and is a **product** defect, not a test-isolation one. It is recorded
+as **G95** in `docs/quality/known-gaps.md` and belongs with the AI-agent trigger work; 23.3 is external identity
+and OAuth correctness, and it did not fix it opportunistically.
+
+**What 23.3 deliberately did not do.** SAML and SCIM are **not** implemented: they are different protocols with a
+different trust model, and the plan's own scope for this sub-phase was the generic OIDC profile. The rationale is
+recorded in `docs/runbooks/advanced-integrations.md` §"Deferred: SAML and SCIM". The endpoint allowlist check for
+OIDC is a **misconfiguration** check (https, no credentials in the URL, no private literal); SSRF for user-supplied
+URLs belongs to 23.5, where the four divergent validators (G86) become one helper.

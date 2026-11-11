@@ -1658,6 +1658,38 @@ export interface AuthPasswordResetsTable {
   created_at: Date;
 }
 
+/**
+ * Phase 23.3 (PLAN §17.3) — one row per in-flight OIDC sign-in.
+ *
+ * `id` is the SHA-256 of the state parameter: the state itself is never stored, so a database read
+ * does not yield a usable callback token.
+ */
+export interface OidcSigninStatesTable {
+  id: string;
+  profile_key: string;
+  nonce: string;
+  code_verifier: string;
+  redirect_uri: string;
+  created_at: Date;
+  expires_at: Date;
+  consumed_at: Date | null;
+}
+
+/**
+ * Phase 23.3 (PLAN §17.3) — the account-linking table.
+ *
+ * One row per (provider, subject) pair bound to a local user. The subject is the provider's stable
+ * identifier for the person, not an email address, so a changed email never re-points an identity.
+ */
+export interface OidcIdentitiesTable {
+  id: string;
+  provider_key: string;
+  subject: string;
+  user_id: string;
+  created_at: Date;
+  last_sign_in_at: Date | null;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -1665,6 +1697,8 @@ export interface Database {
   user_recovery_codes: UserRecoveryCodesTable;
   auth_login_attempts: AuthLoginAttemptsTable;
   auth_password_resets: AuthPasswordResetsTable;
+  oidc_signin_states: OidcSigninStatesTable;
+  oidc_identities: OidcIdentitiesTable;
   api_users: ApiUsersTable;
   api_keys: ApiKeysTable;
   roles: RolesTable;

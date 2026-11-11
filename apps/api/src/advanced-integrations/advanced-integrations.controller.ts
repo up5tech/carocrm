@@ -275,7 +275,7 @@ export class AdvancedIntegrationsController {
     await this.permissions.assert('connectionAdmin');
     const input = parse(MappingCreateSchema, body);
     return this.mappings.create({
-      connectionId: await resolveConnectionId(this.connections, input.providerKey),
+      connectionId: await resolveConnectionId(this.connections, input.providerKey, input.connectionId),
       objectType: input.objectType,
       crmEntityType: input.crmEntityType,
       direction: input.direction,
@@ -897,21 +897,50 @@ export class AdvancedIntegrationsController {
 }
 
 /**
- * The connection a provider key names.
+ * The connection a mapping belongs to.
  *
- * The mapping builder addresses a connection by its provider and the connection's name; the
- * caller must be allowed to see it, so the lookup goes through the connection service.
+ * Phase 23.3 (G50): the answer used to be "the first connection whose provider key matches", and
+ * the list is ordered by `provider_key asc, name asc` — so with two connections of one provider the
+ * target was the alphabetically first **name**, an ordering nobody chose and nobody sees. The
+ * mapping then synced one connection's objects into the other connection's records.
+ *
+ * The rule now is explicit:
+ *
+ *  - a named `connectionId` is used, and it must belong to the provider that was named;
+ *  - a provider with exactly **one** connection resolves to it;
+ *  - a provider with several connections is **refused** — the caller names the one it means.
  */
 async function resolveConnectionId(
   connections: ConnectionLifecycleService,
   providerKey: string,
+  connectionId?: string | undefined,
 ): Promise<string> {
   const all = await connections.list();
-  const found = all.find((connection) => connection.providerKey === providerKey);
-  if (!found) {
+  if (connectionId !== undefined && connectionId !== '') {
+    const named = all.find((connection) => connection.id === connectionId);
+    if (named === undefined) {
+      throw new ValidationError('That connection does not exist.', { connectionId });
+    }
+    if (named.providerKey !== providerKey) {
+      throw new ValidationError('That connection does not belong to the named provider.', { connectionId, providerKey });
+    }
+    return named.id;
+  }
+  const candidates = all.filter((connection) => connection.providerKey === providerKey);
+  if (candidates.length === 0) {
     throw new ValidationError(`No connection for provider "${providerKey}" exists.`, { providerKey });
   }
-  return found.id;
+  if (candidates.length > 1) {
+    throw new ValidationError(
+      `Provider "${providerKey}" has more than one connection. Name the connection the mapping belongs to.`,
+      { providerKey, connectionIds: candidates.map((connection) => connection.id) },
+    );
+  }
+  const only = candidates[0];
+  if (only === undefined) {
+    throw new ValidationError(`No connection for provider "${providerKey}" exists.`, { providerKey });
+  }
+  return only.id;
 }
 
 function parse<T extends ZodTypeAny>(schema: T, body: unknown): T['_output'] {

@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { AuthenticationFailedError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
@@ -57,6 +57,30 @@ export const OAUTH_REDIRECT_URI = OAUTH_CALLBACK_PATH;
 const KIND_ACCESS_TOKEN = 'oauth_access_token';
 const KIND_REFRESH_TOKEN = 'oauth_refresh_token';
 const KIND_CLIENT_SECRET = 'client_secret';
+
+/**
+ * How a refresh should behave.
+ *
+ * The default is the conservative one: refresh only a token that is expired or about to expire.
+ */
+export interface OAuthRefreshOptions {
+  /**
+   * Phase 23.3 (G47): refresh even when the stored token is not near its expiry.
+   *
+   * The reason is a provider that **refused** the credential. The clock may still say the token is
+   * valid while the provider has already revoked it, so the "is it expired?" question is the wrong
+   * one to ask at that moment.
+   */
+  readonly force?: boolean | undefined;
+  /**
+   * The access token the caller used when the provider refused it.
+   *
+   * A forced refresh is only performed while the stored credential is still this one. When another
+   * worker already replaced it, the refresh is skipped — rotating a rotating refresh token twice
+   * destroys it.
+   */
+  readonly expectedAccessToken?: string | null | undefined;
+}
 
 export interface OAuthAuthorizationStartResult {
   readonly connectionId: string;
@@ -185,7 +209,13 @@ export class OAuthFlowService {
    * The connection is derived from the state, so a callback cannot be aimed at another connection.
    * The state is consumed atomically, so a replay finds nothing.
    */
-  async complete(input: { state: string; code: string; error?: string | null }): Promise<OAuthCallbackResult> {
+  async complete(input: {
+    state: string;
+    code: string;
+    error?: string | null;
+    /** The redirect URI the provider echoed back. It is compared, never used. */
+    redirectUri?: string | null;
+  }): Promise<OAuthCallbackResult> {
     if (input.error !== undefined && input.error !== null && input.error !== '') {
       // Phase 23.1 (G52): never echo the provider's raw error text into the response.
       throw new AuthenticationFailedError('The provider refused the authorization.');
@@ -202,6 +232,18 @@ export class OAuthFlowService {
       throw new AuthenticationFailedError(
         'The authorization response is not valid. It may have expired, already been used, or never have come from this platform.',
       );
+    }
+
+    // Phase 23.3 (G51): the redirect URI is compared against the exact value the platform sent,
+    // **before** the code is exchanged. The platform's own redirect URI is a constant, so a state
+    // row that names another one is a tampered row and the flow stops here.
+    if (row.redirect_uri !== OAUTH_REDIRECT_URI) {
+      throw new AuthenticationFailedError('The authorization response was not made for this platform.');
+    }
+    if (input.redirectUri !== undefined && input.redirectUri !== null && input.redirectUri !== '') {
+      if (!timingSafeEqualStrings(input.redirectUri, row.redirect_uri)) {
+        throw new AuthenticationFailedError('The authorization response was not made for this platform.');
+      }
     }
 
     const connection = await this.connections.get(row.connection_id);
@@ -292,16 +334,20 @@ export class OAuthFlowService {
    * concurrent operations cannot refresh the same token twice. The second one finds a fresh token
    * and does nothing.
    */
-  async refresh(connectionId: string): Promise<{ readonly refreshed: boolean; readonly expiresAt: string | null }> {
+  async refresh(
+    connectionId: string,
+    options: OAuthRefreshOptions = {},
+  ): Promise<{ readonly refreshed: boolean; readonly expiresAt: string | null }> {
     // A refresh is background work: it has no human session. It runs under the documented service
     // authority (ADR 0003, §7.2), and it is not exposed as a route.
     return runAsAdvancedIntegrationsSystem(this.scope, `refresh:${connectionId}`, () =>
-      this.refreshUnderServiceAuthority(connectionId),
+      this.refreshUnderServiceAuthority(connectionId, options),
     );
   }
 
   private async refreshUnderServiceAuthority(
     connectionId: string,
+    options: OAuthRefreshOptions,
   ): Promise<{ readonly refreshed: boolean; readonly expiresAt: string | null }> {
     const connection = await this.connections.get(connectionId);
     const provider = this.registry.find(connection.providerKey);
@@ -325,7 +371,18 @@ export class OAuthFlowService {
         throw new ValidationError('The connection holds no access token.');
       }
       // Another worker may have refreshed while this one waited for the lock.
-      if (!needsRefresh(current.expiresAt)) {
+      if (options.force === true) {
+        // Phase 23.3 (G47): a **forced** refresh happens because the provider refused the
+        // credential, not because the clock says it expired. It is still only performed while the
+        // stored credential is the one that was refused: if another worker already replaced it,
+        // rotating it again would destroy a rotating refresh token for nothing.
+        if (options.expectedAccessToken !== undefined && options.expectedAccessToken !== null) {
+          const stored = await this.vault.read({ connectionId, kind: KIND_ACCESS_TOKEN });
+          if (stored === null || !timingSafeEqualStrings(stored, options.expectedAccessToken)) {
+            return { refreshed: false, expiresAt: current.expiresAt };
+          }
+        }
+      } else if (!needsRefresh(current.expiresAt)) {
         return { refreshed: false, expiresAt: current.expiresAt };
       }
       const refreshToken = await this.vault.read({ connectionId, kind: KIND_REFRESH_TOKEN });
@@ -564,12 +621,24 @@ function notificationId(connectionId: string, kind: string): string {
   return `intgn_reauth_${connectionId}_${kind}`;
 }
 
-/** Whether an access token is expired, or close enough to expiry to be worth refreshing. */
-function needsRefresh(expiresAt: string | null): boolean {
+/**
+ * Whether a token needs refreshing: unknown expiry, already expired, or expiring within a minute.
+ *
+ * Exported so the connector executor asks the same question the refresh does (Phase 23.3 / G47).
+ */
+export function needsRefresh(expiresAt: string | null): boolean {
   if (expiresAt === null) return true;
   const expiry = Date.parse(expiresAt);
   if (Number.isNaN(expiry)) return true;
   return expiry - Date.now() <= 60_000;
+}
+
+/** A length-checked, constant-time string comparison. */
+export function timingSafeEqualStrings(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 /**

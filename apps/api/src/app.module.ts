@@ -20,6 +20,9 @@ import { AuthGuard } from './auth/auth.guard.js';
 import { AuthService } from './auth/auth.service.js';
 import { IdentityController } from './auth/identity.controller.js';
 import { IdentityService } from './auth/identity.service.js';
+import { OidcController } from './auth/oidc/oidc.controller.js';
+import { FetchOidcHttp,OIDC_HTTP_PORT } from './auth/oidc/oidc-http.port.js';
+import { OidcIdentityService } from './auth/oidc/oidc-identity.service.js';
 import { PasswordResetService } from './auth/password-reset.service.js';
 import { CALENDAR_CONTROLLERS, CALENDAR_PROVIDERS } from './calendar/index.js';
 import { OutboxService } from './common/outbox.service.js';
@@ -77,6 +80,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     HealthController,
     AuthController,
     IdentityController,
+    // Phase 23.3 (PLAN §17.3): the generic OpenID Connect sign-in.
+    OidcController,
     // Phase 7A (PLAN §41.5): `/api/v1/I18n` and `/api/v1/AppUser` are static prefixes,
     // matched before the generic `:entity` wildcard.
     I18nController,
@@ -174,6 +179,11 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     I18nService,
     AuthService,
     PasswordResetService,
+    // Phase 23.3: the OIDC identity service and its outbound HTTP port.
+    OidcIdentityService,
+    // A factory, not `useClass`: the port's implementation takes a timeout, and a class provider
+    // would make Nest resolve that number as a dependency.
+    { provide: OIDC_HTTP_PORT, useFactory: () => new FetchOidcHttp() },
     IdentityService,
     OutboxService,
     ...ACL_PROVIDERS,

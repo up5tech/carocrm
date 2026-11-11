@@ -21,7 +21,8 @@ import { OAUTH_CALLBACK_PATH, OAuthFlowService } from './oauth-flow.service.js';
  *  - the connection is derived **from the state**, never from the request, so a callback cannot be
  *    aimed at somebody else's connection;
  *  - the redirect URI the platform sent is an allowlisted constant, and the one that comes back is
- *    compared against the state row — a callback for a different redirect is refused.
+ *    compared against that exact value before the code is exchanged (Phase 23.3 / G51) — a callback
+ *    for a different redirect is refused without a token request.
  *
  * Because there is no session, the callback runs under the documented service authority
  * (`advanced-integrations-authority.ts`). That authority is what makes the work attributable; it
@@ -49,6 +50,7 @@ export class AdvancedIntegrationsOAuthCallbackController {
         state: parsed.data.state,
         code: parsed.data.code ?? '',
         error: parsed.data.error ?? null,
+        redirectUri: parsed.data.redirect_uri ?? null,
       }),
     );
     // The browser goes back to the administration surface. The module's own page arrives with

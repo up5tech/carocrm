@@ -14,6 +14,14 @@ interface SessionState {
   pendingChallenge: string | null;
   signIn: (userName: string, password: string) => Promise<boolean>;
   completeChallenge: (code: string) => Promise<boolean>;
+  /**
+   * Phase 23.3 (PLAN §17.3): adopt a challenge that an **external** sign-in produced.
+   *
+   * The OIDC callback ends in the same challenge the password sign-in can produce, so the SPA
+   * treats it the same way — the challenge id travels in the redirect, and the session store is
+   * the one place that holds it.
+   */
+  adoptChallenge: (challengeId: string) => void;
   clearChallenge: () => void;
   loadPrincipal: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -87,6 +95,10 @@ export const useSession = create<SessionState>((set, get) => ({
       set({ loading: false, error: error instanceof Error ? error.message : t('web.login.failed') });
       return false;
     }
+  },
+
+  adoptChallenge(challengeId) {
+    set({ pendingChallenge: challengeId, error: null });
   },
 
   clearChallenge() {

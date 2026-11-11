@@ -57,11 +57,11 @@
 | G44 | The sync checkpoint advanced only at the end of the loop, and a bounded run advanced it past records it never applied | advanced-integrations | High | Fixed (22.14) |
 | G45 | Cancelling a run stopped nothing, and a cancelled run could be cancelled again | advanced-integrations | Medium | Fixed (22.14) |
 | G46 | `features.connections` was stored and displayed but enforced nothing | advanced-integrations | Medium | Fixed (22.14) |
-| G47 | Token refresh is implemented, serialised and tested — and no production path calls it | advanced-integrations | Medium | Open (found 22.14) |
+| G47 | Token refresh is implemented, serialised and tested — and no production path calls it | advanced-integrations | Medium | Fixed (23.3) |
 | G48 | The resilience layer the sync path never uses: rate limiter, retry policy, `assertCallable` | advanced-integrations | Medium | Open (22.21; 22.18 decided scope) |
 | G49 | `deletionPolicy: 'archive'` behaves exactly like `unlink` | advanced-integrations | Low | Open (found 22.14) |
-| G50 | A mapping asked for "the connection for this provider" gets one picked by name order | advanced-integrations | Medium | Open (found 22.14) |
-| G51 | The OAuth callback never compares the redirect URI its own comment claims it checks | advanced-integrations | Medium | Open (found 22.14) |
+| G50 | A mapping asked for "the connection for this provider" gets one picked by name order | advanced-integrations | Medium | Fixed (23.3) |
+| G51 | The OAuth callback never compares the redirect URI its own comment claims it checks | advanced-integrations | Medium | Fixed (23.3) |
 | G52 | A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential | advanced-integrations | Low | Fixed (23.1) |
 | G53 | A delivery deferred by a paused connection or a disabled module is never picked up again | advanced-integrations | Medium | Open (found 22.14) |
 | G54 | An unexpected error sent its own text to the browser inside `details.reason` | platform / SPA | High | Fixed (22.15) |
@@ -518,8 +518,8 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Module / contract:** advanced-integrations — `OAuthFlowService.refresh`, `ConnectorExecutor.buildContext`.
 - **Impact:** `refresh()` takes an advisory lock per connection, re-checks under that lock whether another worker already rotated the token, stores the new pair and moves the connection to `reauthorization_required` if the provider refuses. It is correct and it is concurrency-safe. Nothing calls it: the only caller in the repository is `apps/api/test/advanced-integrations.test.ts`, and the executor reads the stored access token and hands it to the adapter without consulting its expiry. So a token that expires in the middle of a working day leaves the connection `connected`, every provider call failing, and no path marks it as needing reauthorization from a live authorization error — the operator finds out from failed runs, not from the connection's state.
 - **Expected vs observed:** expected — an expiring grant is refreshed before it is used, or the connection says so; observed — an expiry notice job exists (`features.expiryNotices`, `notifyExpiringCredentials`) that warns a human days ahead, and nothing else.
-- **Status:** Open (found 22.14) — the journey calls the service directly to prove the mechanism works and says so in the step, because pretending a route exists would be worse than recording that it does not. Wiring it up is a decision with a cost: refreshing inside the executor means a provider round-trip and a credential rotation in the middle of every call, and mapping an adapter's `authorization` failure to `reauthorization_required` changes what a deployment sees after an outage. Both belong in the connector-operations sub-phase, not smuggled into a hardening journey.
-- **Remaining risk:** a deployment whose provider issues short-lived tokens needs the expiry notice to be enough, and today it only produces a notification.
+- **Status:** Fixed (23.3) — the executor now consults the credential's own expiry before every provider call and refreshes an expired (or nearly expired) token first, so a long-idle connection no longer fails on its first use. The refresh question itself (`needsRefresh`) was lifted out of `oauth-flow.service.ts` and is now one shared function, so the executor and the refresh cannot drift apart. A provider that **refuses** the credential gets exactly **one** second attempt with a fresh token, and the retry is bounded: a second failure is the failure. That path needed a *forced* refresh, because a provider can revoke a token whose clock has not run out — the refresh is therefore bound to the token that was refused, so a credential another worker already replaced is not rotated twice, and the per-connection advisory lock still serialises concurrent refreshes. The provider-facing behaviour did not change: a refresh that the provider refuses still moves the connection to `reauthorization_required` and the caller still sees the provider's own failure.
+- **Remaining risk:** a deployment whose provider issues short-lived tokens now sees a refresh on nearly every call; the number of provider round-trips per call is one, and the token is rotated once per connection, but a deployment that cannot afford that should widen its token lifetime rather than rely on the expiry notice.
 
 ## G48 — The resilience layer the sync path never uses
 
@@ -542,16 +542,16 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Module / contract:** advanced-integrations — `POST action/mappings` and its `resolveConnectionId` helper.
 - **Impact:** the request names a provider, and the helper lists the caller's connections and takes the **first one whose provider key matches**, ordered by `provider_key, name`. A deployment with two connections to one provider (a sandbox and a production tenant; a revoked one awaiting deletion and a live one) silently binds the mapping — and therefore every sync and every webhook apply — to whichever name sorts first. A revoked connection sorts as easily as a live one.
 - **Expected vs observed:** expected — the caller chooses, or the platform chooses a *usable* connection and says which; observed — an ordering accident decides where CRM records come from.
-- **Status:** Open (found 22.14) — the journey works around it by keeping exactly one live connection per provider and deleting the ones it revokes, and records the workaround in its findings. The fix is an explicit `connectionId` on the mapping request, which is an API-shape change (and a metadata/migration question for existing mappings that only carry a provider key).
-- **Remaining risk:** a mapping bound to the wrong tenant reads real records from the wrong account.
+- **Status:** Fixed (23.3) — the mapping request may now name the connection it belongs to (`connectionId`), and the platform refuses to guess: a named connection must exist **and** belong to the named provider; a provider with exactly one connection still resolves without naming it; a provider with more than one is refused with a message that says so. The alphabetical pick is gone — the ordering accident cannot happen any more. Existing mappings are unaffected: they already carry a `connection_id`, and the request shape only gained an optional field, so no migration is needed.
+- **Remaining risk:** a mapping that was created **before** this change and was bound to the alphabetically first connection still points at that connection. Nothing rewrote it, because rewriting it would have been guesswork; an operator who has more than one connection per provider should review those mappings by hand.
 
 ## G51 — The OAuth callback never compares the redirect URI its own comment claims it checks
 
 - **Module / contract:** advanced-integrations — `AdvancedIntegrationsOAuthCallbackController` header comment and `OAuthFlowService.complete`.
 - **Impact:** the controller states that the returning redirect URI is compared with the one stored on the state row. `complete()` takes `{state, code, error}` and has no redirect input at all, so nothing is compared. The state row is single-use, hashed, short-lived and bound to a connection and an initiating principal, which is what actually stops a replay — but the provider-facing binding an operator is told about (register the exact redirect) is not enforced by the platform.
 - **Expected vs observed:** expected — either compare it, or stop documenting it; observed — documentation of a check that is not there.
-- **Status:** Open (found 22.14) — closing it properly means sending `redirectUri` on the exchange (providers validate it against the registered value) or dropping the claim from the comment; the second is honest and the first is what a real OAuth client does, so it belongs with the OAuth wiring in G47 rather than arriving half-way here.
-- **Remaining risk:** a mis-registered redirect produces a provider-side error the platform reports as a generic authorization failure (`AUTHORIZATION_FAILED`), which is accurate but not actionable.
+- **Status:** Fixed (23.3) — the callback now carries the redirect URI the provider echoed back, and the platform compares it with the value it sent, **before** the authorization code is exchanged. The comparison is constant-time, and a state row whose stored redirect URI is not the platform's own constant is refused as a tampered row — so a mismatch costs no token request at all. The platform's redirect URI stays a constant of the platform (it is never request input), and the exchange still sends the stored value, which is what a real OAuth client does. The same rule was applied to the **generic OIDC sign-in** added in this sub-phase: its callback compares the echoed redirect URI with the one the platform sent, before the code is exchanged.
+- **Remaining risk:** a mis-registered redirect at the provider produces a provider-side error the platform reports as a generic authorization failure (`AUTHORIZATION_FAILED`), which is accurate but not actionable.
 
 ## G52 — A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential
 
@@ -808,7 +808,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 | ID | Title | Module | Severity | Status |
 |---|---|---|---|---|
 | G83 | Three worker doors cannot be called by the worker — they lack `@Public()`, so the global guard answers 401 before the capability check | sales / marketing-automation | Medium | Open (reproduced 23.0) |
-| G84 | The OAuth callback never compares a redirect URI, although its own comment says it does | advanced-integrations | Medium | Open |
+| G84 | The OAuth callback never compares a redirect URI, although its own comment says it does | advanced-integrations | Medium | Fixed (23.3) |
 | G86 | Four independent SSRF validators, and one outbound fetch that follows redirects | platform / voice | Medium | Open |
 | G87 | Half-configured S3 credentials are silently dropped and the SDK falls back to its default credential chain | platform / files | Low | Fixed (23.1) |
 | G88 | Every module system principal carries `sysAdmin`, so record ACL is bypassed for worker and public-intake writes (the concrete shape of F1) | platform | Medium | Open |
@@ -818,6 +818,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 | G92 | The DB-free CI lane contains no API authorization assertion; the only SSRF suite is not in the include list | platform (CI) | Medium | Open |
 | G93 | The Phase 22.17 §7/§9 exception list drifted from this register after the 2026-11-03 fixes | platform (docs) | Low | **Fixed (23.0)** |
 | G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
+| G95 | The AI-agent trigger door reads only the **first 20** published agents, ordered by a random UUID, so a matching agent can be invisible | ai-agents | Medium | Open (found 23.3) |
 
 ## G83 — Three worker doors cannot be called by the worker
 
@@ -858,7 +859,10 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   registered value), but the stated control does not exist.
 - **Severity:** Medium — a false security comment is a maintenance hazard, and a provider that requires the echoed
   redirect URI to match would not be checked.
-- **Status:** Open — target **23.3**, together with **G51**'s wording in the exception register.
+- **Status:** Fixed (23.3) — the callback schema now accepts the echoed `redirect_uri`, the flow compares it with the
+  value the platform sent (constant-time) **before** the code is exchanged, and a state row whose stored redirect URI
+  is not the platform's own constant is refused as a tampered row. The comment now describes a check that exists, and
+  the same rule was applied to the generic OIDC sign-in added in this sub-phase.
 
 ## G86 — Four SSRF validators, and one fetch that follows redirects
 
@@ -963,3 +967,32 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   — but the endpoint is reachable and the contract is not closed.
 - **Severity:** Medium.
 - **Status:** Fixed (23.1) — cookie-driven refresh now requires the double-submit CSRF token plus an Origin/SameSite check.
+
+## G95 — The AI-agent trigger door reads only the first 20 published agents, ordered by a random UUID
+
+- **Module / contract:** ai-agents — `apps/api/src/ai-agents/runs/triggers.ts:127-134` (the event door) and
+  `:342-349` (the integration door).
+- **Impact:** both doors select their candidates with `where status = 'published' and is_deleted = false
+  order by id asc limit 20`. The agent id is a **random UUID**, so the ordering is arbitrary and the
+  window is the 20 agents whose UUID happens to sort first — not the 20 that match. An installation
+  with more than 20 published agents therefore has agents that a matching event can **never** start:
+  the agent is simply outside the window, and nothing says so. The response reports `matched: 0`,
+  which reads like "no agent wanted this event" rather than "the candidate window excluded your agent".
+  The fan-out cap that follows (`candidates.slice(0, 5)`) is a deliberate bound; this one is not — it
+  bounds the *search*, not the fan-out.
+- **Expected vs observed:** expected — every published agent that matches the event type, the entity and
+  the record-context rule is a candidate; observed — only the agents inside an arbitrary 20-row window
+  are considered.
+- **Severity:** Medium — availability, not authorization: the affected agent simply never runs. It
+  fails **closed** (no run is started), so it is not a way to make an agent do something it should not.
+- **How it surfaced:** the `ai-agent-triggers` suite failed under the full parallel gate and passed
+  solo. The cause was **not** the suite's isolation: the shared database held 22 published test agents
+  from earlier runs, and the suite's own agent fell outside the window. The leftovers were removed by
+  their exact `AGENT_TEST` marker (the suite's own `afterAll` had not run for the interrupted run), and
+  the suite passes (15/15) with a clean database. The underlying defect is the window, not the leftovers.
+- **Status:** Open (found 23.3) — out of scope for 23.3, which is external identity and OAuth
+  correctness; the fix belongs with the AI-agent trigger work (filter by the event type and the entity
+  in SQL instead of paging an arbitrary window, and keep the fan-out cap on the *matched* set). The
+  finding is recorded here rather than fixed opportunistically.
+- **Remaining risk:** until it is fixed, an installation with more than 20 published agents has agents
+  whose triggers silently never fire.

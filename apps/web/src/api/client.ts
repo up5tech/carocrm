@@ -136,6 +136,7 @@ import type {
   ModuleSettingsView,
   MySession,
   NavigationTree,
+  OidcProvider,
   OmnichannelAnalytics,
   OmnichannelCallView,
   OmnichannelCapabilitiesView,
@@ -608,6 +609,23 @@ export const api = {
   confirmPasswordReset: (token: string, newPassword: string) =>
     request<{ status: boolean }>('/PasswordReset/confirm', post({ token, newPassword })),
   me: () => request<Principal>('/AppUser/me'),
+  /**
+   * Phase 23.3 (PLAN §17.3): the configured OpenID Connect providers.
+   *
+   * The route is public — the sign-in screen asks for it before anyone has a session — so it is
+   * read without an access token, and a failure is not fatal: an installation without a provider
+   * simply offers the password form.
+   */
+  oidcProviders: async (): Promise<{ readonly list: readonly OidcProvider[] }> => {
+    try {
+      const response = await fetch('/api/v1/Oidc/providers', { credentials: 'same-origin' });
+      if (!response.ok) return { list: [] };
+      const payload = (await response.json()) as { list?: OidcProvider[] };
+      return { list: Array.isArray(payload.list) ? payload.list : [] };
+    } catch {
+      return { list: [] };
+    }
+  },
   patchMyProfile: (input: ProfilePatch) => request<ProfileInfo>('/AppUser/me', { method: 'PATCH', body: JSON.stringify(input) }),
   changeMyPassword: (input: { currentPassword: string; newPassword: string }) =>
     request<{ status: boolean }>('/AppUser/me/password', post(input)),

@@ -40,8 +40,15 @@ rotated by a provider-side policy.
    `reauthorization_required` and the detail names the **missing scope** — a permission class, never
    a credential. Grant the scope at the provider and reconnect again.
 
-**What the platform will not do.** It will not retry the refresh. A refresh that failed because the
-grant is gone would fail forever, and the platform refuses to consume quota on it.
+**What the platform now does on its own (Phase 23.3).** A token that is expired — or within a minute
+of expiring — is refreshed **before** the next provider call, so a connection that sat idle over
+the weekend no longer fails on its first use. If the provider **refuses** a credential whose clock
+has not run out (a grant revoked provider-side), the platform refreshes once and retries **once**.
+The retry is bounded: a second refusal is the failure, and the connection moves to
+`reauthorization_required` exactly as before.
+
+**What the platform will not do.** It will not retry the refresh forever. A refresh that failed
+because the grant is gone would fail forever, and the platform refuses to consume quota on it.
 
 ## 2. A required provider scope was removed
 
@@ -258,6 +265,104 @@ has. It is deliberately narrow:
   a debug mode that stays on;
 - it exposes only the **field names** and the size of a payload. Never a value.
 - it needs the *diagnostics* capability, not merely the *use* capability.
+
+## 15. Signing in with an external identity (generic OIDC)
+
+Phase 23.3 added a **generic** OpenID Connect sign-in. A provider is **configuration, not code**: a
+*profile* says which provider is meant, and Google, Microsoft or any other OpenID Connect provider
+is a profile. There is no provider-specific code to write, and none will be.
+
+**The profile.** One JSON array in the environment variable `OIDC_PROFILES`:
+
+```json
+[
+  {
+    "key": "google",
+    "displayName": "Google",
+    "issuer": "https://accounts.google.com",
+    "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenEndpoint": "https://oauth2.googleapis.com/token",
+    "jwksUri": "https://www.googleapis.com/oauth2/v3/certs",
+    "clientId": "…",
+    "clientSecret": "…",
+    "scopes": ["openid", "email", "profile"],
+    "linkByEmail": true,
+    "autoProvision": true,
+    "defaultRoleIds": []
+  }
+]
+```
+
+| Field | Meaning |
+| --- | --- |
+| `key` | The short name the sign-in screen shows and the API accepts (`/Oidc/start?profile=<key>`). |
+| `issuer`, `authorizationEndpoint`, `tokenEndpoint`, `jwksUri` | Where the provider lives. Every endpoint must be **https**, must carry no credentials in the URL, and must not be a private or loopback address. |
+| `clientId`, `clientSecret` | The application's own registration at the provider. The secret lives in the environment, **never** in the database and never in a response. |
+| `scopes` | The scopes asked for. `openid` is required. |
+| `linkByEmail` | May an external identity whose email the provider marks **verified** bind to an existing local account with that address? It binds only when **exactly one** account matches, so an address can never pick a victim. |
+| `autoProvision` | May an unknown external identity create a local account? The new account gets `defaultRoleIds`. |
+| `defaultRoleIds` | The roles a provisioned account receives. An empty list means "no extra roles". |
+
+**The other environment variables.**
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OIDC_PROFILES` | `[]` | The profiles, as JSON. Empty means "no external sign-in", which is the safe default. A **malformed** profile refuses the boot rather than failing on the first sign-in attempt. |
+| `OIDC_STATE_TTL_SECONDS` | `600` | How long a sign-in attempt stays usable (60–3600). |
+| `OIDC_POST_LOGIN_REDIRECT` | `/` | Where the browser goes after a successful sign-in. A **relative path only** — an absolute URL would be an open redirect. |
+| `OIDC_LOGIN_PATH` | `/login` | Where the browser goes when the sign-in is refused. Relative only, for the same reason. |
+
+**The account-linking rule.** It is explicit, and it is the same for every provider:
+
+1. an **existing link** wins — the (provider, subject) pair is already bound to a local user;
+2. otherwise, **linking by email** applies if `linkByEmail` is on: the email must be marked
+   **verified** by the provider, and exactly one local account may match;
+3. otherwise, **provisioning** applies if `autoProvision` is on;
+4. otherwise the sign-in is **refused** — no link, no account, no session.
+
+An email the provider does *not* mark as verified never binds to an existing account. That is the
+rule that stops an attacker who controls an email address at a permissive provider from taking over
+an account here.
+
+**What the platform guarantees.** The sign-in ends in the **same** session the password sign-in
+issues — the same cookies, the same refresh rotation, the same revocation, the same MFA policy. An
+external identity is not a second class of session. A refused sign-in shows a stable code; the
+provider's own error text never reaches the browser.
+
+**Deploying it.**
+
+1. Register the application at the provider and note the **exact** redirect URI the platform uses:
+   `/api/v1/Oidc/callback`. Register it character for character — the platform compares the
+   redirected value with the one it sent, and refuses a mismatch **before** it exchanges the code.
+2. Put the profile in `OIDC_PROFILES`.
+3. Restart the platform. A malformed profile refuses the boot, so a typo is visible immediately and
+   not at the first sign-in attempt.
+4. Open `/login`. The provider appears as a button below the password form.
+
+**Deferring it.** Remove `OIDC_PROFILES` (or set it to `[]`) and restart. The sign-in screen stops
+offering the provider; the accounts that were already linked keep working through the password
+form, and the links themselves stay in the database so a later re-enable finds them again.
+
+### Deferred: SAML and SCIM
+
+**Neither is implemented, and that is deliberate.** They are different protocols with a different
+trust model:
+
+- **SAML** is an XML assertion protocol with a different signature model, a metadata-distribution
+  problem, and a clock-skew rule of its own. Building it means a second identity stack — a second
+  session issuance, a second linking rule, a second set of refusal semantics — beside the one the
+  plan asked for. Every OpenID Connect deployment that also speaks SAML already speaks OIDC, so the
+  generic profile covers the identity providers that matter without a second stack.
+- **SCIM** is not an authentication protocol at all. It is a **provisioning** protocol: it creates,
+  updates and deactivates *users* from an identity authority. It has nothing to do with signing in,
+  and it would need its own directory model, its own conflict rules and its own deactivation
+  semantics — a different deliverable from "external identity and OAuth correctness".
+
+Both remain **open product work**, not a gap in what Phase 23.3 delivered. When they are built, they
+belong in their own sub-phase with their own threat model, and the OIDC profile they will share
+(`oidc-profile.ts`, `oidc-identity.service.ts`) is the piece to generalise, not rewrite.
+
+---
 
 ## 14. Who owns what
 
