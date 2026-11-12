@@ -9,6 +9,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { AclApiService } from '../acl/acl-api.service.js';
 import { AuthService } from '../auth/auth.service.js';
+import { runAsUser } from '../common/async-principal.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { AppConfig } from '../config.js';
@@ -288,19 +289,21 @@ export class ReportService {
     if (!schedule || !schedule.enabled) throw new NotFoundError(`Enabled report schedule "${scheduleId}" does not exist.`);
     const report = await this.reportRow(schedule.report_id);
     if (report.user_id !== schedule.owner_user_id) throw new AuthorizationDeniedError('Scheduled report owner no longer matches the saved report owner.');
-    const principal = await this.auth.principalFromUser(schedule.owner_user_id);
     const recipientRow = await this.database.db.selectFrom('users').select(['email_address']).where('id', '=', schedule.owner_user_id).where('is_active', '=', true).where('is_deleted', '=', false).executeTakeFirst();
     const recipient = recipientRow?.email_address;
     if (typeof recipient !== 'string' || recipient.trim() === '') throw new ValidationError('The report owner has no active email address.');
 
-    return this.scope.runAs(principal, async () => {
+    // F1: the owner is re-derived inside `runAsUser` on every delivery, so a disabled account fails
+    // closed and the export runs under the owner's *current* roles, not the ones they held when the
+    // schedule was saved.
+    return runAsUser(this.auth, this.scope, schedule.owner_user_id, `report-schedule:${schedule.id}:${randomBytes(8).toString('hex')}`, async () => {
       const result = await this.exportCsv(report.id);
       if (result.truncated) throw new ValidationError('Scheduled report exceeds the bounded complete-result limit; no partial file was delivered.', { rows: result.rows });
       if (Buffer.byteLength(result.csv, 'utf8') > MAX_SCHEDULED_CSV_BYTES) {
         throw new ValidationError('Scheduled report CSV exceeds the 5 MiB delivery limit.');
       }
       return { reportId: report.id, reportName: report.name, recipient, filename: result.filename, csv: result.csv };
-    }, `report-schedule:${schedule.id}:${randomBytes(8).toString('hex')}`);
+    });
   }
 
   private assertWorkerSecret(supplied: string | undefined): void {

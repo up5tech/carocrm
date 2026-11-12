@@ -119,12 +119,54 @@ export class DeadLetterService {
   }
 
   /**
-   * Mark a dead letter as replayed.
+   * The work a replay has to re-run before the letter may be stamped `replayed` (G11/G23).
    *
-   * The letter stays. The platform keeps the history of what failed and what was done about it,
-   * which is what an operator reviewing a provider outage needs.
+   * A terminal sync failure is recorded with the mapping and run that failed. Without that context
+   * the letter describes a failure nothing can reproduce, so a replay is refused rather than
+   * pretending the work happened — the defect G23 recorded was exactly that a letter could be
+   * marked replayed without anything having been retried.
    */
-  async markReplayed(id: string): Promise<DeadLetterView> {
+  async replayTarget(id: string): Promise<{ readonly mappingId: string; readonly runId: string | null }> {
+    const rows = await sql<{ status: string; payload: unknown }>`
+      select status, payload from integration_dead_letters where id = ${id} limit 1
+    `.execute(this.database.db);
+    const row = rows.rows[0];
+    if (!row) throw new NotFoundError(`Dead letter "${id}" does not exist.`);
+    if (row.status !== 'open') {
+      throw new ValidationError('The dead letter is not open, so it cannot be replayed.');
+    }
+    let payload: unknown = row.payload;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload) as unknown;
+      } catch {
+        payload = null;
+      }
+    }
+    const mappingId = typeof payload === 'object' && payload !== null
+      ? (payload as Record<string, unknown>)['mappingId']
+      : undefined;
+    if (typeof mappingId !== 'string' || mappingId === '') {
+      throw new ValidationError('This dead letter does not record the mapping it failed on, so its work cannot be re-run.');
+    }
+    const runId = typeof payload === 'object' && payload !== null
+      ? (payload as Record<string, unknown>)['runId']
+      : undefined;
+    return { mappingId, runId: typeof runId === 'string' ? runId : null };
+  }
+
+  /**
+   * Mark a dead letter as replayed, after the work was actually re-run.
+   *
+   * `replay` names the run that performed the retry. It is required on purpose: there is no code
+   * path that can stamp a letter `replayed` without an executed replay, which is what G11/G23
+   * asked for. The letter stays — the platform keeps the history of what failed and what was done
+   * about it, which is what an operator reviewing a provider outage needs.
+   */
+  async markReplayed(id: string, replay: { readonly runId: string }): Promise<DeadLetterView> {
+    if (typeof replay.runId !== 'string' || replay.runId === '') {
+      throw new ValidationError('A replay must name the run that performed the work.');
+    }
     const rows = await sql<DeadLetterRow>`
       update integration_dead_letters
       set status = 'replayed', replayed_at = ${new Date()}, replayed_by = ${this.scope.userId ?? 'system'}
@@ -140,6 +182,7 @@ export class DeadLetterService {
       connectionId: row.connection_id,
       entityType: 'IntegrationDeadLetter',
       entityId: id,
+      detail: { replayRunId: replay.runId },
     });
     return toView(row);
   }

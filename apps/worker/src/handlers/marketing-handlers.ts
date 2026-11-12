@@ -22,11 +22,11 @@ import type { JobContext, JobHandler, JobRegistry } from '@carocrm/jobs';
 
 /** MA.9 — claim open delivery work (`Queued`/`Sending` sends) and submit it through the provider gate. */
 export const DELIVERY_BATCH_JOB = 'marketing.deliveryBatch';
-export const DELIVERY_BATCH_PATH = '/api/v1/MarketingAutomation/action/delivery/run-scheduled-batch';
+export const DELIVERY_BATCH_PATH = '/api/v1/MarketingAutomation/action/delivery/run-worker-batch';
 
 /** MA.13 — advance due journey wait/condition/action steps with recovery for stale claims. */
 export const JOURNEY_RUN_BATCH_JOB = 'marketing.journeyRunBatch';
-export const JOURNEY_RUN_BATCH_PATH = '/api/v1/MarketingAutomation/action/journey/run-batch';
+export const JOURNEY_RUN_BATCH_PATH = '/api/v1/MarketingAutomation/action/journey/run-worker-batch';
 
 export interface MarketingJobDeps {
   readonly apiBaseUrl: string;

@@ -1,5 +1,6 @@
-import { createHash, randomUUID , timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
+import { ValidationError } from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
@@ -47,12 +48,17 @@ function normalizeEventType(raw: string): NormalizedMarketingEventType {
   return EVENT_TYPE_MAP[key] ?? "provider_error";
 }
 
+/** The replay window a provider signature is valid for. A timestamp is mandatory (G33). */
+export const WEBHOOK_REPLAY_WINDOW_MS = 5 * 60 * 1000;
+
 export interface WebhookIngestInput {
   readonly provider: string;
   readonly signature: string | undefined;
   readonly timestamp: string | undefined;
   readonly secret: string | undefined;
   readonly payload: Record<string, unknown>;
+  /** The exact bytes the provider signed. A parsed body cannot be verified against an HMAC (G33). */
+  readonly rawBody: string;
 }
 
 export interface WebhookIngestResult {
@@ -70,13 +76,28 @@ export class MarketingEventIngestionService {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
-  verifySignature(provided: string | undefined, expected: string | undefined): boolean {
-    if (provided === undefined || expected === undefined) return false;
-    const a = Buffer.from(provided);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length) return false;
+  /**
+   * HMAC-SHA256 over `timestamp + "." + rawBody`, hex encoded, `sha256=` prefix accepted (G33).
+   *
+   * The timestamp is inside the signed material, so a captured body cannot be paired with a fresh
+   * timestamp to slip past the replay window. Comparison is constant time.
+   */
+  verifySignature(
+    provided: string | undefined,
+    expected: string | undefined,
+    timestamp: string | undefined,
+    rawBody: string,
+  ): boolean {
+    if (provided === undefined || expected === undefined || expected.trim() === "" || timestamp === undefined) {
+      return false;
+    }
+    const supplied = provided.trim().startsWith("sha256=") ? provided.trim().slice("sha256=".length) : provided.trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(supplied)) return false;
+    const computed = createHmac("sha256", expected).update(`${timestamp}.${rawBody}`, "utf8").digest();
+    const received = Buffer.from(supplied, "hex");
+    if (received.length !== computed.length) return false;
     try {
-      return timingSafeEqual(a, b);
+      return timingSafeEqual(received, computed);
     } catch {
       return false;
     }
@@ -105,11 +126,17 @@ export class MarketingEventIngestionService {
         ? providerEventId
         : `${eventTypeRaw}:${providerMessageId ?? ""}:${recipientEntityId ?? ""}:${occurredAt ?? ""}`;
 
-    const now = new Date();
-    if (input.timestamp !== undefined) {
+    // G33: freshness is mandatory, not volunteered. A missing or unparseable timestamp is a rejected
+    // delivery (recorded as evidence); a timestamp outside the window is refused outright, so a
+    // captured request cannot be replayed later even when it carries a valid signature.
+    let rejectionReason: "MISSING_TIMESTAMP" | "INVALID_TIMESTAMP" | null = null;
+    if (input.timestamp === undefined || input.timestamp.trim() === "") {
+      rejectionReason = "MISSING_TIMESTAMP";
+    } else {
       const ts = Date.parse(input.timestamp);
-      if (!Number.isNaN(ts) && Math.abs(now.getTime() - ts) > 5 * 60 * 1000) {
-        throw new Error("Webhook timestamp outside replay window.");
+      if (Number.isNaN(ts)) rejectionReason = "INVALID_TIMESTAMP";
+      else if (Math.abs(Date.now() - ts) > WEBHOOK_REPLAY_WINDOW_MS) {
+        throw new ValidationError("Webhook timestamp outside replay window.");
       }
     }
 
@@ -120,7 +147,10 @@ export class MarketingEventIngestionService {
     // delivery that was seen before; a forged delivery that reuses a known key must be refused, not
     // answered "already have it" — otherwise anybody could probe the inbox with a key they guessed.
     const configured = typeof input.secret === "string" && input.secret.trim() !== "";
-    const signatureValid = configured && this.verifySignature(input.signature, input.secret);
+    const signatureValid =
+      configured &&
+      rejectionReason === null &&
+      this.verifySignature(input.signature, input.secret, input.timestamp, input.rawBody);
 
     if (!signatureValid) {
       // A rejected delivery is evidence, so it is recorded — under a key of its own. A rejection must
@@ -134,7 +164,7 @@ export class MarketingEventIngestionService {
         values
           (${rejectionId}, ${input.provider}, ${providerEventId}, ${rejectedKey(input.provider, dedupKey, payload)},
            ${eventTypeRaw}, false, 'rejected',
-           ${configured ? "INVALID_SIGNATURE" : "SECRET_NOT_CONFIGURED"}, ${normalized})
+           ${configured ? (rejectionReason ?? "INVALID_SIGNATURE") : "SECRET_NOT_CONFIGURED"}, ${normalized})
         on conflict (provider, dedup_key) do nothing
         returning id
       `.execute(this.database.db);

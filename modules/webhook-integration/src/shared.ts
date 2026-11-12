@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 
+import { isLoopbackHostname, isMetadataHostname, isPublicAddress, normalizeHostname } from '@carocrm/core/net/address.js';
 import { decryptSecret, encryptSecret } from '@carocrm/core/utils/crypto.js';
 import { generateId } from '@carocrm/core/utils/id.js';
 
@@ -115,8 +116,10 @@ export async function assertPublicUrl(rawUrl: string): Promise<URL> {
   }
   if (url.protocol !== 'https:') throw new WebhookSecurityError('Webhook URLs must use https.');
   if (url.username !== '' || url.password !== '') throw new WebhookSecurityError('Webhook URLs must not carry credentials.');
-  const host = url.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost') || host === 'metadata.google.internal') {
+  // Phase 23.5 (G86): `url.hostname` keeps the brackets of an IPv6 literal, so `[::1]` used to
+  // miss the loopback check and reach `resolveHost`, which treated it as an opaque public string.
+  const host = normalizeHostname(url.hostname);
+  if (isLoopbackHostname(host) || isMetadataHostname(host)) {
     throw new WebhookSecurityError('Webhook URLs must not target the local network.');
   }
   for (const address of await resolveHost(host)) {
@@ -139,30 +142,6 @@ async function resolveHost(host: string): Promise<string[]> {
 
 function isIpv4(host: string): boolean {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
-}
-
-function isPublicAddress(address: string): boolean {
-  if (isIpv4(address)) return isPublicIpv4(address);
-  const lower = address.toLowerCase();
-  if (lower === '::' || lower === '::1') return false;
-  // Unique-local (fc00::/7) and link-local (fe80::/10), plus IPv4-mapped private ranges.
-  if (/^f[cd]/.test(lower)) return false;
-  if (/^fe[89ab]/.test(lower)) return false;
-  const mapped = /^::ffff:(\d{1,3}(\.\d{1,3}){3})$/.exec(lower);
-  if (mapped?.[1] !== undefined) return isPublicIpv4(mapped[1]);
-  return true;
-}
-
-function isPublicIpv4(address: string): boolean {
-  const parts = address.split('.').map((part) => Number(part));
-  const [a, b] = parts;
-  if (a === undefined || b === undefined) return false;
-  if (a === 0 || a === 10 || a === 127) return false;
-  if (a === 172 && b >= 16 && b <= 31) return false;
-  if (a === 192 && b === 168) return false;
-  if (a === 169 && b === 254) return false; // link-local, including cloud metadata endpoints
-  if (a === 100 && b >= 64 && b <= 127) return false; // carrier-grade NAT
-  return true;
 }
 
 /** `X-Caro-Signature: sha256=<hmac>` over the raw request body. */

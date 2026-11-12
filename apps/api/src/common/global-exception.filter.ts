@@ -6,6 +6,7 @@ import { Catch, HttpException } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { translateErrorMessage } from '../i18n/i18n.service.js';
+import { emitDenialAudit } from './denial-audit.js';
 
 interface ErrorBody {
   error: {
@@ -176,6 +177,23 @@ export class GlobalExceptionFilter {
         ...(Object.keys(details).length > 0 ? { details } : {}),
       },
     };
+
+    // Phase 23.4 (F3): an explicit 403 is a security decision, not noise, so it is written to the
+    // audit trail with actor, target, action and correlation id. The write happens off the response
+    // path (see `denial-audit.ts`) and the message is the fixed denial sentence — never a payload.
+    if (error.code === 'AUTHORIZATION_DENIED') {
+      const details = error.details ?? {};
+      const detailString = (key: string): string | null => (typeof details[key] === 'string' ? details[key] as string : null);
+      emitDenialAudit({
+        entityType: detailString('entity'),
+        recordId: detailString('id'),
+        action: detailString('action') ?? detailString('capability'),
+        code: error.code,
+        reason: error.message,
+        path: redactUrl(request.url),
+        method: request.method,
+      });
+    }
 
     if (error.statusCode >= 500) {
       log.error({ err: exception, requestId: getRequestId(), path: redactUrl(request.url) }, 'unhandled error');

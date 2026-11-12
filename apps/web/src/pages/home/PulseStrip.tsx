@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { pickDefaultDashboard } from '../../state/dashboard-default.js';
 import { formatNumber, t } from '../../state/i18n.js';
 import { usePreference } from '../../state/preferences.js';
-import { useSession } from '../../state/session.js';
 import { kpiDashletsOf } from './home-model.js';
 import { HomeSkeleton } from './HomeSkeleton.js';
 import { useHomeDashboards, useHomePulse } from './useHomeData.js';
@@ -19,12 +18,12 @@ import { useHomeDashboards, useHomePulse } from './useHomeData.js';
 export function PulseStrip() {
   const dashboards = useHomeDashboards();
   const preferred = usePreference<string | null>('defaultDashboard');
-  const { principal } = useSession();
 
-  // Same rule as the Dashboards page, so the two screens always show the same board.
+  // Same rule as the Dashboards page, so the two screens always show the same board. G65: the
+  // server's list is already the caller's visible set, so no role comparison happens here.
   const picked = useMemo(
-    () => pickDefaultDashboard(dashboards.data ?? [], preferred.value, principal?.roles ?? []),
-    [dashboards.data, preferred.value, principal?.roles],
+    () => pickDefaultDashboard(dashboards.data ?? [], preferred.value),
+    [dashboards.data, preferred.value],
   );
   const active = useMemo(() => dashboards.data?.find((dashboard) => dashboard.id === picked?.id) ?? null, [dashboards.data, picked]);
   const pulse = useHomePulse(active);

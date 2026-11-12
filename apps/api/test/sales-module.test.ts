@@ -191,7 +191,9 @@ describe('document numbering (19-S.2)', () => {
     // A retried issuance for the same document returns its existing number instead of a new one.
     const again = await numbering.allocate(seriesCode, { documentType: 'Invoice', documentId: `AGENT_TEST_${seriesCode}_0` });
     expect(again.reused).toBe(true);
-    expect(again.number).toBe(1);
+    // Concurrent allocation decides which document gets which number; the contract is that the retry
+    // returns the number that document already owns, not that document `_0` happened to be first.
+    expect(again.number).toBe(allocations[0]?.number);
     const ledger = await ctx.database.db
       .selectFrom('sales_document_numbers')
       .select('number')

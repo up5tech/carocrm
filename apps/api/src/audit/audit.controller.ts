@@ -43,6 +43,10 @@ export class AuditController {
         'Audit log access requires administrator privileges; non-admin users must filter by entityId.',
       );
     }
+    // Phase 23.4 (IDoA): filtering by an id is not permission to read that record's history.
+    if (!this.scope.isAdmin && parsed.data.entityId !== undefined) {
+      await this.read.assertHistoryVisible(parsed.data.entityId, parsed.data.entityType);
+    }
     return this.read.list(parsed.data);
   }
 

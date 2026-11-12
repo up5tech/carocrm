@@ -1,9 +1,124 @@
 # Phase 23 Security Test Evidence
 
-> **Date:** 2026-11-10
-> **Sub-phase:** 23.2 — Authentication Hardening (tasks 1–6 delivered)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §8
+> **Date:** 2026-11-12
+> **Sub-phase:** 23.5 — Injection, SSRF, XSS and webhook authenticity (delivered)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §11
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.5 — Injection, SSRF, XSS and webhook authenticity (delivered 2026-11-12)
+
+### Scope delivered
+
+1. **Query engine allowlists (task 2).** `phase22-security-injection.test.ts` now demands the refusal it used to only
+   hope for: a SQL-looking field, operator, sort key or selected field is a **400 `INVALID_QUERY`**, a SQL-looking
+   *value* is parameterised (200, empty list), an injection-shaped entity name is 400/404 (never 500), and a malformed
+   provider body is rejected before an adapter sees it. No query text is assembled from any of those inputs.
+2. **SSRF inventory (task 3, G86).** `packages/core/src/net/address.ts` is the one classifier; the AI provider, voice
+   media, connector and outbound-webhook validators delegate to it. The inventory covers the AI providers (redirect
+   `error`), voice recording fetch (now `redirect: 'error'`; it was the only follower), advanced-integrations / OIDC
+   (redirect `error`/`manual`), and the webhook-integration delivery (revalidated per attempt, redirect `manual`).
+   `media.allowedHosts = []` now refuses every fetch, and media URLs must be https. `phase23-5-ssrf.test.ts` is DB-free
+   and covers `[::1]`, `::ffff:127.0.0.1`, `::ffff:7f00:1`, ULA, link-local, metadata, 6to4/Teredo/NAT64 private
+   embeddings, bracketed hostnames, allowlist misses and injected resolver answers.
+3. **XSS (task 4).** The stored-payload test now also asserts the response is `application/json`; a CSP test pins
+   `script-src 'self'`, `object-src 'none'`, `frame-src 'self'` and the absence of inline script. The SPA has no
+   `dangerouslySetInnerHTML`; the docs renderer builds a typed React tree, and every HTML preview (email, document
+   template) is a `sandbox=""` iframe. The existing `e2e/email-template.spec.ts` guarantee is unchanged.
+4. **Formula sandbox (task 5).** The hostile list now includes `fetch`, `setTimeout`, `Math`, `Date`, `Reflect` and
+   property access, on top of `eval`/`require`/`import`/`process`/`globalThis`, prototype keys, host-object leakage and
+   the step/string/array budgets.
+5. **G33 (task 6).** Marketing webhooks verify `sha256=<hex>` = HMAC-SHA256 over `timestamp + "." + rawBody`; the
+   timestamp is mandatory, part of the signed material, and must be within five minutes. Missing/invalid timestamps
+   are recorded rejections; an out-of-window delivery is a 400 with no inbox row; a tampered body cannot reuse the
+   genuine dedupe key. The exact bytes are preserved for both marketing prefixes in `bootstrap.ts`.
+6. **Provider fixtures (task 7).** Marketing joins the already-covered Advanced Integrations, Voice, Omnichannel and
+   ESignature doors: valid, forged, tampered, missing timestamp, stale and duplicate deliveries are all exercised,
+   comparisons are `timingSafeEqual`, and per-connection secrets stay in the vault (no secret is echoed by a read).
+7. **OpenAPI (task 1).** The served document now declares `cookieAuth` (`CRM-SESSION`) and `bearerAuth`, and a contract
+   test asserts representative paths/verbs. The DTO-schema half is **not** delivered and is recorded as a proposed
+   accepted deviation in `known-gaps.md` G1; G90 (anonymous OpenAPI) still needs the owner's decision.
+8. **ASVS / §48 links (task 8).** Each suite names its category: injection → ASVS 5.3.4 / API Top 10 API8:2023;
+   SSRF → ASVS 5.2.6 / API7:2023; XSS → ASVS 5.3.3 / API8:2023; webhook authenticity/replay → ASVS 2.10.4 / API2:2023
+   and PLAN §48 “Webhook signature verification” / “Replay protection”. Gap IDs are in the test file headers and in
+   `known-gaps.md`.
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @carocrm/core build` | exit 0 (new shared classifier compiled) |
+| `pnpm typecheck` | exit 0 (API and SPA) |
+| `pnpm vitest run apps/api/test/phase23-5-ssrf.test.ts apps/api/test/phase22-security-injection.test.ts` | 2 files / 23 tests passed |
+| `pnpm vitest run apps/api/test/marketing-automation-events.test.ts` | 23 tests passed |
+| `pnpm vitest run apps/api/test/phase22-journey-marketing-consent-attribution.test.ts` | 11 tests passed |
+| `pnpm vitest run apps/api/test/phase22-replay-contract.test.ts packages/formula/src/engine/index.test.ts` | 2 files / 43 tests passed |
+| `pnpm lint:changed` | exit 0 after import sorting (37 changed files) |
+| `pnpm verify` | **exit 0** — `lint` 0, `typecheck` 0, `test` 279 files / **3 648 tests**, `test:web` 15 files / 86 tests |
+
+### Not run / limitations
+
+- **G1 remains open in substance.** The route-level document and authentication schemes are machine-checkable, but
+  request/response bodies are still not DTO-derived; the deviation proposal needs owner sign-off.
+- **G90** (anonymous access to the OpenAPI document) is unchanged; it is an owner decision, not a code fix made here.
+- **DNS rebinding** between validation and connect is still documented, not eliminated.
+- **Playwright** was not executed; the XSS claims rest on source inspection, CSP assertions and the existing e2e spec.
+- No live provider, DNS or outbound HTTP call is made by `phase23-5-ssrf.test.ts`; the marketing tests use the
+  configured primary database and in-process providers.
+
+## Phase 23.4 — Authorization consistency across every surface (delivered 2026-11-12)
+
+### Scope delivered
+
+1. **F1 — the async principal.** `apps/api/src/common/async-principal.ts` (`runAsUser`) reloads the initiating user,
+   refuses an inactive/deleted account, and runs the work under the user's **current** roles. `ReportService`'s
+   scheduled delivery now uses it instead of duplicating the reload. The jobs that remain system-scoped are
+   enumerated with their justification in `docs/quality/authorization-matrix.md` §14.1. The worker's BPM/workflow
+   writers (G89) are still outside the API ACL and are recorded as a residual risk, not as fixed.
+2. **F2 — webhook verification.** The `@Public()` provider inventory is in the matrix §14.2. Every provider path
+   (advanced-integrations, esignature, voice, omnichannel) verifies a signature before recording or applying state.
+   Marketing's shared-secret-as-signature scheme is **not** claimed closed; it stays **G33** for 23.5.
+3. **F3 — denial audit.** `GlobalExceptionFilter` emits a denial event for every `AUTHORIZATION_DENIED` answer via
+   `apps/api/src/common/denial-audit.ts`; `AuditSinkService.recordDenial` writes `audit_log.action='denied'` with the
+   actor from the request scope, the target the error named, the attempted action, the redacted path and the request
+   id. The write is off the response path and a failure is logged, never returned. `bootstrap.ts` attaches the sink
+   after the container initialises.
+4. **IDoA.** `AuditReadService.assertHistoryVisible` resolves a record through `EntityCrudService.get` before a
+   non-admin may read its history, closing **G96**; the isolated audit harness (no entity module) is fail-closed. The
+   attachment metadata/file/signed-URL denials are pinned by a new independent-object test.
+5. **Field ACL.** `acl-matrix.test.ts` now asserts that a bulk update touching an `edit:'no'` field is refused and the
+   stored value is unchanged, and that a mass delete of a foreign record reports `count: 0` and leaves the record.
+6. **G65.** The dashboard-default choice no longer reads `principal.roles`; the server's already-filtered list and the
+   user preference are the only inputs. The dead `roleScoped` comparison is removed from the SPA.
+7. **G11/G23 — dead-letter replay.** A run failure now records `{mappingId, runId}`. `replayTarget` refuses a letter
+   without a mapping, the route re-runs the mapping's inbound sync with the `manual` trigger, and only then stamps
+   `replayed`; `markReplayed` requires the id of that run. A failed re-run leaves the letter `open`.
+8. **G83 — worker doors.** `@Public()` added to the worker-only Sales billing door. The two marketing doors were
+   dual (admin token or worker capability on one route); because `@Public()` skips session resolution, they were
+   split into an authenticated admin route plus a dedicated `@Public()` worker route, and the worker's path
+   constants point at the new routes. The existing constant-time capability check is the authorisation.
+9. **Decision table.** `docs/quality/authorization-matrix.md` §14 states the result for owner / team / unrelated /
+   admin / API / portal / anonymous across every listed surface, with the system-scoped rows justified.
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` | exit 0 (API and SPA) |
+| `pnpm lint:changed` | exit 0 (20 changed files) |
+| `pnpm vitest run apps/api/test/phase23-4-denial-audit.test.ts apps/api/test/phase23-4-idor.test.ts` | 2 files / 3 tests passed |
+| `pnpm vitest run apps/api/test/acl-matrix.test.ts apps/api/test/advanced-integrations-engine.test.ts apps/api/test/advanced-integrations-admin.test.ts apps/api/test/reports.test.ts apps/api/test/error-payload-hygiene.test.ts` | 5 files / 62 tests passed |
+| `pnpm vitest run apps/api/test/audit.test.ts` | 14 tests passed (after the fail-closed harness branch) |
+| `pnpm verify` | **exit 0** — `lint` 0, `typecheck` 0, `test` 278 files / **3 621 tests**, `test:web` 15 files / 86 tests |
+
+### Not run / limitations
+
+- **Playwright** was not executed; no browser check is claimed for the removed dashboard rule.
+- **G89** (worker BPM/workflow writes) is not fixed. It is documented as intentional system-scoped automation and
+  routed to 23.10.
+- The field-ACL matrix additions cover bulk update/delete and the audit surface; CSV import/export, global search and
+  autocomplete still rely on their module suites rather than a new cell-by-cell matrix test.
+- No live provider, mail, SMS or payment call was made; the tests use the configured primary database and fake/
+  in-process providers only.
 
 ## Phase 23.3 — External identity and OAuth correctness (delivered 2026-11-11)
 

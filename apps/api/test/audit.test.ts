@@ -229,16 +229,18 @@ describe('AuditLog REST endpoints', () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe('AUTHORIZATION_DENIED');
   });
 
-  it('non-admin with entityId sees only that record', async () => {
+  it('non-admin with entityId is refused when the record ACL layer is absent', async () => {
+    // Phase 23.4 (IDoA): filtering by an id is not permission to read that record's history. This
+    // harness deliberately does not boot the entity module, so the fail-closed branch answers 403;
+    // the positive path (a record the caller may read) is covered by `phase23-4-idor.test.ts`
+    // against the full API.
     const res = await ctx.app.inject({
       method: 'GET',
       url: `/api/v1/AuditLog?entityId=${RECORD_ID}-redact`,
       headers: authHeader(ctx.regularToken),
     });
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as { list: Array<{ entityId: string }>; total: number };
-    expect(body.total).toBe(2);
-    expect(body.list.every((entry) => entry.entityId === `${RECORD_ID}-redact`)).toBe(true);
+    expect(res.statusCode).toBe(403);
+    expect((res.json() as { error: { code: string } }).error.code).toBe('AUTHORIZATION_DENIED');
   });
 
   it('rejects invalid timestamps', async () => {

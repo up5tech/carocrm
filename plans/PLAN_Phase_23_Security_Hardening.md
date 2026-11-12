@@ -140,15 +140,15 @@ This is the starting position, not a promise. Phase 23.0 must confirm or correct
 | G51 | OAuth callback never compares the redirect URI it claims to check | Medium | 23.3 |
 | G50 | A mapping gets "the connection for this provider" picked by name order | Medium | 23.3 |
 | G47 | Token refresh exists but no production path calls it | Medium | 23.3 |
-| G33 | Marketing webhook "signature" is the shared secret itself; a delivery with no timestamp is never age-checked | Medium | 23.5 |
+| G33 | Marketing webhook "signature" is the shared secret itself; a delivery with no timestamp is never age-checked | Medium | **Fixed 23.5** (HMAC over raw body + mandatory timestamp) |
 | G23 | A dead letter can be marked "replayed" without re-running the work | Medium | 23.4 / 23.5 |
 | G12/G13/G14/G21 | No retention for signature/voice/marketing receipts, `jobs`/`job_logs`, or unretryable failed jobs | Low/Medium | 23.7 |
 | G30 | Hard-delete leaves `stream_items`/attachment orphans | Medium (Accepted in 22) | 23.7 |
-| G65 | Home content chosen client-side from `principal.roles` | Low | 23.4 |
+| G65 | Home content chosen client-side from `principal.roles` | Low | **Fixed 23.4** |
 | G66 | Browser error/denial/empty states need continued coverage | Medium | 23.10 |
-| G1 | No generated OpenAPI document — **contradicted** by `bootstrap.ts` and `compatibility-matrix.md:22` | Medium | 23.0 / 23.5 |
-| G11 | Dead-letter replay capability check — summary says Fixed (22.14), detail says Open | Medium | 23.0 / 23.4 |
-| F1 | Worker preserves `userId` but does not re-check record ACL at execution | Medium | 23.4 |
+| G1 | No generated OpenAPI document — **contradicted** by `bootstrap.ts`; route-level spec + auth schemes now exist, DTO schemas absent | Medium | 23.5 partial; deviation proposal to 23.9 |
+| G11 | Dead-letter replay capability check — summary says Fixed (22.14), detail says Open | Medium | **Fixed 23.4** (capability + real replay) |
+| F1 | Worker preserves `userId` but does not re-check record ACL at execution | Medium | **Fixed 23.4** (`runAsUser`); G89 residual |
 | F2 | esignature / omnichannel `@Public()` webhooks are a verification gap | Low | 23.4 |
 | F3 | Explicit 403 denials are not written to `audit_log` | Low | 23.4 |
 | — | No login throttling / lockout / failed-login counter (PLAN §17.1, §48) | High | 23.2 |
@@ -185,13 +185,13 @@ Every §48 required control must end Phase 23 with one of: a passing automated t
 | API key hashing | Verified, weak compare | 23.1 / 23.2 |
 | Secrets encryption at rest | `config.ts:92` empty key disables it | 23.1 / 23.7 |
 | Security headers | helmet registered | 23.1 audit |
-| Content Security Policy | Not verified | 23.1 / 23.5 |
+| Content Security Policy | Verified on API responses (23.5) | 23.1 / 23.5 |
 | MIME/file validation | Verified | 23.6 |
-| SSRF protection | Two paths verified | 23.5 full inventory |
-| Webhook signature verification | Advanced Integrations verified; G33 open | 23.5 |
-| Replay protection for webhooks | Partial | 23.5 |
-| Audit logging | Verified; denials missing | 23.4 / 23.7 |
-| Least-privilege service accounts | F1 open | 23.4 |
+| SSRF protection | Verified: one shared classifier, redirects pinned, empty allowlist fails closed (23.5) | 23.5 full inventory |
+| Webhook signature verification | Verified for all provider doors, including marketing HMAC (23.5) | 23.5 |
+| Replay protection for webhooks | Verified: mandatory timestamp in the signed material (23.5) | 23.5 |
+| Audit logging | Verified; denials now audited (23.4) | 23.7 retention |
+| Least-privilege service accounts | User-scoped work re-derives; system jobs documented (23.4, G89 residual) | 23.10 |
 | Tenant isolation | Single-tenant by design | 23.9 documented decision |
 | Permission tests for every CRUD endpoint | Matrix exists, not exhaustive | 23.4 / 23.10 |
 
@@ -389,6 +389,24 @@ Make one ACL decision govern every path, including asynchronous and public-callb
 - Async user-scoped work cannot execute with more authority than the initiating user had at execution time.
 - The matrix records the actual result for each cell, including `Not applicable` with justification.
 
+### Status — delivered 2026-11-12
+
+All nine tasks were addressed. Evidence: `docs/quality/phase-23-security-test-evidence.md` §"Phase 23.4".
+
+| Task | Outcome |
+|---|---|
+| 1 — F1 | `apps/api/src/common/async-principal.ts` (`runAsUser`) reloads the initiating user, fails closed when inactive, and runs under the current grant. Scheduled reports use it. System-scoped jobs are enumerated and justified in `docs/quality/authorization-matrix.md` §14.1. **G88 mitigated by classification.** |
+| 2 — F2 | The provider-webhook inventory is recorded in the matrix §14.2; every provider path verifies its signature before a state change (advanced-integrations, esignature, voice, omnichannel). Marketing's shared-secret scheme remains **G33** (23.5), not silently closed. |
+| 3 — F3 | `GlobalExceptionFilter` emits a denial event for every `AUTHORIZATION_DENIED`; `AuditSinkService.recordDenial` writes `action='denied'` with actor, target, action, redacted path and correlation id, off the response path. Regression: `phase23-4-denial-audit.test.ts`. |
+| 4 — IDoA | **G96 fixed:** audit history now resolves the record through `EntityCrudService.get`, so a non-admin cannot read a foreign record's field history by id. Attachment metadata/file/signed-URL denial is pinned by `phase23-4-idor.test.ts`. |
+| 5 — Field ACL | `acl-matrix.test.ts` gains bulk-delete record scoping and field-level bulk-update denial; existing list/detail/related coverage is unchanged. CSV/search/autocomplete cells remain covered by their module suites, not by a new matrix case. |
+| 6 — G65 | The dead client-side `principal.roles` dashboard rule is removed; `pickDefaultDashboard` takes only the preference and the server-filtered list. |
+| 7 — G11/G23 | A sync failure records its mapping and run; `replayTarget` refuses a letter that cannot be re-run; the route re-runs the mapping's inbound sync and only then stamps `replayed`, which now requires the replay run id. |
+| 8 — Regressions | Capability-gate, portal, worker-door and audit suites re-run; **G83 fixed** — `@Public()` on the Sales worker door, and the two dual marketing routes split into an authenticated admin door plus a `@Public()` worker door (`assertWorkerSecret` is the authorisation; `@Public()` skips session resolution, so one dual route cannot serve both). G63 was a corrected misreading at 23.0: the SPA guard exists; there is no server `/admin/*` prefix. |
+| 9 — Matrix | `docs/quality/authorization-matrix.md` §14 records the owner / team / unrelated / admin / API / portal / anonymous result per surface, with system-scoped rows justified. |
+
+**Residual risk:** **G89** — the worker's BPM/workflow handlers still write through the worker's own DB access without re-checking record ACL. That is documented as intentional system-scoped automation and routed to 23.10; it is not claimed as fixed here.
+
 ---
 
 ## 11. Phase 23.5 — Injection, SSRF, XSS, and Webhook Authenticity
@@ -414,6 +432,12 @@ Harden the entire untrusted-input boundary and prove it with adversarial tests.
 - Every provider webhook path rejects a valid-looking replay and a missing timestamp.
 - The OpenAPI question is closed with either a generated, contract-tested spec or a signed accepted deviation.
 - All new tests are deterministic and use fake providers/fixtures.
+
+**Status (2026-11-12):** tasks 2–8 delivered; task 1 delivered for the route-level contract and authentication
+schemes, with the DTO-schema half recorded as a proposed accepted deviation (G1 still open). The marketing webhook
+now verifies an HMAC over the raw body with a mandatory timestamp (G33 closed), the four SSRF validators share one
+classifier and the one redirect-following fetch is pinned (G86 closed). Evidence:
+`docs/quality/phase-23-security-test-evidence.md` §"Phase 23.5".
 
 ---
 

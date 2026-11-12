@@ -1159,6 +1159,9 @@ export class SalesController {
     return await this.subscriptions.processDue(input.today);
   }
 
+  /** Phase 23.4 (G83): the worker door must be `@Public()` or the global guard answers 401
+   *  before the shared capability is ever compared. The capability check below is the authorisation. */
+  @Public()
   @HttpCode(200)
   @Post("action/generate-subscription-invoices")
   async generateSubscriptionInvoicesWorker(

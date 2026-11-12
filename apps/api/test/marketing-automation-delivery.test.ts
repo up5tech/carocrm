@@ -621,7 +621,7 @@ describe("limits, retries and the emergency stop (19-MA.9 tasks 4–6)", () => {
   it("the worker capability authorises the batch endpoint; a wrong one does not", async () => {
     const denied = await call(
       "POST",
-      "/api/v1/MarketingAutomation/action/delivery/run-scheduled-batch",
+      "/api/v1/MarketingAutomation/action/delivery/run-worker-batch",
       {},
       ctx.adminToken,
       { "x-worker-secret": "not-the-capability" },
@@ -631,7 +631,7 @@ describe("limits, retries and the emergency stop (19-MA.9 tasks 4–6)", () => {
 
     const sweep = await call(
       "POST",
-      "/api/v1/MarketingAutomation/action/delivery/run-scheduled-batch",
+      "/api/v1/MarketingAutomation/action/delivery/run-worker-batch",
       {},
       ctx.adminToken,
       { "x-worker-secret": WORKER_SECRET },

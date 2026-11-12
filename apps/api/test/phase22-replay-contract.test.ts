@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -132,17 +134,23 @@ const webhookAdapter: ConnectorAdapter = {
   },
 };
 
+/** G33 canonical signature: HMAC-SHA256 over `timestamp + "." + raw JSON body`. */
+function signMarketing(secret: string, timestamp: string, payload: Record<string, unknown>): string {
+  return `sha256=${createHmac('sha256', secret).update(`${timestamp}.${JSON.stringify(payload)}`).digest('hex')}`;
+}
+
 async function marketingEvent(
   payload: Record<string, unknown>,
-  signature = MARKETING_SECRET,
+  signature?: string,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
+  const timestamp = new Date().toISOString();
   const res = await ctx.app.inject({
     method: 'POST',
     url: `/api/v1/MarketingAutomation/webhook/${MARKETING_PROVIDER}`,
     headers: {
       'content-type': 'application/json',
-      'x-webhook-signature': signature,
-      'x-webhook-timestamp': new Date().toISOString(),
+      'x-webhook-signature': signature ?? signMarketing(MARKETING_SECRET, timestamp, payload),
+      'x-webhook-timestamp': timestamp,
     },
     payload,
   });

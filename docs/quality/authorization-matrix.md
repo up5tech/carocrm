@@ -86,6 +86,13 @@ not re-establish a scoped principal or re-check record-level ACL at execution ti
   `initiated_by_user_id`, or formally document these jobs as intentionally system-scoped. Tracked as an
   open hardening item (not a Phase 22.4 blocker).
 
+> **Phase 23.4 update (2026-11-12) — F1 closed for user-scoped work.** The reference pattern now lives in
+> `apps/api/src/common/async-principal.ts` (`runAsUser`): a background run reloads the initiating user, refuses an
+> inactive/deleted account, and executes under the user's **current** roles. The scheduled-report path uses it. The
+> module authorities that still carry `sysAdmin` are **system-scoped scheduled work**, now listed and justified in
+> §14.1. The worker's own BPM/workflow writes (G89) remain outside the API's ACL layer and are a documented residual
+> risk, not a re-derivation of this rule.
+
 **Scheduled report delivery (the one user-scoped async path that is already correct):**
 `reports/report.service.ts:290-303` re-derives the owner principal and runs the CSV export under it
 (`scope.runAs(principal, …)`), denies when `report.user_id !== schedule.owner_user_id`, enforces CSV size
@@ -153,6 +160,11 @@ comparison (`report.service.ts:306-314`).
 verifies its provider signature before processing (defer to journey phases 22.11 / 22.14). The pattern is
 established; this is a verification gap, not a known bypass.
 
+> **Phase 23.4 update (2026-11-12) — F2 closed.** Every provider webhook (advanced-integrations, esignature, voice,
+> omnichannel) verifies its signature **before** recording or applying anything. The marketing path's weaker
+> shared-secret scheme was **G33**, closed in 23.5 with an HMAC over the raw body and a mandatory timestamp. The
+> inventory is in §14.2; no `@Public()` provider path applies a state change before verification.
+
 ---
 
 ## 7. Exports, search, batch, autocomplete, background files (Plan task 8)
@@ -185,6 +197,13 @@ AI tool calls log `actorUserId`, `tool_key`, `policy_result`, and `idempotency_k
 `GlobalExceptionFilter` and the HTTP response, and is **not** necessarily written to `audit_log`. A
 centralized denial log would make "who was denied what, when" auditable. Recommendation: emit a
 `denied` audit event from the exception filter for `AuthorizationDeniedError`.
+
+> **Phase 23.4 update (2026-11-12) — F3 closed.** `GlobalExceptionFilter` now emits a denial event for every
+> `AUTHORIZATION_DENIED` answer through `common/denial-audit.ts`; `AuditSinkService.recordDenial` writes to
+> `audit_log` with `action='denied'`, the actor from the request scope, the target the error named, the attempted
+> action and the correlation id. The path is the redacted request URL; no request body or payload is stored. The
+> write is off the response path, so a broken audit store never changes the 403. Regression:
+> `apps/api/test/phase23-4-denial-audit.test.ts`.
 
 ---
 
@@ -296,10 +315,11 @@ export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
 
 | # | Finding | Severity | Disposition |
 |---|---|---|---|
-| F1 | Worker preserves initiating `userId` but does not re-establish a scoped principal / re-check ACL at execution | Medium | Open hardening; scheduled-report path already correct (§3) |
-| F2 | Each `@Public()` webhook must verify its provider signature | Low | Advanced Integrations verified; others defer to 22.11/22.14 |
-| F3 | Explicit authorization denials not written to `audit_log` | Low | Recommend denial event from exception filter |
-| F4 | `@Public()` inventory must stay reviewed | Info | Keep table in CI diff |
+| F1 | Worker preserves initiating `userId` but does not re-establish a scoped principal / re-check ACL at execution | Medium | **Closed 23.4** for user-scoped work (`runAsUser`); system-scoped jobs documented in §14.1; G89 remains a residual risk |
+| F2 | Each `@Public()` webhook must verify its provider signature | Low | **Closed 23.4** — inventory in §14.2; marketing's shared-secret scheme is G33 (23.5) |
+| F3 | Explicit authorization denials not written to `audit_log` | Low | **Closed 23.4** — denial event from the exception filter, tested |
+| F4 | `@Public()` inventory must stay reviewed | Info | Table updated at 23.4; G83's three missing decorators fixed |
+| F5 | Audit history readable by id without the record ACL | Medium | **Fixed 23.4** (G96) — history resolves the record through the entity ACL |
 
 **Acceptance criteria:**
 - ✅ Documented authorization matrix maps principal types → actions for high-risk entities (§10).
@@ -307,5 +327,57 @@ export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
 - ✅ No frontend-only permission treated as enforcement; all `@Public()` routes are server-side verified (§9).
 - ✅ Phase 22.0 High-risk #1 (default JWT secret in production) remediated and regression-locked (§12).
 
-**Open items for owner:** F1 worker principal hardening; CI platform decision (22.22); recovery-env
-rehearsal (22.23); CRMChat conversation-route scope (22.13).
+**Open items for owner:** G89 worker BPM writes; CI platform decision (22.22); recovery-env rehearsal
+(22.23); CRMChat conversation-route scope (22.13).
+
+---
+
+## 14. Phase 23.4 — authorization decision table across every surface
+
+Legend: ✅ allowed · ⛔ refused · 🔎 scoped by the record/field ACL · — not applicable (justified).
+Every ✅/🔎 cell is decided **server-side** by `AclApiService`, `PortalPolicyService` or the module capability
+gate; the SPA only renders the answer.
+
+| Surface | Owner | Team member | Unrelated user | Administrator | API user | Portal user | Anonymous |
+|---|---|---|---|---|---|---|---|
+| Entity list/detail/create/edit/delete | 🔎 own | 🔎 team | ⛔ 404/403 | ✅ | 🔎 key roles | 🔎 own contact/account | ⛔ 401 |
+| Mass update / mass delete | 🔎 own only; foreign ids count 0 | 🔎 team only | ⛔ 0 / 403 at entity level | ✅ | 🔎 key roles | — (portal has no mass route) | ⛔ 401 |
+| Field read / field write | 🔎 stripped / 403 | 🔎 stripped / 403 | ⛔ | ✅ | 🔎 key roles | 🔎 portal field rules | ⛔ 401 |
+| CSV export / report / dashboard | 🔎 same ACL predicate | 🔎 | ⛔ 404/403 | ✅ | 🔎 | — (portal dashboards are separate) | ⛔ 401 |
+| Global search / autocomplete / related selector | 🔎 filtered rows | 🔎 | ⛔ absent | ✅ | 🔎 | 🔎 linked records | ⛔ 401 |
+| Attachment / recording / transcript download | 🔎 parent ACL or uploader | 🔎 parent ACL | ⛔ 403, no bytes | ✅ | 🔎 | ⛔ internal visibility gate | ⛔ 401 |
+| Audit history of a record | 🔎 record ACL (G96) | 🔎 | ⛔ 403/404 | ✅ | 🔎 | — (no portal audit surface) | ⛔ 401 |
+| Worker door (scheduled sweep) | — | — | — | — | — | — | ✅ capability only — no user exists by design |
+| Provider webhook | — | — | — | — | — | — | ✅ verified signature before state change (§14.2) |
+| Public form / web-to-case intake | — | — | — | — | — | — | ✅ allowlist + abuse controls; writes as a system principal |
+| User / Role / Team administration | ⛔ | ⛔ | ⛔ | ✅ | ⛔ (sysAdmin only) | ⛔ | ⛔ 401 |
+| Metadata / settings | ⛔ | 🔎 per-setting role | ⛔ | ✅ | 🔎 | ⛔ | ⛔ 401 |
+| `/admin/*` SPA route | ⛔ | ⛔ | ⛔ | ✅ `RequireAdministration` | — | ⛔ | redirects to login |
+
+### 14.1 System-scoped async work (documented, not user authority)
+
+| Job / path | Why it is system-scoped | Authority |
+|---|---|---|
+| Subscription invoice run, quote expiry, overdue marking | A billing sweep has no initiating user; it is a clock-driven policy | sales module internal principal |
+| Marketing delivery batch and journey batch | The scheduled send/step sweep acts for the campaign, not a person; consent is re-checked per recipient | marketing system principal |
+| Service-desk SLA scan | A scheduled breach/escalation scan is instance policy | `runAsServiceDeskSystem` |
+| Lead-score recalculation | A recomputation has no user decision in it | lead-score system principal |
+| E-signature artifact retrieval / provider webhook apply | The provider has no CRM session; the inbox row is the idempotency key | e-signature system principal |
+| Advanced-integrations OAuth callback / token refresh / sync run | The callback and the refresh are machine events; state + connection ownership are the real checks | advanced-integrations system principal |
+| Voice media/event processing | Provider delivery, not a user command | voice system principal |
+| Public web-to-case and marketing form | There is no authenticated user at intake; only a customer-facing field allowlist is written | service/marketing system principal |
+| **Scheduled report delivery** | **User-scoped** — the report belongs to a person and is delivered to them | `runAsUser` re-derives the owner and fails closed when inactive |
+| **AI agent run / trigger** | **User-scoped** — the run acts as its initiator | run principal from `initiated_by_user_id`; `principal_unavailable` otherwise |
+| Worker BPM/workflow writes (G89) | Configured automation after a transition; not a user-supplied write | worker DB access — **residual risk**, target 23.10 |
+
+### 14.2 `@Public()` webhook inventory (F2)
+
+| Route | Verification before state change | Evidence |
+|---|---|---|
+| `integrations/advanced-integrations/webhooks/:key` | Opaque per-endpoint key + provider signature; rejected deliveries recorded without payload | `webhook-ingress.service.ts`, `advanced-integrations.test.ts` |
+| `integrations/esignature/:provider/:connection` | Provider signature verified, then a durable inbox row; processing is idempotent | `esignature-operations.test.ts`, `esignature-events.test.ts` |
+| `integrations/voice/:provider/:connection` | Provider signature verified, receipt stored before projection | `phase22-out-of-order-events.test.ts` |
+| `integrations/omnichannel/:providerKey/:accountKey/:kind` | Provider signature verified before a message is applied | `omnichannel*.test.ts` |
+| `MarketingAutomation/webhook/:providerKey` and `webhooks/:providerKey` | HMAC-SHA256 over `timestamp + "." + rawBody`, mandatory timestamp inside a five-minute window, constant-time compare; a rejected delivery is recorded under its own key and never occupies the genuine one (G33 closed 23.5) | `marketing-automation-events.test.ts`, `phase22-replay-contract.test.ts` |
+| `MarketingAutomation/public/...` | Scoped hashed public token (unsubscribe, confirm, click/open beacons); no shared secret | `marketing-automation*.test.ts` |
+| OAuth callbacks (advanced-integrations, esignature) | Single-use `state` binds the connection; the redirect URI is the platform constant (23.3/G51) | `phase23-3-oauth-connector.test.ts` |

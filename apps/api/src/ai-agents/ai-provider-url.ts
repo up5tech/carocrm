@@ -2,6 +2,12 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
 import { ValidationError } from '@carocrm/core/errors/index.js';
+import {
+  isLoopbackHostname,
+  isMetadataHostname,
+  isPrivateAddress,
+  normalizeHostname,
+} from '@carocrm/core/net/address.js';
 
 /**
  * Phase 19-AI.4 — provider URL safety
@@ -31,44 +37,9 @@ export interface SafeProviderUrl {
   readonly loopback: boolean;
 }
 
-const METADATA_HOSTS = new Set([
-  'metadata.google.internal',
-  'metadata.goog',
-  'instance-data',
-  '169.254.169.254',
-]);
-
-export function isLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  return host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '::1';
-}
-
-/** True for IPv4/IPv6 addresses that must never be reached by an external-provider connection. */
-export function isPrivateAddress(address: string): boolean {
-  const value = address.toLowerCase().split('%')[0] ?? '';
-  if (isIP(value) === 4) return isPrivateIpv4(value);
-  if (isIP(value) === 6) {
-    if (value === '::1' || value === '::') return true;
-    if (value.startsWith('fe80') || value.startsWith('fc') || value.startsWith('fd')) return true;
-    // IPv4-mapped address, e.g. ::ffff:10.0.0.1
-    const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped?.[1] !== undefined) return isPrivateIpv4(mapped[1]);
-    return false;
-  }
-  return true;
-}
-
-function isPrivateIpv4(address: string): boolean {
-  const parts = address.split('.').map((part) => Number(part));
-  const [a, b] = parts;
-  if (a === undefined || b === undefined) return true;
-  if (a === 10 || a === 127 || a === 0) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
-  return false;
-}
+/** Phase 23.5: the classification itself is shared with every other outbound-URL validator. */
+export const isLoopbackHost = isLoopbackHostname;
+export { isPrivateAddress };
 
 export async function assertSafeProviderBaseUrl(raw: string, options: ProviderUrlOptions): Promise<SafeProviderUrl> {
   let url: URL;
@@ -83,9 +54,9 @@ export async function assertSafeProviderBaseUrl(raw: string, options: ProviderUr
   if (url.username !== '' || url.password !== '') {
     throw new ValidationError('Provider base URLs must not carry credentials.');
   }
-  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const hostname = normalizeHostname(url.hostname);
   if (hostname === '') throw new ValidationError('The provider base URL must name a host.');
-  if (METADATA_HOSTS.has(hostname) || (isIP(hostname) === 4 && hostname === '169.254.169.254')) {
+  if (isMetadataHostname(hostname) || (isIP(hostname) === 4 && hostname === '169.254.169.254')) {
     throw new ValidationError('Provider base URLs must not target cloud metadata endpoints.');
   }
 

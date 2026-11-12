@@ -165,6 +165,10 @@ export class VoiceMediaService {
     });
 
     const response = await fetch(row.provider_ref, {
+      // Phase 23.5 (G86): this was the only outbound fetch that followed redirects. The URL was
+      // validated above, but a 302 would leave that validated origin for an address the check never
+      // saw. A recording URL has no legitimate redirect, so a 3xx is a refusal.
+      redirect: 'error',
       signal: AbortSignal.timeout(30_000),
       headers: { accept: 'audio/*,video/*' },
     });

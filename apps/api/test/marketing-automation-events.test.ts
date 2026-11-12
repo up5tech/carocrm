@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -45,15 +47,22 @@ function identity(address: string): string {
   return ctx.app.get(MarketingConsentService).identity(address) ?? "";
 }
 
+/** G33 canonical signature: HMAC-SHA256 over `timestamp + "." + raw JSON body`, hex encoded. */
+function sign(secret: string, timestamp: string, payload: Record<string, unknown>): string {
+  return `sha256=${createHmac("sha256", secret).update(`${timestamp}.${JSON.stringify(payload)}`).digest("hex")}`;
+}
+
 async function webhook(
   payload: Record<string, unknown>,
-  options: { signature?: string | null | undefined; timestamp?: string | undefined } = {},
+  options: { signature?: string | null | undefined; timestamp?: string | null | undefined } = {},
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const headers: Record<string, string> = { "content-type": "application/json" };
-  if (options.signature !== undefined && options.signature !== null) {
-    headers["x-webhook-signature"] = options.signature;
-  }
-  if (options.timestamp !== undefined) headers["x-webhook-timestamp"] = options.timestamp;
+  const signingTimestamp = options.timestamp ?? new Date().toISOString();
+  const signature =
+    options.signature === undefined ? sign(WEBHOOK_SECRET, signingTimestamp, payload) : options.signature;
+  if (signature !== null) headers["x-webhook-signature"] = signature;
+  // `null` omits the header but still signs a real timestamp, so the test isolates freshness.
+  if (options.timestamp !== null) headers["x-webhook-timestamp"] = signingTimestamp;
   const res = await ctx.app.inject({
     method: "POST",
     url: `/api/v1/MarketingAutomation/webhook/${PROVIDER}`,
@@ -73,7 +82,7 @@ async function webhook(
 async function event(
   type: string,
   overrides: Record<string, unknown> = {},
-  options: { signature?: string | null | undefined; timestamp?: string | undefined } = {},
+  options: { signature?: string | null | undefined; timestamp?: string | null | undefined } = {},
 ) {
   return webhook(
     {
@@ -87,7 +96,7 @@ async function event(
       occurredAt: new Date().toISOString(),
       ...overrides,
     },
-    { signature: options.signature === undefined ? WEBHOOK_SECRET : options.signature, timestamp: options.timestamp ?? new Date().toISOString() },
+    options,
   );
 }
 
@@ -267,6 +276,27 @@ describe("the webhook door verifies what it cannot trust (19-MA.10 tasks 1, 3)",
     expect(await countEvents()).toBe(before);
   });
 
+  it("refuses a valid-looking signature computed over a different body", async () => {
+    const before = await countEvents();
+    const timestamp = new Date().toISOString();
+    const signature = sign(WEBHOOK_SECRET, timestamp, { eventId: `evt-${runId}-other`, type: "complaint" });
+    const res = await event("delivered", {}, { signature, timestamp });
+    expect(res.body["processingStatus"]).toBe("rejected");
+    expect(await countEvents()).toBe(before);
+    const row = await inboxRow(String(res.body["inboxId"]));
+    expect(row?.["failure_reason"]).toBe("INVALID_SIGNATURE");
+  });
+
+  it("rejects a missing timestamp even when the signature itself is valid", async () => {
+    const before = await countEvents();
+    const res = await event("delivered", {}, { timestamp: null });
+    expect(res.status).toBe(200);
+    expect(res.body["processingStatus"]).toBe("rejected");
+    expect(await countEvents()).toBe(before);
+    const row = await inboxRow(String(res.body["inboxId"]));
+    expect(row?.["failure_reason"]).toBe("MISSING_TIMESTAMP");
+  });
+
   it("rejects a replay outside the five-minute window", async () => {
     const before = await countInbox();
     const stale = new Date(Date.now() - 30 * 60_000).toISOString();
@@ -284,6 +314,7 @@ describe("the webhook door verifies what it cannot trust (19-MA.10 tasks 1, 3)",
       timestamp: new Date().toISOString(),
       secret: undefined,
       payload: { eventId: `evt-${runId}-nosecret`, type: "delivered", campaignId },
+      rawBody: JSON.stringify({ eventId: `evt-${runId}-nosecret`, type: "delivered", campaignId }),
     });
     expect(result.processingStatus).toBe("rejected");
     const row = await inboxRow(result.inboxId);

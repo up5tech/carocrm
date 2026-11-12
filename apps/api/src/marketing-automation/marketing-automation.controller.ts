@@ -450,18 +450,35 @@ export class MarketingAutomationController {
   }
 
   /**
-   * Run the delivery batch (MA.9). Two doors onto the same bounded batch: an administrator pressing
-   * "run delivery" for one send, or the worker's own capability (`x-worker-secret`, the shared
-   * `REPORT_WORKER_SECRET` used by Sales, CustomerSuccess and ServiceDesk) for the scheduled sweep.
-   * With no arguments the sweep claims open work from every `Queued`/`Sending` send; with `sendId` it
-   * drives that send only. The runtime executes under the documented service identity either way (§9.2),
-   * and a batch never puts a message on the wire the recipient's consent gate has not re-approved.
+   * Run the delivery batch as the authenticated operator (MA.9). With no arguments the sweep claims
+   * open work from every `Queued`/`Sending` send; with `sendId` it drives that send only. The runtime
+   * executes under the documented service identity (§9.2), and a batch never puts a message on the
+   * wire the recipient's consent gate has not re-approved.
    */
   @HttpCode(200)
   @Post("action/delivery/run-scheduled-batch")
-  async runScheduledBatch(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
-    if (workerSecret !== undefined) this.assertWorkerSecret(workerSecret);
-    else this.requireAdmin("running delivery batch");
+  async runScheduledBatch(@Body() body: unknown) {
+    this.requireAdmin("running delivery batch");
+    return this.runDeliveryBatch(body);
+  }
+
+  /**
+   * The scheduled sweep's door (MA.9, G83).
+   *
+   * A worker has no session, so the route is `@Public()` and the shared worker capability is the
+   * authorisation. It is a **separate** route from the administrator's door on purpose: `@Public()`
+   * skips session resolution entirely, so a dual door on one route would make the admin branch see
+   * no principal. This is the same split Sales uses (`expireQuotes` / `expire-quotes`).
+   */
+  @Public()
+  @HttpCode(200)
+  @Post("action/delivery/run-worker-batch")
+  async runScheduledBatchForWorker(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
+    this.assertWorkerSecret(workerSecret);
+    return this.runDeliveryBatch(body);
+  }
+
+  private async runDeliveryBatch(body: unknown) {
     const input = parse(RunScheduledBatchSchema, body);
     return this.deliveryBatch.run({
       ...(input.sendId !== undefined ? { sendId: input.sendId } : {}),
@@ -660,18 +677,23 @@ export class MarketingAutomationController {
   async providerWebhook(
     @Param("providerKey") providerKey: string,
     @Body() body: unknown,
-    @Headers("x-webhook-signature") signature?: string,
-    @Headers("x-webhook-timestamp") timestamp?: string,
+    @Headers("x-webhook-signature") signature: string | undefined,
+    @Headers("x-webhook-timestamp") timestamp: string | undefined,
+    @Req() request: FastifyRequest,
   ) {
     // Fail closed: with no configured secret there is nothing to verify a signature against, so every
     // event is recorded as rejected instead of being accepted against a public default (§9.4).
+    // G33: the signature is an HMAC over the raw bytes, so the parsed body is not enough. `bootstrap.ts`
+    // preserves `rawBody` for this prefix; an empty string means the request carried no body.
     const configuredSecret = this.config.marketingWebhookSecret.trim();
+    const rawBody = (request as FastifyRequest & { rawBody?: string | null }).rawBody ?? "";
     return this.eventIngestion.ingest({
       provider: providerKey,
       signature,
       timestamp,
       secret: configuredSecret === "" ? undefined : configuredSecret,
       payload: (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>,
+      rawBody,
     });
   }
 
@@ -681,10 +703,11 @@ export class MarketingAutomationController {
   async providerWebhooksAlias(
     @Param("providerKey") providerKey: string,
     @Body() body: unknown,
-    @Headers("x-webhook-signature") signature?: string,
-    @Headers("x-webhook-timestamp") timestamp?: string,
+    @Headers("x-webhook-signature") signature: string | undefined,
+    @Headers("x-webhook-timestamp") timestamp: string | undefined,
+    @Req() request: FastifyRequest,
   ) {
-    return this.providerWebhook(providerKey, body, signature, timestamp);
+    return this.providerWebhook(providerKey, body, signature, timestamp, request);
   }
 
   @HttpCode(200)
@@ -727,39 +750,49 @@ export class MarketingAutomationController {
   }
 
   /**
-   * Advance due journey steps (MA.13). The admin door runs as the caller; the worker door — the
-   * `marketing.journeyRunBatch` cron twin — carries the shared capability and runs under the service
-   * identity, exactly like the Service Desk SLA scan (§9.2 "background jobs act under an explicit
-   * service identity"). The pass is idempotent: a step executes under its enrollment's own claim and
+   * Advance due journey steps as the authenticated operator (MA.13).
+   *
+   * The admin door runs as the caller; the worker door below runs under the service identity,
+   * exactly like the Service Desk SLA scan (§9.2 "background jobs act under an explicit service
+   * identity"). The pass is idempotent: a step executes under its enrollment's own claim and
    * dedupe keys, so a duplicate tick changes nothing.
    */
   @HttpCode(200)
   @Post("action/journey/run-batch")
-  async journeyRunBatch(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
+  async journeyRunBatch(@Body() body: unknown) {
+    this.requireAdmin("running the journey engine");
+    return this.runJourneyBatch(body);
+  }
+
+  /**
+   * The scheduled journey sweep's door (MA.13, G83). Separate from the admin route because
+   * `@Public()` skips session resolution; the shared worker capability is the authorisation.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post("action/journey/run-worker-batch")
+  async journeyRunBatchForWorker(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
+    this.assertWorkerSecret(workerSecret);
+    return runAsMarketingSystem(this.scope, "journeyRunBatch", () => this.runJourneyBatch(body));
+  }
+
+  private async runJourneyBatch(body: unknown) {
     const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
     const limit = Number(b.limit ?? 25);
-    const run = async () => {
-      const now = new Date().toISOString();
-      const due = await this.journeyRuntime.dueEnrollments(now, limit);
-      const results: unknown[] = [];
-      for (const item of due) {
-        const enrollment = await this.journeyRuntime.claim(item.id, now);
-        if (enrollment === undefined) continue;
-        const versionRow = item.versionId ? await this.journeyRuntime.versionGraph(item.versionId) : undefined;
-        if (versionRow === undefined) {
-          results.push({ enrollmentId: item.id, outcome: "failed", reason: "missing-version" });
-          continue;
-        }
-        results.push(await this.journeyRuntime.runStep(item.id, versionRow));
+    const now = new Date().toISOString();
+    const due = await this.journeyRuntime.dueEnrollments(now, limit);
+    const results: unknown[] = [];
+    for (const item of due) {
+      const enrollment = await this.journeyRuntime.claim(item.id, now);
+      if (enrollment === undefined) continue;
+      const versionRow = item.versionId ? await this.journeyRuntime.versionGraph(item.versionId) : undefined;
+      if (versionRow === undefined) {
+        results.push({ enrollmentId: item.id, outcome: "failed", reason: "missing-version" });
+        continue;
       }
-      return { ran: results.length, results };
-    };
-    if (workerSecret !== undefined) {
-      this.assertWorkerSecret(workerSecret);
-      return runAsMarketingSystem(this.scope, "journeyRunBatch", run);
+      results.push(await this.journeyRuntime.runStep(item.id, versionRow));
     }
-    this.requireAdmin("running the journey engine");
-    return run();
+    return { ran: results.length, results };
   }
 
   @HttpCode(200)
@@ -791,9 +824,7 @@ export class MarketingAutomationController {
    * Evaluate a whitelisted CRM event against a journey (worker/channel entry, §15 MA.14).
    *
    * Not public: it answers whether a journey is published, so an anonymous caller could use it to
-   * enumerate the deployment's journeys. The event channel carries the shared worker capability
-   * (`x-worker-secret`, the same door as `journey/run-batch`); a human operator needs administrator
-   * access.
+   * enumerate the deployment's journeys. It is an operator route and requires administrator access.
    */
   @HttpCode(200)
   @Post("action/journey/:id/trigger")

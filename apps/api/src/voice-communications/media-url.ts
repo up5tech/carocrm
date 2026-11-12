@@ -1,4 +1,5 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
+import { normalizeHostname } from '@carocrm/core/net/address.js';
 
 import { assertSafeProviderBaseUrl } from '../ai-agents/ai-provider-url.js';
 
@@ -22,8 +23,15 @@ export async function assertSafeMediaUrl(
   } catch {
     throw new ValidationError('The media URL is not a valid URL.');
   }
-  const host = url.hostname.toLowerCase();
-  if (options.allowedHosts.length > 0 && !options.allowedHosts.some((allowed) => host === allowed.toLowerCase())) {
+  // Phase 23.5 (G86): the comment above always said an empty allowlist refuses every fetch, but the
+  // condition only ran when the list was non-empty — so the default configuration fetched from any
+  // host. Fail closed first, then check the host. Media is always https.
+  if (url.protocol !== 'https:') throw new ValidationError('Media URLs must use https.');
+  const host = normalizeHostname(url.hostname);
+  if (options.allowedHosts.length === 0) {
+    throw new ValidationError('No media hosts are allowlisted, so every media fetch is refused.');
+  }
+  if (!options.allowedHosts.some((allowed) => normalizeHostname(allowed) === host)) {
     throw new ValidationError(`The media host "${host}" is not on the configured media allowlist.`);
   }
   await assertSafeProviderBaseUrl(raw, { allowLoopback: options.allowLoopback });

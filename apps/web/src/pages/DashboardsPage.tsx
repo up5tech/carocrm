@@ -305,9 +305,10 @@ export function DashboardsPage() {
   const chosenManually = useRef(false);
   useEffect(() => {
     if (chosenManually.current) return;
-    // §20.19: the priority is shared with the home page (user-starred > role-scoped > first), so the
-    // two screens cannot land on different boards.
-    const picked = pickDefaultDashboard(dashboards, defaultDashboard.value, principal?.roles ?? []);
+    // §20.19: the priority is shared with the home page (user-starred > first visible), so the two
+    // screens cannot land on different boards. Phase 23.4 (G65): the server already filtered the
+    // list; no client-side role comparison decides content.
+    const picked = pickDefaultDashboard(dashboards, defaultDashboard.value);
     if (!picked) return;
     // The fallback picks the first board for a fresh screen; it never replaces the one already open.
     if (picked.source === 'first' && activeId !== null) return;

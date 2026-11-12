@@ -274,6 +274,9 @@ export class SyncOrchestrator {
         providerKey: connection.providerKey,
         error,
         attempts: 1,
+        // G11/G23: a replay has to know which mapping to re-run. Only references are recorded —
+        // the mapping id and the failed run id — never a provider payload.
+        payload: { mappingId: mapping.id, runId: run.id, phase: 'run' },
       });
       throw error;
     }

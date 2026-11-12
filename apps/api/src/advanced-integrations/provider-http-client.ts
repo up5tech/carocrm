@@ -1,4 +1,15 @@
+import {
+  isLoopbackAddress,
+  isLoopbackHostname,
+  isMetadataHostname,
+  isPublicAddress,
+  normalizeHostname,
+} from '@carocrm/core/net/address.js';
+
 import { errorForStatus, errorForTransport, parseRetryAfter, ProviderError } from './provider-error.js';
+
+// Phase 23.5: both predicates are now the shared ones; keep the module's existing exports for callers.
+export { isLoopbackAddress, isPublicAddress };
 
 /**
  * Phase 19-INT.6 — the provider HTTP client
@@ -251,21 +262,20 @@ export async function assertProviderUrl(rawUrl: string, options: ProviderUrlOpti
   if (url.username !== '' || url.password !== '') {
     throw new ProviderHttpError('The provider URL must not carry credentials.');
   }
-  const host = url.hostname.toLowerCase();
-  const isLoopbackHost = host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '[::1]';
+  const host = normalizeHostname(url.hostname);
 
   if (url.protocol === 'http:') {
     if (!options.allowLoopback) {
       throw new ProviderHttpError('The provider URL must use https.');
     }
-    if (!isLoopbackHost) {
+    if (!isLoopbackHostname(host)) {
       throw new ProviderHttpError('A plain http provider URL is only permitted for a loopback address.');
     }
   } else if (url.protocol !== 'https:') {
     throw new ProviderHttpError('The provider URL must use https.');
   }
 
-  if (host === 'metadata.google.internal' || host === 'metadata') {
+  if (isMetadataHostname(host)) {
     throw new ProviderHttpError('The provider URL must not target the cloud metadata service.');
   }
 
@@ -298,39 +308,4 @@ async function defaultResolveHost(host: string): Promise<string[]> {
 
 function isIpv4(host: string): boolean {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
-}
-
-export function isLoopbackAddress(address: string): boolean {
-  const lower = address.toLowerCase();
-  if (lower === '::1' || lower === '0:0:0:0:0:0:0:1') return true;
-  if (isIpv4(lower)) {
-    const parts = lower.split('.').map((part) => Number(part));
-    return parts[0] === 127;
-  }
-  return false;
-}
-
-export function isPublicAddress(address: string): boolean {
-  if (isLoopbackAddress(address)) return false;
-  if (isIpv4(address)) return isPublicIpv4(address);
-  const lower = address.toLowerCase();
-  if (lower === '::' || lower === '::1') return false;
-  // Unique-local (fc00::/7) and link-local (fe80::/10), plus IPv4-mapped private ranges.
-  if (/^f[cd]/.test(lower)) return false;
-  if (/^fe[89ab]/.test(lower)) return false;
-  const mapped = /^::ffff:(\d{1,3}(\.\d{1,3}){3})$/.exec(lower);
-  if (mapped?.[1] !== undefined) return isPublicIpv4(mapped[1]);
-  return true;
-}
-
-function isPublicIpv4(address: string): boolean {
-  const parts = address.split('.').map((part) => Number(part));
-  const [a, b] = parts;
-  if (a === undefined || b === undefined) return false;
-  if (a === 0 || a === 10 || a === 127) return false;
-  if (a === 172 && b >= 16 && b <= 31) return false;
-  if (a === 192 && b === 168) return false;
-  if (a === 169 && b === 254) return false; // link-local, including cloud metadata endpoints
-  if (a === 100 && b >= 64 && b <= 127) return false; // carrier-grade NAT
-  return true;
 }

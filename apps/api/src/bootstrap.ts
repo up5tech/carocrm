@@ -21,6 +21,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
 import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './advanced-integrations/webhook-prefix.js';
+import { AuditSinkService } from './audit/index.js';
+import { setDenialAuditSink } from './common/denial-audit.js';
 import { GlobalExceptionFilter } from './common/global-exception.filter.js';
 import { resolveRequestId } from './common/request-id.js';
 import { RequestTimeoutInterceptor } from './common/request-timeout.interceptor.js';
@@ -32,6 +34,10 @@ import { setExtensionHost } from './extensions/extension-host.js';
 import { createExtensionHostModule } from './extensions/extension-host.module.js';
 import { readInstalledExtensions } from './extensions/extension-store.js';
 import { OMNICHANNEL_WEBHOOK_PREFIX } from './omnichannel/omnichannel-module.js';
+
+/** Phase 23.5 (G33) — the marketing provider door and its documented alias. */
+const MARKETING_WEBHOOK_PREFIX = '/api/v1/MarketingAutomation/webhook/';
+const MARKETING_WEBHOOK_ALIAS_PREFIX = '/api/v1/MarketingAutomation/webhooks/';
 
 /**
  * Reads the installed extensions and assembles the host for this process (PLAN §38.3).
@@ -202,7 +208,16 @@ export async function createApp(
     // provider prefixes, but still parses the body normally — its pipeline reads the parsed shape
     // today, and a future byte-signing adapter (19-OM.15) gets the raw bytes it needs.
     const omnichannel = request.url.startsWith(OMNICHANNEL_WEBHOOK_PREFIX);
-    if (!esignature && !omnichannel && !request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)) {
+    // Phase 23.5 (G33): the marketing webhook signature is an HMAC over the raw body, so the exact
+    // bytes must be preserved for both its documented path and its alias.
+    const marketing =
+      request.url.startsWith(MARKETING_WEBHOOK_PREFIX) || request.url.startsWith(MARKETING_WEBHOOK_ALIAS_PREFIX);
+    if (
+      !esignature &&
+      !omnichannel &&
+      !marketing &&
+      !request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)
+    ) {
       done(null, payload);
       return;
     }
@@ -231,6 +246,16 @@ export async function createApp(
     openapi: {
       info: { title: 'CaroCRM API', version: '1.0.0' },
       servers: [{ url: `http://${config.host}:${config.port}` }],
+      // Phase 23.5 (G1): the route-level document already existed; what it lacked was any way to
+      // describe how a client authenticates. These schemes are the real session mechanisms from
+      // `auth/session-cookies.ts` and the bearer token. DTO request/response schemas remain the open
+      // half of G1 and are recorded as a deviation in `docs/quality/known-gaps.md`.
+      components: {
+        securitySchemes: {
+          cookieAuth: { type: 'apiKey', in: 'cookie', name: 'CRM-SESSION' },
+          bearerAuth: { type: 'http', scheme: 'bearer' },
+        },
+      },
     },
   });
   await app.register(asPlugin(cookie));
@@ -303,6 +328,10 @@ export async function createApp(
   instance.get('/api/v1/OpenApi', async () => instance.swagger());
 
   await app.init();
+  // Phase 23.4 (F3): the filter is built by hand, so the denial audit is attached here, after the
+  // container exists and before the first request. The sink reads the request scope at call time,
+  // which is why the actor does not have to travel through the filter.
+  setDenialAuditSink((event) => app.get(AuditSinkService).recordDenial(event));
   return app;
 }
 

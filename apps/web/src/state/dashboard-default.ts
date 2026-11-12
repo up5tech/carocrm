@@ -7,21 +7,23 @@ import type { DashboardRow } from '../api/client.js';
  * the priority lives here instead of in either page:
  *
  * 1. the dashboard the user starred (`defaultDashboard` preference),
- * 2. the dashboard scoped to one of the user's roles (`roleScoped`),
- * 3. the first dashboard in the list the server returned.
+ * 2. the first dashboard in the list the server returned.
+ *
+ * Phase 23.4 (G65): there is no client-side role rule any more. The server already returns only
+ * the dashboards the caller may see, and it never returns a `roleScoped` field, so comparing
+ * `principal.roles` here was dead code that claimed a server rule the client could not make.
  *
  * `source` is part of the answer because a page may treat the fallback differently: Dashboards keeps
  * the board the user already has open unless a stated default replaces it.
  */
 export interface DefaultDashboardChoice {
   id: string;
-  source: 'preferred' | 'role' | 'first';
+  source: 'preferred' | 'first';
 }
 
 export function pickDefaultDashboard(
   dashboards: readonly DashboardRow[],
   preferredId: string | null | undefined,
-  roles: readonly string[],
 ): DefaultDashboardChoice | null {
   const first = dashboards[0];
   if (first === undefined) return null;
@@ -31,11 +33,6 @@ export function pickDefaultDashboard(
     // A starred dashboard that was deleted (or no longer visible) falls through to the next rule.
     if (starred) return { id: starred.id, source: 'preferred' };
   }
-
-  const roleScoped = dashboards.find(
-    (dashboard) => dashboard.roleScoped !== null && dashboard.roleScoped !== undefined && roles.includes(dashboard.roleScoped),
-  );
-  if (roleScoped) return { id: roleScoped.id, source: 'role' };
 
   return { id: first.id, source: 'first' };
 }

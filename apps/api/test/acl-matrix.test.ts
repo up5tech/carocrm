@@ -168,6 +168,13 @@ describe('ACL matrix — entity level', () => {
     const mass = await call('POST', '/api/v1/Account/action/massUpdate', users.own.token, { ids: [ids.other], data: { type: 'Lead' } });
     expect(mass.status).toBe(200);
     expect(mass.body['count']).toBe(0);
+
+    // Phase 23.4: the bulk delete surface honours the same record scope as a single delete.
+    const massDelete = await call('POST', '/api/v1/Account/action/massDelete', users.own.token, { ids: [ids.other] });
+    expect(massDelete.status).toBe(200);
+    expect(massDelete.body['count']).toBe(0);
+    const stillThere = await call('GET', `/api/v1/Account/${ids.other}`, adminToken);
+    expect(stillThere.status).toBe(200);
   });
 
   it('level "own" assigns new records to the current user', async () => {
@@ -241,6 +248,18 @@ describe('ACL matrix — field level', () => {
 
     const create = await call('POST', '/api/v1/Account', users.field.token, { name: `Field create ${runId}`, industry: 'Nope' });
     expect(create.status).toBe(403);
+  });
+
+  it('edit "no" rejects a bulk update that touches the field', async () => {
+    const res = await call('POST', '/api/v1/Account/action/massUpdate', users.field.token, {
+      ids: [ids.field],
+      data: { industry: 'Retail' },
+    });
+    expect(res.status).toBe(403);
+    expect(errorOf(res.body)).toBe('AUTHORIZATION_DENIED');
+
+    const unchanged = await call('GET', `/api/v1/Account/${ids.field}`, adminToken);
+    expect(unchanged.body['industry']).toBe('Banking');
   });
 
   it('a second role without the restriction re-grants the field (max level wins)', async () => {

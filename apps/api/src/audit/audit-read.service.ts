@@ -1,7 +1,10 @@
-import { InvalidQueryError, RecordNotFoundError } from '@carocrm/core/errors/index.js';
-import { Inject, Injectable } from '@nestjs/common';
+import { AuthorizationDeniedError, InvalidQueryError, RecordNotFoundError } from '@carocrm/core/errors/index.js';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
+import { EntityCrudService } from '../entity/entity.service.js';
 
 export interface AuditListQuery {
   entityId?: string | undefined;
@@ -49,7 +52,49 @@ function parseDate(value: string, name: string): Date {
 
 @Injectable()
 export class AuditReadService {
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    // `@Optional` exists for the audit module's isolated test harness, which does not boot the
+    // entity module. The API always provides it; when it is absent a non-admin read is refused
+    // rather than allowed, so the fallback is fail-closed.
+    @Optional() @Inject(EntityCrudService) private readonly entities: EntityCrudService | undefined,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+  ) {}
+
+  /**
+   * Phase 23.4 (IDoA): a record's history is readable only when the record is.
+   *
+   * The controller already refuses a non-admin listing without `entityId`, but that only bounds the
+   * query — it did not check that the caller may read the record the id names, so any signed-in user
+   * could read another record's field-level history by guessing its id. The read goes through
+   * `EntityCrudService.get`, which applies the same entity/record/field ACL as the record itself and
+   * answers 404 for a record the caller cannot see, so the refusal does not disclose existence.
+   *
+   * `entityType` is optional on the query. Without it the audit rows themselves name the type; more
+   * than one type for one id is ambiguous and is refused rather than guessed.
+   */
+  async assertHistoryVisible(entityId: string, entityType?: string): Promise<void> {
+    if (this.scope.isAdmin) return;
+    const types = entityType === undefined
+      ? (await this.database.db
+          .selectFrom('audit_log')
+          .select('entity_type')
+          .distinct()
+          .where('record_id', '=', entityId)
+          .limit(2)
+          .execute()).map((row) => row.entity_type)
+      : [entityType];
+    if (types.length === 0) throw new RecordNotFoundError('AuditLog', entityId);
+    if (types.length > 1) {
+      throw new AuthorizationDeniedError('This record id is ambiguous; name the entity type to read its history.', { id: entityId });
+    }
+    const type = types[0] as string;
+    if (this.entities === undefined) {
+      throw new AuthorizationDeniedError('Record history requires the entity access layer.');
+    }
+    // `get` enforces the record ACL and throws 404 when the record is out of scope.
+    await this.entities.get(type, entityId);
+  }
 
   async list(q: AuditListQuery): Promise<AuditListResult> {
     const build = () => {

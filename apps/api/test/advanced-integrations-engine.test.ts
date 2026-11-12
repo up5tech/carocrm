@@ -880,7 +880,7 @@ describe('Advanced Integrations — resilience (19-INT.11)', () => {
     expect((await breaker.snapshot(key)).state).toBe('closed');
   });
 
-  itSystem('records a dead letter and replays it explicitly', async () => {
+  itSystem('records a dead letter, refuses a replay without replay context, and stamps only an executed run', async () => {
     const connectionId = await createConnection();
     const letter = await deadLetters.record({
       connectionId,
@@ -897,10 +897,26 @@ describe('Advanced Integrations — resilience (19-INT.11)', () => {
     expect(letter.errorCategory).toBe('provider_outage');
     expect((await deadLetters.listOpen(connectionId)).length).toBeGreaterThan(0);
 
-    const replayed = await deadLetters.markReplayed(letter.id);
+    // G11/G23: a letter that does not name the mapping cannot be re-run, so it cannot be replayed.
+    await expect(deadLetters.replayTarget(letter.id)).rejects.toThrow(/does not record the mapping/);
+    // And a stamp must name the run that did the work.
+    await expect(deadLetters.markReplayed(letter.id, { runId: '' })).rejects.toThrow(/must name the run/);
+
+    const replayable = await deadLetters.record({
+      connectionId,
+      providerKey: PROVIDER_KEY,
+      error: new ProviderError('PROVIDER_UNAVAILABLE', 'down', { category: 'provider_outage', retryable: true }),
+      attempts: 5,
+      payload: { mappingId: mappingIds[0] ?? 'mapping-test', runId: `run-${runId}` },
+    });
+    const target = await deadLetters.replayTarget(replayable.id);
+    expect(target.mappingId).toBe(mappingIds[0] ?? 'mapping-test');
+    expect(target.runId).toBe(`run-${runId}`);
+
+    const replayed = await deadLetters.markReplayed(replayable.id, { runId: `manual-${runId}` });
     expect(replayed.status).toBe('replayed');
     // A letter can only be replayed once.
-    await expect(deadLetters.markReplayed(letter.id)).rejects.toThrow(/not open/);
+    await expect(deadLetters.markReplayed(replayable.id, { runId: `manual-2-${runId}` })).rejects.toThrow(/not open/);
   });
 });
 

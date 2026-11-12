@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -217,6 +219,10 @@ interface SignedEvent {
   readonly providerMessageId?: string;
 }
 
+function signMarketing(secret: string, timestamp: string, payload: Body): string {
+  return `sha256=${createHmac('sha256', secret).update(`${timestamp}.${JSON.stringify(payload)}`).digest('hex')}`;
+}
+
 async function providerEvent(event: SignedEvent, signature?: string): Promise<CallResult> {
   const payload: Body = {
     eventId: event.eventId,
@@ -230,9 +236,10 @@ async function providerEvent(event: SignedEvent, signature?: string): Promise<Ca
     ...(event.url !== undefined ? { url: event.url } : {}),
     ...(event.providerMessageId !== undefined ? { providerMessageId: event.providerMessageId } : {}),
   };
+  const timestamp = new Date().toISOString();
   return publicCall('POST', `/api/v1/MarketingAutomation/webhook/${WEBHOOK_PROVIDER}`, payload, {
-    'x-webhook-signature': signature ?? WEBHOOK_SECRET,
-    'x-webhook-timestamp': new Date().toISOString(),
+    'x-webhook-signature': signature ?? signMarketing(WEBHOOK_SECRET, timestamp, payload),
+    'x-webhook-timestamp': timestamp,
   });
 }
 
@@ -796,22 +803,22 @@ describe('the journey: consent, a campaign, and what the provider says afterward
     const genuine = await providerEvent({ type: 'open', eventId: `${runId}-evt-forged`, campaignId, sendId, slot: 1, recipientId: consentedId });
     expect(genuine.body['duplicate']).toBe(false);
 
-    // What this door's "signature" really is today: the shared secret itself, compared equal, and a
-    // timestamp that is only checked when the caller bothers to send one. Recorded as G33 — the platform's
-    // other webhook doors sign the body and refuse a stale delivery outright.
+    // G33 (fixed in 23.5): freshness is mandatory and the signature is an HMAC over the raw body, so a
+    // captured delivery with no timestamp is refused instead of being recorded as a fresh event.
     const staleWithoutTimestamp = await publicCall(
       'POST',
       `/api/v1/MarketingAutomation/webhook/${WEBHOOK_PROVIDER}`,
       { eventId: `${runId}-evt-stale`, type: 'open', campaignId, occurredAt: '2020-01-01T00:00:00.000Z', recipientEntityType: 'Contact', recipientEntityId: consentedId },
       { 'x-webhook-signature': WEBHOOK_SECRET },
     );
-    expect(staleWithoutTimestamp.body['processingStatus']).toBe('processed');
+    expect(staleWithoutTimestamp.body['processingStatus']).toBe('rejected');
+    expect(typeof staleWithoutTimestamp.body['inboxId']).toBe('string');
 
     const stats = await call('GET', `/api/v1/MarketingAutomation/action/campaign/${campaignId}/stats`);
     expect(stats.status, JSON.stringify(stats.body)).toBe(200);
     const delivery = (stats.body['delivery'] ?? {}) as Body;
     expect(Number(delivery['delivered'])).toBe(1);
-    expect(Number(delivery['opened'])).toBe(3);
+    expect(Number(delivery['opened'])).toBe(2);
     expect(Number(delivery['clicked'])).toBe(1);
 
     // A bounce and a complaint are not just numbers: they block the next send through this door.
@@ -894,9 +901,10 @@ describe('the journey: consent, a campaign, and what the provider says afterward
     // A test send proves the path; it never counts as a campaign send.
     expect(sentMessages.length).toBe(before + 1);
     const stats = await call('GET', `/api/v1/MarketingAutomation/action/campaign/${campaignId}/stats`);
-    // A test send leaves no trace in the campaign's own counters: the 5 here are the one delivered, three
-    // opened and one clicked event the log holds, none of them the test message.
-    expect(Number(((stats.body['delivery'] ?? {}) as Body)['sent'])).toBe(5);
+    // A test send leaves no trace in the campaign's own counters: the 4 here are the one delivered, two
+    // opened and one clicked event the log holds, none of them the test message. The stale, unsigned
+    // delivery G33 used to record as a third open is now rejected.
+    expect(Number(((stats.body['delivery'] ?? {}) as Body)['sent'])).toBe(4);
   });
 
   it('step 9 — a conversion is attributed as a model, and the report says so', async () => {

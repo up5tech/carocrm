@@ -408,10 +408,23 @@ export class AdvancedIntegrationsController {
     return { list: await this.deadLetters.listOpen(id) };
   }
 
+  /**
+   * Replay a dead letter (G11/G23).
+   *
+   * The caller's `connectionAdmin` capability is required, the mapping the failure belongs to is
+   * re-run, and only a completed run may stamp the letter `replayed`. If the re-run fails the error
+   * reaches the caller and the letter stays open, so it can be investigated rather than silently
+   * retired.
+   */
   @Post('action/dead-letters/:id/replay')
   async replayDeadLetter(@Param('id') id: string) {
     await this.permissions.assert('connectionAdmin');
-    return this.deadLetters.markReplayed(id);
+    const target = await this.deadLetters.replayTarget(id);
+    const run = await this.orchestrator.runInbound(target.mappingId, {
+      runType: 'manual',
+      triggerSource: 'manual',
+    });
+    return this.deadLetters.markReplayed(id, { runId: run.id });
   }
 
   // ---------------------------------------------------------------------------

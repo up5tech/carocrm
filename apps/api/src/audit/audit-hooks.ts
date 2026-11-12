@@ -76,6 +76,25 @@ export interface RecordDeleteArgs {
   tx?: Db | DbTx | undefined;
 }
 
+/**
+ * Phase 23.4 (F3) — one explicit authorization refusal.
+ *
+ * The denial reason is a fixed sentence produced by the ACL layer ("No \"edit\" access to this
+ * \"Account\" record."), never a request payload, so it is safe to store. The attempted action,
+ * the target and the correlation id are the fields an operator needs to answer "who was denied
+ * what, when" without reading an access log.
+ */
+export interface RecordDenialArgs {
+  entityType?: string | null | undefined;
+  recordId?: string | null | undefined;
+  action?: string | null | undefined;
+  code: string;
+  reason: string;
+  path?: string | null | undefined;
+  method?: string | null | undefined;
+  requestId?: string | null | undefined;
+}
+
 const REDACTED = '[REDACTED]';
 const SENSITIVE_FIELD = /(?:password|secret|token|apikey)/i;
 const PHYSICAL_AUDITED_FIELDS: readonly string[] = ['assignedUserId'];
@@ -199,6 +218,40 @@ export class AuditSinkService {
         action: 'delete',
         order: 0,
         data: JSON.stringify({ deleted: true }),
+        archived: false,
+        created_at: new Date(),
+      })
+      .execute();
+  }
+
+  /**
+   * Write a single `denied` audit row for an explicit authorization refusal (F3).
+   *
+   * Denials are not entity changes, so they do not carry a field diff; the row records the actor
+   * (from the request scope), the target the error named, the attempted action and the correlation
+   * id. `record_id` is `'-'` when the error named no record, because the column is NOT NULL and a
+   * denial of a route-level capability is still a fact worth keeping.
+   */
+  async recordDenial(args: RecordDenialArgs): Promise<void> {
+    const principal = this.scope.principal;
+    await this.database.db
+      .insertInto('audit_log')
+      .values({
+        id: generateId(),
+        entity_type: args.entityType ?? 'Authorization',
+        record_id: args.recordId ?? '-',
+        username: principal?.userName ?? null,
+        user_id: principal?.userId ?? null,
+        action: 'denied',
+        order: 0,
+        data: JSON.stringify({
+          code: args.code,
+          reason: args.reason.slice(0, 500),
+          action: args.action ?? null,
+          path: args.path ?? null,
+          method: args.method ?? null,
+          requestId: args.requestId ?? null,
+        }),
         archived: false,
         created_at: new Date(),
       })

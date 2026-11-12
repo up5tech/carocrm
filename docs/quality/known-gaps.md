@@ -11,7 +11,7 @@
 
 | ID | Title | Module | Severity | Status |
 |---|---|---|---|---|
-| G1 | No generated OpenAPI document — the API contract is not machine-verifiable | platform | Medium | Deferred (22.22) |
+| G1 | Route-level OpenAPI exists; DTO schemas absent (security schemes added 23.5) | platform | Medium | Partial — deviation proposed (23.9) |
 | G2 | Event payloads carry no `schemaVersion`, `correlationId` or `dedupeKey` | platform | Medium | Deferred (22.7) |
 | G3 | `LeadConversionService` has no direct service-level test | lead-score | Low | Open |
 | G4 | `advanced-integrations-contracts.test.ts` leaves two contacts behind | advanced-integrations | Low | Open |
@@ -33,7 +33,7 @@
 | G20 | The payment provider event key is not scoped by provider | sales | Low | Fixed (22.19) |
 | G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
 | G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Fixed (22.19) |
-| G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21; reproduced 22.14) |
+| G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Fixed (23.4) |
 | G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Fixed (22.12) |
 | G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Fixed (22.12) |
 | G26 | There is no Sales→ESignature contract; a completed signature has no consumer in the platform | sales / esignature | Medium | Open (22.9+) |
@@ -43,7 +43,7 @@
 | G30 | Hard-deleting an entity leaves its `stream_items` (and attachment rows) behind as orphans | platform (Entity Engine delete) | Medium | Accepted (22.19; deferred to 22.21 retention) |
 | G31 | The campaign reports answered any authenticated caller, and the event log named recipients the caller could not open | marketing-automation | High | Fixed (22.12) |
 | G32 | A replayed attribution outcome double-counted the conversion and its revenue | marketing-automation | Medium | Fixed (22.12) |
-| G33 | The marketing webhook "signature" is the shared secret itself, and a delivery with no timestamp is never age-checked | marketing-automation | Medium | Open (found 22.12) |
+| G33 | The marketing webhook "signature" is the shared secret itself, and a delivery with no timestamp is never age-checked | marketing-automation | Medium | **Fixed 23.5** (HMAC over raw body + mandatory timestamp) |
 | G34 | Help retrieval read Service Desk's knowledge corpus with the caller's rights ignored | crm-chat → service-desk | Medium | Fixed (22.13) |
 | G35 | The MCP-shaped tool door could commit an approval-class write with no decision anywhere | ai-agents | Medium | Fixed (22.13) |
 | G36 | Three declared run and approval states are unreachable | ai-agents | Low | Open (found 22.13) |
@@ -75,7 +75,7 @@
 | G62 | The chat action card rendered its own decision response instead of the server's | crm-chat / SPA | Medium | Fixed (22.15) |
 | G63 | No route guard sits in front of `/admin/*` — only the menu is filtered by the server | platform / SPA | Medium | Fixed (2026-11-03) |
 | G64 | ~150 call sites still show `error.message` raw instead of the code-aware helper | platform / SPA | Medium | Open (found 22.15) |
-| G65 | Home content is chosen from `principal.roles` in the client, a rule the server does not mirror | platform / SPA | Low | Open (found 22.15) |
+| G65 | Home content is chosen from `principal.roles` in the client, a rule the server does not mirror | platform / SPA | Low | Fixed (23.4) |
 | G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15; error/empty/denial browser spec added in 22.16, run pending) |
 | G67 | Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion | platform / SPA | Low | Open (found 22.15) |
 | G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
@@ -126,7 +126,18 @@ The 57 `@nestjs/swagger` imports under `apps/api/src` are `ApiTags` only — the
 **Accurate statement of the gap:** *a route-level OpenAPI document is generated and served, but it carries no
 DTO-derived schemas, no request/response bodies and no declared security scheme, so the API contract is still not
 machine-verifiable.* The gap survives in substance; only the wording was wrong. Target: **23.5**.
-Related: **G90** (the document is served without authentication).
+
+### G1 update (Phase 23.5, 2026-11-12)
+
+The document now declares the two real authentication schemes (`cookieAuth` on `CRM-SESSION`, `bearerAuth`), and
+`apps/api/test/phase22-security-injection.test.ts` contract-tests representative paths and verbs (`/api/v1/{entity}`,
+`/api/v1/{entity}/{id}`, `/api/v1/Authentication`) plus those schemes. **The DTO half is still absent:**
+`components.schemas` remains empty and no route carries `requestBody`, because the API is validated with Zod at the
+controller boundary rather than class DTOs. That is recorded as a **proposed accepted deviation**: the route-level
+contract is machine-checkable, the payload shapes are documented in `docs/architecture/contract-catalog.md` and
+asserted at the route boundary, and generating 772 request/response schemas from Zod is a separate, larger change.
+Owner sign-off and a target phase (23.9 or later) are still required; this entry is not marked closed.
+Related: **G90** (the document is served without authentication; owner decision still pending).
 
 ## G2 — Event payloads carry no version, correlation or dedupe key
 
@@ -298,7 +309,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 
 - **Module / contract:** advanced-integrations — `DeadLetterService.markReplayed`.
 - **Impact:** the route flips the status to `replayed` and writes an audit row; it does not re-enqueue the failed operation, and no route ever calls `markDiscarded`. An operator reading the queue sees "replayed" for work that was never retried.
-- **Status:** Open — deferred to 22.21, together with the operator API that G21 also needs.
+- **Status:** Fixed (23.4) — a terminal sync failure now records the mapping and run it failed on, `replayTarget` refuses a letter that cannot be re-run, and `markReplayed` requires the id of the run that actually performed the replay. The route re-runs the mapping's inbound sync before it stamps the letter, and leaves the letter `open` when the run fails. Regression: `apps/api/test/advanced-integrations-engine.test.ts` (replay context and single replay).
 
 ## G24 — The marketing form's Lead write is silently truncated
 
@@ -371,14 +382,14 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Status:** Fixed (22.12) — migration `084_phase22_marketing_attribution_dedup.sql` adds the partial unique index `uq_marketing_events_internal_attribution` (internally-recorded conversions that name a correlation id, scoped by campaign), and `recordAttribution` now makes the write itself the decision: an insert that loses the race re-reads the winner and returns `duplicate: true`. An outcome without a correlation id is a different fact each time and still stands. Proven in the Phase 22.12 journey step 9.
 - **Remaining risk:** attribution is scoped by campaign by design — crediting the same outcome to two campaigns remains two intentional rows, not a duplicate.
 
-## G33 — The marketing webhook signature is the shared secret, and freshness is optional
+## G33 — The marketing webhook signature is the shared secret, and freshness is optional **— Fixed (23.5)**
 
 - **Module / contract:** marketing-automation — `POST webhook/:providerKey` (and its `webhooks/` alias).
 - **Impact:** `MarketingEventIngestionService.verifySignature` compares the `x-webhook-signature` header **to the configured secret itself** — it is not a signature over the payload. The door therefore cannot prove the body was not altered in transit, and because the five-minute replay window is only consulted when the caller sent an `x-webhook-timestamp`, a captured request without that header can be replayed at any later time and is recorded as a fresh delivery. The platform's other provider doors do it differently: Voice and ESignature sign `timestamp + body` and verify with a constant-time HMAC comparison.
 - **Expected vs observed:** expected — the door verifies a body-bound signature and refuses a stale delivery whether or not the caller volunteered a timestamp; observed — the secret itself is the credential, and an omitted header skips the age check.
 - **Verification:** found while building the Phase 22.12 journey, whose step 6 asserts today's behaviour (a 2020-dated `open` event with no timestamp header is processed).
-- **Status:** Open — the fix changes what every provider adapter must send (a per-event HMAC), so it belongs with the provider-binding work rather than to a journey; the assertion is left in place so the behaviour cannot drift further without a failing test.
-- **Remaining risk:** a leaked request (proxy log, support attachment) is a reusable credential for as long as the secret stays valid, and a replayed bounce or complaint can suppress an address that never asked for it.
+- **Status:** **Fixed (23.5).** `MarketingEventIngestionService` now verifies `sha256=<hex>` where the hex is HMAC-SHA256 over `timestamp + "." + rawBody`, compares it in constant time, and keeps the `x-webhook-timestamp` **inside** the signed material. A missing or unparseable timestamp is a recorded rejection (`MISSING_TIMESTAMP` / `INVALID_TIMESTAMP`), an out-of-window one is a 400 with no inbox row, and a forged body can no longer reuse the genuine event's dedupe key. The raw bytes are preserved for both marketing prefixes in `bootstrap.ts`. Proven by `marketing-automation-events.test.ts` (valid, forged, tampered body, missing timestamp, stale, duplicate), `phase22-replay-contract.test.ts` and the updated journey step 6.
+- **Remaining risk:** provider adapters must migrate from sending the shared secret to signing the body; any adapter that still sends the old value is refused. The 5-minute window is fixed in code rather than configurable per provider.
 
 ## G34 — Help retrieval read Service Desk's knowledge corpus with the caller's rights ignored
 
@@ -656,7 +667,11 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 
 - **Module / contract:** platform / SPA — `home/SetupBanner.tsx`, `home/PulseStrip.tsx`, `pages/DashboardsPage.tsx`, `state/dashboard-default.ts`, `state/portal.ts`.
 - **Impact:** these pick what to show by looking at role names or `principal.type === 'admin'` on the stored session. No server rule corresponds, so a custom role that holds the right to read a dashboard can be denied the widget by a client-side name check, and an `admin`-typed principal with a reduced ACL is offered a setup banner whose every link 403s. It is not an authorization hole — every read is still enforced — but the two answers to "what may this person see" are computed differently.
-- **Status:** Open (found 22.15) — the honest fix is to serve the home page's blocks from the same capability endpoints the module pages already use. The current behaviour is cosmetic refusal after a render, so this is Low-impact and needs the dashboard capability story settled first.
+- **Status:** Fixed (23.4) — the dead client-side rule is gone. `pickDefaultDashboard` no longer takes or compares
+  `principal.roles`; the server's dashboard list is already filtered to the caller's ACL, and the API never returned
+  the `roleScoped` field the client was testing, so the branch could never match. The only remaining home gate is the
+  setup checklist, whose endpoint is administrator-only on the server — the banner cannot show content the server
+  would refuse. Regression: the web suite's dashboard-default test and the `pnpm typecheck` of the removed signature.
 
 ## G66 — No browser spec asserts an error, denied or empty state, and login is English-only
 
@@ -807,18 +822,19 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 
 | ID | Title | Module | Severity | Status |
 |---|---|---|---|---|
-| G83 | Three worker doors cannot be called by the worker — they lack `@Public()`, so the global guard answers 401 before the capability check | sales / marketing-automation | Medium | Open (reproduced 23.0) |
+| G83 | Three worker doors cannot be called by the worker — they lack `@Public()`, so the global guard answers 401 before the capability check | sales / marketing-automation | Medium | Fixed (23.4) |
 | G84 | The OAuth callback never compares a redirect URI, although its own comment says it does | advanced-integrations | Medium | Fixed (23.3) |
-| G86 | Four independent SSRF validators, and one outbound fetch that follows redirects | platform / voice | Medium | Open |
+| G86 | Four independent SSRF validators, and one outbound fetch that follows redirects | platform / voice | Medium | **Fixed 23.5** (shared classifier, redirects pinned, empty allowlist fails closed) |
 | G87 | Half-configured S3 credentials are silently dropped and the SDK falls back to its default credential chain | platform / files | Low | Fixed (23.1) |
-| G88 | Every module system principal carries `sysAdmin`, so record ACL is bypassed for worker and public-intake writes (the concrete shape of F1) | platform | Medium | Open |
-| G89 | The worker's BPM/workflow handlers write CRM records through the worker's own DB access, bypassing the API's ACL layer | worker | Medium | Open |
+| G88 | Every module system principal carries `sysAdmin`, so record ACL is bypassed for worker and public-intake writes (the concrete shape of F1) | platform | Medium | Mitigated (23.4) — system scope documented; user-scoped work uses `runAsUser` |
+| G89 | The worker's BPM/workflow handlers write CRM records through the worker's own DB access, bypassing the API's ACL layer | worker | Medium | Open — documented system-scoped automation (23.4); residual risk |
 | G90 | The generated OpenAPI document is served without authentication and exposes the whole route surface | platform | Low | Open |
 | G91 | Readiness returns database reachability to an anonymous caller | platform | Low | Open |
 | G92 | The DB-free CI lane contains no API authorization assertion; the only SSRF suite is not in the include list | platform (CI) | Medium | Open |
 | G93 | The Phase 22.17 §7/§9 exception list drifted from this register after the 2026-11-03 fixes | platform (docs) | Low | **Fixed (23.0)** |
 | G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
 | G95 | The AI-agent trigger door reads only the **first 20** published agents, ordered by a random UUID, so a matching agent can be invisible | ai-agents | Medium | Open (found 23.3) |
+| G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
 
 ## G83 — Three worker doors cannot be called by the worker
 
@@ -840,9 +856,16 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   check and failed there, as designed.
 - **Severity:** Medium. This is an **availability** defect, not an authorization bypass — it fails closed.
 - **Root cause:** the `@Public()` decorator was applied door by door; these three were missed.
-- **Status:** Open — target **23.4** (the async/worker authorization model).
-- **Regression test:** a request carrying only the correct worker secret must reach the capability check, not the
-  authentication guard — asserted per route, with the exact status.
+- **Status:** Fixed (23.4). `Sales/action/generate-subscription-invoices` is worker-only, so it carries `@Public()` and
+  its existing `assertWorkerSecret` is the authorisation. The two marketing routes were **dual doors** (admin token
+  or worker capability on one route); `@Public()` skips session resolution, so a dual door would leave the admin
+  branch with no principal. They are split like Sales' `expireQuotes` / `expire-quotes`: the admin routes keep their
+  session check, and `action/delivery/run-worker-batch` / `action/journey/run-worker-batch` are `@Public()` and
+  require the shared capability. The worker's two path constants point at the new doors. Every capability is
+  compared in constant time and refused when unconfigured.
+- **Regression test:** `marketing-automation-delivery.test.ts` asserts the worker door refuses a wrong capability and
+  accepts the configured one; `marketing-automation-journey-runtime.test.ts` and the Phase 22 marketing journey
+  exercise the admin doors. The session guard is no longer reached before the capability check on a worker door.
 
 ## G84 — The OAuth callback never compares a redirect URI
 
@@ -864,7 +887,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   is not the platform's own constant is refused as a tampered row. The comment now describes a check that exists, and
   the same rule was applied to the generic OIDC sign-in added in this sub-phase.
 
-## G86 — Four SSRF validators, and one fetch that follows redirects
+## G86 — Four SSRF validators, and one fetch that follows redirects **— Fixed (23.5)**
 
 - **Module / contract:** platform — `apps/api/src/ai-agents/ai-provider-url.ts`,
   `apps/api/src/voice-communications/media-url.ts`,
@@ -876,8 +899,16 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   the original URL. An allowlisted host that answers with a 302 to a private or metadata address would be followed.
   The `media.allowedHosts` allowlist is empty by default, so the path is unreachable until an operator configures it.
 - **Severity:** Medium (conditional on configuration).
-- **Status:** Open — target **23.5** (one shared helper; `modules/webhook-integration` is in scope for the inventory
-  even though it lives outside `apps/api`).
+- **Status:** **Fixed (23.5).** `packages/core/src/net/address.ts` is now the one classifier (`isLoopbackAddress`,
+  `isPublicAddress`, `isPrivateAddress`, `isLoopbackHostname`); the four validators delegate to it and keep only their
+  own protocol/allowlist policy. It parses every IPv6 spelling that the copies disagreed on — `[::1]`,
+  `::ffff:127.0.0.1`, `::ffff:7f00:1`, ULA, link-local, 6to4/Teredo/NAT64-embedded private IPv4 and the documentation
+  range. `assertSafeMediaUrl` now requires https and **refuses every fetch when `media.allowedHosts` is empty** (the
+  comment said so; the condition did not). `voice-media.service.ts` uses `redirect: 'error'`, so a 302 cannot leave the
+  validated origin. Proven DB-free by `apps/api/test/phase23-5-ssrf.test.ts`; the DNS-rebinding window between check
+  and connect remains documented in `ai-provider-url.ts`.
+- **Remaining risk:** DNS rebinding (a record that changes after the check) is not closed; the connector and webhook
+  transports pin redirects, and the AI/voice destinations are administrator-configured.
 
 ## G87 — Half-configured S3 credentials are silently dropped
 
@@ -904,7 +935,15 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Severity:** Medium. The correct reference implementation already exists at
   `apps/api/src/reports/report.service.ts:290-303`, where a real user is re-derived and the owner match, entity
   access, visible fields and the record predicate are all re-evaluated.
-- **Status:** Open — target **23.4**. This is the concrete shape of **F1**.
+- **Status:** Mitigated (23.4). The remaining `sysAdmin` principals are now classified rather than left ambiguous:
+  every worker door they serve is a **system-scoped** scheduled sweep (billing run, marketing batch, SLA scan,
+  artifact retrieval, provider callback), and the public intake paths are system-scoped by design because there is no
+  user to act as. User-scoped async work goes through the new `apps/api/src/common/async-principal.ts`
+  (`runAsUser`), which reloads the initiating user, fails closed when the account is inactive, and executes under the
+  user's current roles; the scheduled-report path now uses it. The full list of system-scoped jobs and why is in
+  `docs/quality/authorization-matrix.md` §3.1. **Residual risk:** the system principals still carry the platform
+  wildcard, so a future user-scoped door that reuses one would bypass record ACL — the review rule is that a
+  user-scoped door must use `runAsUser`, not a module authority.
 
 ## G89 — Worker BPM/workflow writes bypass the API's ACL layer
 
@@ -914,7 +953,27 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   (`bpm-store.ts`, `workflow-store.ts`), not through the API. The `userId` is never re-checked against the record's
   ACL at execution time, so a workflow step can write a record the initiating user could not have written.
 - **Severity:** Medium.
-- **Status:** Open — target **23.4**.
+- **Status:** Open — documented at 23.4 as **intentional system-scoped automation**: a workflow/BPM action is
+  configured by an administrator and applies after the triggering transition already passed the caller's ACL; it is
+  not a user-supplied write. The worker still does not re-evaluate the record ACL, which is the residual risk.
+  Route the narrowing (worker calls an API door under the initiating principal) to **23.10**, where the field/bulk
+  authorization matrix is completed.
+
+## G96 — Any signed-in user could read any record's audit history by id
+
+- **Module / contract:** audit — `GET /api/v1/AuditLog?entityId=…` (`apps/api/src/audit/audit.controller.ts`).
+- **Impact:** a non-admin was required to pass `entityId`, but the id was never checked against the record's ACL. Any
+  signed-in user who knew or guessed a record id could read its field-level history — old and new values, actor names
+  and timestamps — even when the record itself answered 404 on the record endpoint. That is an independent-object
+  authorization failure, not a scoping bug.
+- **Expected vs observed:** expected — the history of a record is readable only when the record is; observed — the
+  audit query filtered by id without consulting the entity ACL.
+- **Fix (23.4):** `AuditReadService.assertHistoryVisible` resolves the record through `EntityCrudService.get`, which
+  applies entity, record and field ACL and answers 404 for a record out of scope. When the query omits `entityType`
+  the audit rows name it; more than one type for one id is refused rather than guessed. The isolated audit test
+  harness does not boot the entity module, so its non-admin branch is **fail-closed** (403) and names that reason.
+- **Verification:** `apps/api/test/phase23-4-idor.test.ts` (a stranger asking for a foreign Account's history gets 403
+  and no record data); `apps/api/test/audit.test.ts` (the harness branch).
 
 ## G90 — The OpenAPI document is served without authentication
 
