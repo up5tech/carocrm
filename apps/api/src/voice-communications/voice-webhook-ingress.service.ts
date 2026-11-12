@@ -4,6 +4,7 @@ import { AuthenticationFailedError, NotFoundError, ValidationError } from "@caro
 import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
+import { recordSecurityEvent } from "../common/security-events.js";
 import { DatabaseService } from "../database/database.service.js";
 import { JobsService } from "../jobs/jobs.service.js";
 import {
@@ -150,6 +151,10 @@ export class VoiceWebhookIngressService {
     } catch (error) {
       const category = error instanceof VoiceProviderError ? error.category : "unknown";
       const detail = error instanceof Error ? error.message : "Signature validation failed.";
+      recordSecurityEvent("webhook.signature.rejected", "denied", {
+        provider: account.providerKey,
+        reason: category === "auth" ? "INVALID_SIGNATURE" : "VALIDATION_FAILED",
+      });
       await this.persistReceipt({
         accountKey: account.key,
         providerKey: account.providerKey,
@@ -216,6 +221,10 @@ export class VoiceWebhookIngressService {
           where id = ${existing.id}
         `.execute(this.database.db);
       }
+      recordSecurityEvent("webhook.replay", "detected", {
+        provider: account.providerKey,
+        reason: bodyMismatch ? "body_mismatch" : "duplicate_delivery",
+      });
       return {
         eventId: existing.id,
         duplicate: true,

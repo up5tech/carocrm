@@ -7,6 +7,7 @@ import argon2 from 'argon2';
 import ipaddr from 'ipaddr.js';
 import { errors as joseErrors, type JWTPayload, jwtVerify, SignJWT } from 'jose';
 
+import { recordSecurityEvent } from '../common/security-events.js';
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -91,6 +92,7 @@ export class AuthService {
     if (lockedUntil !== null && lockedUntil.getTime() > Date.now()) {
       // The same authentication outcome as a wrong password: a locked account is never named, so the
       // refusal cannot be used to enumerate accounts (PLAN §0.1 evidence-over-assumption).
+      recordSecurityEvent('auth.lockout', 'denied', { reason: 'account_locked' });
       throw new AuthenticationFailedError();
     }
     const user = await db
@@ -101,6 +103,7 @@ export class AuthService {
       .executeTakeFirst();
     if (!user || !user.is_active || !user.password) {
       await this.recordFailure(subjectHash);
+      recordSecurityEvent('auth.login.failed', 'failed', { reason: 'invalid_credentials' });
       throw new AuthenticationFailedError();
     }
     let ok = false;
@@ -111,6 +114,7 @@ export class AuthService {
     }
     if (!ok) {
       await this.recordFailure(subjectHash);
+      recordSecurityEvent('auth.login.failed', 'failed', { reason: 'invalid_credentials' });
       throw new AuthenticationFailedError();
     }
     await this.clearFailures(subjectHash);
@@ -235,6 +239,7 @@ export class AuthService {
     }
     if (challenge.attempts >= 5) {
       await db.deleteFrom('auth_challenges').where('id', '=', challengeId).execute();
+      recordSecurityEvent('auth.login.failed', 'failed', { reason: 'challenge_attempts_exhausted' });
       throw new AuthenticationFailedError('Too many attempts. Sign in again.');
     }
     const user = await db
@@ -270,6 +275,7 @@ export class AuthService {
         .set({ attempts: challenge.attempts + 1 })
         .where('id', '=', challengeId)
         .execute();
+      recordSecurityEvent('auth.login.failed', 'failed', { reason: 'invalid_totp' });
       throw new AuthenticationFailedError('Two-factor code is not valid.');
     }
     await db.deleteFrom('auth_challenges').where('user_id', '=', user.id).execute();
@@ -468,6 +474,7 @@ export class AuthService {
       // means the chain leaked, so the whole family is revoked — the legitimate holder signs in
       // again, and the replayed copy dies with it. Logout/password revocations are not replays.
       if (session.revoked_reason === 'rotation' && session.family_id !== null) {
+        recordSecurityEvent('auth.refresh.reuse', 'detected', { reason: 'rotation_reuse' });
         await db
           .updateTable('user_sessions')
           .set({ revoked_at: new Date(), revoked_reason: 'reuse-detected' })

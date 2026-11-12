@@ -8,6 +8,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resolveRequestId } from '../common/request-id.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { recordSecurityEvent } from '../common/security-events.js';
 import { AuthService } from './auth.service.js';
 
 export const PUBLIC_KEY = 'crm:public';
@@ -40,6 +41,7 @@ export class AuthGuard implements CanActivate {
           const csrfCookie = cookies['CRM-CSRF'];
           const csrfHeader = request.headers['x-csrf-token'];
           if (!csrfCookie || typeof csrfHeader !== 'string' || !timingSafeEqualStrings(csrfCookie, csrfHeader)) {
+            recordSecurityEvent('csrf.rejected', 'denied', { reason: 'refresh_token_mismatch' });
             throw new AuthorizationDeniedError('CSRF token mismatch.');
           }
           enforceSameOrigin(request);
@@ -88,6 +90,7 @@ export class AuthGuard implements CanActivate {
           const csrfCookie = cookies['CRM-CSRF'];
           const csrfHeader = request.headers['x-csrf-token'];
           if (!csrfCookie || typeof csrfHeader !== 'string' || !timingSafeEqualStrings(csrfCookie, csrfHeader)) {
+            recordSecurityEvent('csrf.rejected', 'denied', { reason: 'session_token_mismatch' });
             throw new AuthorizationDeniedError('CSRF token mismatch.');
           }
           enforceSameOrigin(request);
@@ -171,18 +174,22 @@ function timingSafeEqualStrings(a: string, b: string): boolean {
 function enforceSameOrigin(request: FastifyRequest): void {
   const secFetchSite = request.headers['sec-fetch-site'];
   if (typeof secFetchSite === 'string' && secFetchSite.toLowerCase() === 'cross-site') {
+    recordSecurityEvent('csrf.rejected', 'denied', { reason: 'cross_site' });
     throw new AuthorizationDeniedError('Cross-site request rejected.');
   }
   const origin = request.headers.origin;
   if (typeof origin === 'string' && origin !== '') {
+    let originUrl: URL;
     try {
-      const originUrl = new URL(origin);
-      const host = request.headers.host;
-      if (typeof host === 'string' && host !== '' && originUrl.host !== host) {
-        throw new AuthorizationDeniedError('Cross-origin request rejected.');
-      }
+      originUrl = new URL(origin);
     } catch {
+      recordSecurityEvent('csrf.rejected', 'denied', { reason: 'invalid_origin' });
       throw new AuthorizationDeniedError('Invalid Origin header.');
+    }
+    const host = request.headers.host;
+    if (typeof host === 'string' && host !== '' && originUrl.host !== host) {
+      recordSecurityEvent('csrf.rejected', 'denied', { reason: 'cross_origin' });
+      throw new AuthorizationDeniedError('Cross-origin request rejected.');
     }
   }
 }

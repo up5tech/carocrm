@@ -111,6 +111,13 @@ try {
   console.log(
     `encryption key rotation ${apply ? 'committed' : 'dry run (rolled back)'}: ${String(rotated)} rotated, ${String(alreadyNew)} already new.`,
   );
+  if (apply) {
+    // Phase 23.8: one structured security event with counts only. The key material and every secret
+    // stay out of the line, so it is safe to keep in the operator's operations log.
+    console.log(
+      JSON.stringify({ securityEvent: 'secret.rotated', outcome: 'rotated', rotated, alreadyNew }),
+    );
+  }
 } catch (error) {
   await client.query('ROLLBACK').catch(() => undefined);
   console.error(error instanceof Error ? error.message : 'encryption key rotation failed');

@@ -1,5 +1,7 @@
 import { log } from '@carocrm/core/logger/index.js';
 
+import { recordSecurityEvent } from './security-events.js';
+
 /**
  * Phase 23.4 (F3) — the denial-audit seam.
  *
@@ -44,6 +46,9 @@ export function setDenialAuditSink(next: DenialAuditSink | undefined): void {
  * rethrown.
  */
 export function emitDenialAudit(event: DenialAuditEvent): void {
+  // Phase 23.8: the counter/log seam sees every denial the filter answers, whether or not a durable
+  // audit sink is installed (a DB-free unit test has none). The code is a fixed platform code.
+  recordSecurityEvent('access.denied', 'denied', { reason: event.code });
   const current = sink;
   if (current === undefined) return;
   try {

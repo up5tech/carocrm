@@ -5,6 +5,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
+import { recordSecurityEvent } from "../common/security-events.js";
 import { DatabaseService } from "../database/database.service.js";
 import { runAsMarketingSystem } from "./marketing-automation-authority.js";
 import { type SuppressionReason } from "./marketing-automation-domain.js";
@@ -153,6 +154,10 @@ export class MarketingEventIngestionService {
       this.verifySignature(input.signature, input.secret, input.timestamp, input.rawBody);
 
     if (!signatureValid) {
+      recordSecurityEvent("webhook.signature.rejected", "denied", {
+        provider: input.provider,
+        reason: configured ? (rejectionReason ?? "INVALID_SIGNATURE") : "SECRET_NOT_CONFIGURED",
+      });
       // A rejected delivery is evidence, so it is recorded — under a key of its own. A rejection must
       // never occupy the key of the genuine delivery it pretended to be, or the genuine delivery
       // would be dropped as a duplicate afterwards.
@@ -206,6 +211,7 @@ export class MarketingEventIngestionService {
     `.execute(this.database.db);
 
     if (claimed.rows.length === 0) {
+      recordSecurityEvent("webhook.replay", "detected", { provider: input.provider, reason: "duplicate_delivery" });
       // Somebody already has this event. The answer is a safe acknowledgement, not a second effect.
       const existing = await sql<{ id: string; processing_status: string; normalized_event_type: string | null }>`
         select id, processing_status, normalized_event_type

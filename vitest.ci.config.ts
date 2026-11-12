@@ -19,6 +19,9 @@ import { defineConfig } from 'vitest/config';
 const PURE_API_TESTS = [
   'advanced-integrations-connectors.test.ts',
   'advanced-integrations-transformation.test.ts',
+  // Phase 23.8 (task 2): the named adversarial suite is DB-free (provider URL safety), as is the
+  // Phase 23.5 SSRF boundary suite. Both belong in the nightly gate rather than the sandbox layer.
+  'ai-agent-adversarial.test.ts',
   'ai-agent-actor.test.ts',
   'ai-agent-periods.test.ts',
   'ai-providers.test.ts',
@@ -46,6 +49,8 @@ const PURE_API_TESTS = [
   // Phase 23.3 (G51/G84): the OIDC profile parser and the id_token verifier are DB-free, so they
   // belong in the gate. The DB-backed sign-in and connector suites stay out.
   'phase23-3-oidc-token.test.ts',
+  'phase23-5-ssrf.test.ts',
+  'phase23-8-security-events.test.ts',
   'projects-domain.test.ts',
   'recurrence.test.ts',
   'reports.test.ts',

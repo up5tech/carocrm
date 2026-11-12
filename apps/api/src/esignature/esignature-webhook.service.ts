@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { recordSecurityEvent } from '../common/security-events.js';
 import { DatabaseService } from '../database/database.service.js';
 import { runInTransaction } from '../entity/tx-context.js';
 import { EventBus } from '../events/event-bus.js';
@@ -181,6 +182,10 @@ export class ESignatureWebhookService {
 
     if (!notification.verified) {
       if (accepted.created) {
+        recordSecurityEvent('webhook.signature.rejected', 'denied', {
+          provider: connection.providerKey,
+          reason: notification.refusalReason ?? 'invalid_signature',
+        });
         await this.inbox.markState(accepted.delivery.id, 'ignored', {
           from: ['received'],
           errorSafe: notification.refusalReason ?? 'invalid_signature',
@@ -199,6 +204,7 @@ export class ESignatureWebhookService {
     }
 
     if (!accepted.created) {
+      recordSecurityEvent('webhook.replay', 'detected', { provider: connection.providerKey, reason: 'duplicate_delivery' });
       // G19 — the dedup key is the provider's event id, so a redelivery that reuses it with a
       // different body is answered as a duplicate (no second effect) but is not silently identical.
       // The stored receipt is the delivery of record; the mismatch becomes audit evidence.

@@ -1,9 +1,66 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-12
-> **Sub-phase:** 23.7 — Data protection, privacy and retention (delivered)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §13
+> **Sub-phase:** 23.8 — Security observability and PR-gated CI (delivered)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §14
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.8 — Security observability and PR-gated CI (delivered 2026-11-12)
+
+### Scope delivered
+
+1. **Nightly trigger stays (task 1).** No `pull_request` trigger was added; G78 remains an accepted exception
+   (owner decision D3). The workflow still has `contents: read`, no services, no secrets and no artifacts.
+2. **DB-free security suites join the gate (task 2).** `ai-agent-adversarial.test.ts` (provider-URL/SSRF),
+   `phase23-5-ssrf.test.ts` (the shared address classifier and every outbound URL guard) and the new
+   `phase23-8-security-events.test.ts` are in `vitest.ci.config.ts`. `pnpm test:ci` is now **88 files /
+   1 419 tests** (47 API suites + packages); the list remains a reviewed, explicit include.
+3. **Security event telemetry (task 4).** New `apps/api/src/common/security-events.ts` with a fixed vocabulary,
+   structured `security event` log lines (the logger attaches the request correlation id), and bounded in-process
+   counts. Wiring covers denial audit, CSRF/same-origin refusals, failed logins and lockouts, refresh-token reuse,
+   webhook signature rejections and replays in all four provider ingresses, and the key-rotation script
+   (`secret.rotated`, counts only). The administrator operations snapshot now exposes `security.events` plus
+   `loginFailures24h`, `signatureRejections24h`, `voiceRejections24h` and `marketingSignatureRejections24h` — labels
+   and counts, never actors, addresses, tokens or payloads.
+4. **Secret scan (task 3).** No new secret shape was introduced, so `scripts/check-secrets.mjs` is unchanged.
+5. **Regression proof (task 5, partial).** A temporary DB-free test with one false security assertion made
+   `pnpm test:ci` exit **1** (`1 failed | 88 passed`, `1 419` other tests passed); the file was removed and the
+   regression was never committed. The GitHub scheduled run itself was not performed (no throwaway branch push),
+   so workflow-trigger evidence remains a deployment check.
+6. **CI contract updated (task 6).** `docs/quality/ci-gates.md` now records the new counts, the added suites, the
+   security-event telemetry contract and what is still missing. G92 is narrowed to Partial (SSRF/event contract
+   nightly; authorization still sandbox-only); G77 keeps the no-exporter limitation.
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm test:ci` | **88 files / 1 419 tests passed** |
+| Temporary failing gate proof (`packages/core/src/__phase238_gate_proof.test.ts`, removed immediately) | `pnpm test:ci` **exit 1** — 1 failed / 1 419 passed |
+| `pnpm exec vitest run apps/api/test/observability-operator.test.ts apps/api/test/phase23-8-security-events.test.ts` | **2 files / 9 tests passed** (failed-login/denial counts present; no actor/address/payload) |
+| `pnpm --filter @carocrm/api typecheck` | exit 0 |
+| targeted `eslint` over every touched API file | exit 0 |
+| `pnpm --filter @carocrm/worker test` | 24 files / 248 tests passed (unchanged by 23.8; run before the commit) |
+| `pnpm verify` | **exit 0** — lint 0, typecheck 0, **281 files / 3 666 tests**, web **15 files / 86 tests** |
+
+### Not run / limitations
+
+- **No exporter.** The `security.events` map is process-local and resets on restart; the 24-hour figures are
+  database point-in-time counts. There is no cross-instance aggregation, time series or alerting — **G77** stays
+  open/accepted. The logger's correlation id is the trace; there are no spans.
+- **No GitHub scheduled run.** The local `ci:gate` command's test lane detects a regression, but a real nightly
+  workflow run needs a throwaway branch and push, which this task did not perform. G78 (nightly-only) is unchanged.
+- **Authorization is still not in CI.** Only DB-free SSRF/event suites were added; the ACL/BOLA suites boot the
+  configured database and stay sandbox-only under G92.
+- **Secret-rotation telemetry** is a structured line from the operator script, not an API endpoint; no secret or
+  key material is printed.
+- **One intermittent local failure was observed, not caused by this change:** the first full run failed
+  `phase22-journey-ai-controlled-actions.test.ts` step 11 (`expected 'succeeded' to be 'canceled'`). The same file
+  passed alone (12/12) and in the second full run (281 files / 3 666 tests). This is a timing race in a fake-delay
+  cancellation journey; no assertion was weakened and the suite was not edited.
+- No browser run; the operations snapshot is API-only.
+- No database was created, reset or truncated; the only DB-backed suite writes an `AGENT_TEST_` failed-login row and
+  removes it by its hashed subject in `afterAll`.
 
 ## Phase 23.7 — Data protection, privacy and retention (delivered 2026-11-12)
 
@@ -50,7 +107,7 @@
 | `pnpm --filter @carocrm/api typecheck && pnpm --filter @carocrm/worker typecheck` | exit 0 |
 | Transactional SQL probe (all seven retention statements, `LIMIT 0`, `ROLLBACK`) | all statements parsed/planned, 0 rows changed, no data left behind |
 | Marker probe: four `AGENT_TEST_p237_*` jobs (old completed, old pending, old running, recent completed) inside `BEGIN`/`ROLLBACK` | only the old **completed** marker was returned by `CLEANUP_JOBS_SQL`; pending, running and recent rows survived; transaction rolled back |
-| `pnpm verify` | see the final run recorded with the Phase 23.7 commit — lint 0, typecheck 0, full suite, web suite |
+| `pnpm verify` (after the lint fix; final run includes the Phase 23.8 code) | **exit 0** — lint 0, typecheck 0, 281 files / 3 666 tests, web 15 files / 86 tests |
 
 ### Not run / limitations
 

@@ -6,6 +6,7 @@ import { sql } from 'kysely';
 
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { securityEventSnapshot } from '../common/security-events.js';
 import { DatabaseService } from '../database/database.service.js';
 import { EXTENSION_HOST, type ExtensionHost } from '../extensions/extension-host.js';
 import { JobQueueService } from '../jobs/job-queue.service.js';
@@ -59,6 +60,19 @@ export interface OperationsSnapshotView {
     readonly syncRunsFailedLast24h: number;
   };
   readonly ai: { readonly approvalsPending: number; readonly runsFailedLast24h: number };
+  /**
+   * Phase 23.8. The `events` map is this process's in-memory counters; the day counters are derived
+   * from the receipts the database already holds. Labels and counts only — never an actor, address,
+   * token or provider payload.
+   */
+  readonly security: {
+    readonly events: Record<string, number>;
+    readonly since: string;
+    readonly loginFailures24h: number;
+    readonly signatureRejections24h: number;
+    readonly voiceRejections24h: number;
+    readonly marketingSignatureRejections24h: number;
+  };
 }
 
 /**
@@ -133,6 +147,10 @@ export class InternalInfoService {
       syncFailed,
       approvals,
       aiFailed,
+      loginFailures,
+      signatureRejections,
+      voiceRejections,
+      marketingRejections,
     ] = await Promise.all([
       this.counts('select status, count(*)::text as n from outbox_events group by status'),
       this.age('select coalesce(extract(epoch from now() - min(available_at))::bigint, 0)::text as age from outbox_events where status = \'pending\''),
@@ -149,6 +167,10 @@ export class InternalInfoService {
       this.scalar('select count(*)::text as n from integration_sync_runs where status = \'failed\' and started_at >= now() - interval \'24 hours\''),
       this.scalar('select count(*)::text as n from ai_agent_approvals where status = \'pending\''),
       this.scalar('select count(*)::text as n from ai_agent_runs where status = \'failed\' and finished_at >= now() - interval \'24 hours\''),
+      this.scalar('select count(*)::text as n from auth_login_attempts where failed_at >= now() - interval \'24 hours\''),
+      this.scalar('select count(*)::text as n from signature_webhook_inbox where signature_status = \'invalid\' and received_at >= now() - interval \'24 hours\''),
+      this.scalar('select count(*)::text as n from voice_webhook_events where processing_status = \'rejected\' and received_at >= now() - interval \'24 hours\''),
+      this.scalar('select count(*)::text as n from marketing_provider_webhook_inbox where signature_valid = false and received_at >= now() - interval \'24 hours\''),
     ]);
     return {
       generatedAt: new Date().toISOString(),
@@ -167,6 +189,13 @@ export class InternalInfoService {
         syncRunsFailedLast24h: syncFailed,
       },
       ai: { approvalsPending: approvals, runsFailedLast24h: aiFailed },
+      security: {
+        ...securityEventSnapshot(),
+        loginFailures24h: loginFailures,
+        signatureRejections24h: signatureRejections,
+        voiceRejections24h: voiceRejections,
+        marketingSignatureRejections24h: marketingRejections,
+      },
     };
   }
 

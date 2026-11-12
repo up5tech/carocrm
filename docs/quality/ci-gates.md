@@ -28,8 +28,8 @@ no secrets, no deploy, no provider callback, no artifact upload, 45-minute timeo
 | Layer | In the scheduled gate? | Command | What it proves |
 |---|---|---|---|
 | 1 — fast | **Required** | `pnpm lint` (UI conventions + eslint), `pnpm lint:arch`, `pnpm typecheck`, `pnpm build` | Formatting/static rules, module boundaries, strict types in both projects, production build. |
-| 1 — unit | **Required** | `pnpm test:ci` | 78 files / 1 311 pure tests: every `packages/*/src` suite plus 39 API contract/domain suites that import no boot helper, `DatabaseService` or pool. |
-| 1 — worker | **Required** | `pnpm test:worker` | 228 worker tests against `FakeDb`, fake queues and fake providers (no Postgres/Redis). |
+| 1 — unit | **Required** | `pnpm test:ci` | **88 files / 1 419 pure tests**: every `packages/*/src` suite plus **47** API contract/domain suites that import no boot helper, `DatabaseService` or pool. Phase 23.8 added the adversarial/SSRF and security-event suites. |
+| 1 — worker | **Required** | `pnpm test:worker` | **248** worker tests against `FakeDb`, fake queues and fake providers (no Postgres/Redis). |
 | 2 — contract | **Required** (the pure subset) | included in `test:ci`, plus `pnpm ci:migrations` | Provider adapter conformance (`phase22-provider-contract`), job payload round-trips (`test:worker`), domain contracts, money/decimal rules, event-formatter pure tests. The migration check reads the SQL files only: unique/increasing numeric prefixes, no empty file, and no `DROP DATABASE`/`DROP SCHEMA`/`TRUNCATE`/unqualified `DELETE` without a reviewed `-- migration-safety: allow-destructive` marker. It never connects to a database. |
 | 3 — integration | **Sandbox-only** | `pnpm verify` against the configured DB, or a focused `vitest run` | Persistence, API, ACL, provider fakes with the real database. Never in CI: no DB service, no `DATABASE_URL` secret, no migration. |
 | 4 — browser | **Manual/approved** | `pnpm test:e2e`, Playwright specs | Critical UI journeys; browser cache and a booting app are prerequisites. Artifacts sanitized and failure-only. |
@@ -45,7 +45,7 @@ The root `vitest.config.ts` collects `apps/api/test/**` and most of those files 
 the configured database. `vitest.ci.config.ts` includes:
 
 - `packages/*/src/**/*.test.ts` (pure logic, filesystem, fake clients);
-- an explicit list of 39 API suites, each verified to contain no `bootApi`, `bootTestApp`,
+- an explicit list of 47 API suites, each verified to contain no `bootApi`, `bootTestApp`,
   `bootModuleTestApp`, `createApp`, `DatabaseService`, `ctx.database`, `new Pool` or `pool.query`.
 
 Adding a suite to that list is a deliberate reviewed act; if it boots the app or touches Postgres it
@@ -54,7 +54,7 @@ visible next to the include.
 
 **Proof the gate is DB-free.** Running `pnpm test:ci` with
 `DATABASE_URL=postgres://nobody:nobody@127.0.0.1:1/none REDIS_URL=redis://127.0.0.1:1` passes
-**78 files / 1 311 tests**; the suites never open a connection. The worker suite is pure by design
+**88 files / 1 419 tests**; the suites never open a connection. The worker suite is pure by design
 (`FakeDb`), and `test:web` is a node-environment project with no API.
 
 ## 4. Cache correctness
@@ -106,16 +106,48 @@ A new flaky test must be entered here with an owner, a review date and whether i
   bodies and no security scheme — so the schema diff still cannot be generated. See
   `docs/security/phase-23-security-baseline.md` §3, contradiction C1.
 - **No authorization assertion runs in CI** (G92): every DB-backed ACL/BOLA/injection suite is excluded from
-  `vitest.ci.config.ts`, and the trigger is nightly-only (G78, re-affirmed by the owner on 2026-11-09). The
-  DB-free security suites that *could* join the lane — notably `apps/api/test/ai-agent-adversarial.test.ts`, the
-  repository's only SSRF suite — are added in 23.8.
+  `vitest.ci.config.ts`, and the trigger is nightly-only (G78, re-affirmed by the owner on 2026-11-09).
+  **Phase 23.8 narrowed this:** the DB-free `ai-agent-adversarial.test.ts`, `phase23-5-ssrf.test.ts` and
+  `phase23-8-security-events.test.ts` now run in the lane, so provider-URL/SSRF and the security-event contract
+  are checked nightly. Authorization itself remains DB-backed and therefore sandbox-only until 23.10.
 - **Migrations are not executed in CI** (no DB). A static scan (`ci:migrations`) now guards numbering
   and destructive statements; the migration audit (22.5) and `db:migrate` on the configured
   environment remain the runtime check.
 - **Browser E2E** is manual/approved (22.16), not scheduled.
 - **Integration/ACL/provider journeys** are sandbox-only; `pnpm verify` is the local gate.
 
-## 9. Local equivalents
+## 9. Security event telemetry (Phase 23.8)
+
+There is still no metrics/tracing exporter (G77), so security events are observable in two bounded forms:
+
+1. **Structured log lines.** `apps/api/src/common/security-events.ts` emits one `security event` warning with a
+   fixed name, outcome, optional provider/reason label, and the logger's request correlation id. The vocabulary is
+   allowlisted (`access.denied`, `auth.login.failed`, `auth.lockout`, `auth.refresh.reuse`, `csrf.rejected`,
+   `webhook.signature.rejected`, `webhook.replay`, `secret.rotated`). Details that are not short labels are dropped,
+   and no payload, address or token is accepted by the API.
+2. **Counts in the operations snapshot.** `GET /api/v1/AdminInternal/action/operations` now carries
+   `security.events` (this process's counters and their `since` time) plus `loginFailures24h`,
+   `signatureRejections24h`, `voiceRejections24h` and `marketingSignatureRejections24h`, derived from the receipt
+   tables. The endpoint remains administrator-only and returns counts, never actors or content.
+
+Wiring: denial audit (`access.denied`), auth guard (`csrf.rejected`), auth service (`auth.login.failed`,
+`auth.lockout`, `auth.refresh.reuse`), the ESignature/Voice/Advanced Integrations/Marketing webhook doors
+(`webhook.signature.rejected`, `webhook.replay`), and `scripts/rotate-encryption-key.mjs` (`secret.rotated`, counts
+only). The `logs -> correlation id -> worker/outbox` path is still the trace; there are no spans.
+
+**What remains missing:** the `events` map is process-local (it resets on restart and is not shared across API
+instances); the 24-hour counters are point-in-time database counts with no history; there is no alerting rule.
+That is G77, not a claim that exporter-grade telemetry exists.
+
+### Gate-detection proof (23.8 task 5)
+
+A temporary DB-free test with one deliberately false security assertion was added to `packages/core/src`, and
+`pnpm test:ci` exited **1** with `Test Files 1 failed | 88 passed` and `Tests 1 failed | 1419 passed`. The file was
+removed immediately; no regression was committed. This proves the **local command** the nightly workflow invokes
+fails on a security regression. A real GitHub scheduled run was **not** performed from this environment (no
+throwaway branch was pushed), so the workflow-trigger half of task 5 remains deployment evidence, not claimed here.
+
+## 10. Local equivalents
 
 | Purpose | Command |
 |---|---|

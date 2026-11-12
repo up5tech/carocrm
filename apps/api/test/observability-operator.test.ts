@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
+
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { resetSecurityEventCounters } from '../src/common/security-events.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
 
@@ -22,6 +25,7 @@ import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot
 
 const runId = Date.now().toString(36);
 const userName = `agent_test_p22_obs_${runId}`;
+const failedLoginUser = `agent_test_p23_8_missing_${runId}`;
 const createdIds: string[] = [];
 
 let ctx: ApiContext;
@@ -57,6 +61,7 @@ async function call(
 }
 
 beforeAll(async () => {
+  resetSecurityEventCounters();
   ctx = await bootApi();
   regularToken = (await createTestUser(ctx, { userName })).token;
 });
@@ -71,6 +76,8 @@ afterAll(async () => {
     await ctx.database.db.deleteFrom('entity_records').where('id', 'in', createdIds).execute().catch(() => undefined);
   }
   await ctx.database.db.deleteFrom('users').where('id', '=', `u_${userName}`).execute().catch(() => undefined);
+  const failedSubject = createHash('sha256').update(failedLoginUser.trim().toLowerCase()).digest('hex');
+  await ctx.database.db.deleteFrom('auth_login_attempts').where('subject_hash', '=', failedSubject).execute().catch(() => undefined);
   await shutdownApi();
 });
 
@@ -135,6 +142,12 @@ describe('operations snapshot (tasks 4 and 9)', () => {
     });
     expect(snapshot.body['integrations']).toMatchObject({ connections: expect.any(Object) as object });
     expect(snapshot.body['ai']).toMatchObject({ approvalsPending: expect.any(Number) as number });
+    expect(snapshot.body['security']).toMatchObject({
+      events: expect.any(Object) as object,
+      since: expect.any(String) as string,
+      loginFailures24h: expect.any(Number) as number,
+      signatureRejections24h: expect.any(Number) as number,
+    });
     // Counters only: no record content, address or credential.
     const serialized = JSON.stringify(snapshot.body);
     expect(serialized).not.toMatch(/postgres:|password|token|@example/i);
@@ -143,5 +156,24 @@ describe('operations snapshot (tasks 4 and 9)', () => {
   it('refuses a regular account', async () => {
     const refused = await call('GET', '/api/v1/AdminInternal/action/operations', { token: regularToken });
     expect(refused.status).toBe(403);
+  });
+
+  it('exposes security event counts without an actor, address or payload (Phase 23.8)', async () => {
+    // One failed sign-in for a name that does not exist; the failure row is keyed by a hash and is
+    // removed by this suite's afterAll.
+    const failed = await call('POST', '/api/v1/Authentication', {
+      payload: { userName: failedLoginUser, password: 'not-the-password' },
+    });
+    expect(failed.status).toBe(401);
+
+    const snapshot = await call('GET', '/api/v1/AdminInternal/action/operations', { token: ctx.adminToken });
+    expect(snapshot.status, JSON.stringify(snapshot.body)).toBe(200);
+    const security = snapshot.body['security'] as { events: Record<string, number> };
+    expect(security.events['auth.login.failed:failed']).toBeGreaterThanOrEqual(1);
+    // The regular-account refusal above is the denial the same snapshot counts.
+    expect(security.events['access.denied:denied']).toBeGreaterThanOrEqual(1);
+    const serialized = JSON.stringify(security);
+    expect(serialized).not.toContain(failedLoginUser);
+    expect(serialized).not.toMatch(/not-the-password|postgres:|@example/i);
   });
 });

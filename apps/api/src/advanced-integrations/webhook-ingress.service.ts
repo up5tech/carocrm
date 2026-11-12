@@ -4,6 +4,7 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { recordSecurityEvent } from '../common/security-events.js';
 import { DatabaseService } from '../database/database.service.js';
 import { JobsService } from '../jobs/jobs.service.js';
 import { AdvancedIntegrationsSettingsService, debugModeActive } from './advanced-integrations-settings.service.js';
@@ -122,6 +123,10 @@ export class WebhookIngressService {
             query: input.query,
           });
           if (!verification.valid) {
+            recordSecurityEvent('webhook.signature.rejected', 'denied', {
+              provider: input.providerKey,
+              reason: verification.reason ?? 'invalid_signature',
+            });
             throw new ProviderError('INVALID_REQUEST', 'The provider signature was rejected.', {
               category: 'permanent_validation',
               retryable: false,
@@ -209,6 +214,7 @@ export class WebhookIngressService {
     }
 
     if (accepted === 0 && duplicates > 0) {
+      recordSecurityEvent('webhook.replay', 'detected', { provider: input.providerKey, reason: 'duplicate_delivery' });
       return { status: 'duplicate', deliveryId: null, eventCount: events.length, reason: 'duplicate_delivery', handledCount: handled };
     }
     return { status: 'accepted', deliveryId: null, eventCount: accepted, reason: null, handledCount: handled };

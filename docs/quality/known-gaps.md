@@ -87,7 +87,7 @@
 | G74 | No per-query statement timeout or request deadline | platform (database) | Medium | Fixed (22.26) |
 | G75 | The allocation picker silently hid every issued document past the first 500 | sales (allocation read) | Medium | Fixed (22.26) — the "flake" was this truncation |
 | G76 | Readiness checks the database only; queue/provider health is on demand | platform (health) | Medium | Accepted (22.21) |
-| G77 | No continuous metrics/tracing exporter; metrics are derived module documents | platform (observability) | Medium | Accepted (22.21) |
+| G77 | No continuous metrics/tracing exporter; metrics are derived module documents | platform (observability) | Medium | Accepted (22.21; security counters added 23.8, still no exporter) |
 | G78 | CI is a nightly integrity check, not a PR gate; a regression can land before detection | platform (CI) | Medium | Accepted (22.22 decision) |
 | G79 | `hooks-events` restore-event test flakes under the full parallel suite but passes solo | platform (test isolation) | Low | Fixed (22.26, found 22.22) |
 | G80 | The restore drill is blocked: no approved isolated recovery environment, no approved RPO/RTO | platform (operations) | Medium | Tooling ready, approval outstanding (2026-11-04) |
@@ -765,7 +765,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Module / contract:** platform — no Prometheus/StatsD/OTel exporter; module services compute counters from their own tables (`IntegrationMetricsService`, `crm-chat-observability`, the AdminInternal operations snapshot).
 - **Impact:** there is no time series: an operator sees the current counts and the gaps in `jobs`/`outbox`, but cannot graph request latency, error rate, retry rate or provider health over time without querying the database. Request latency was measured once by `scripts/perf-baseline.ts` (22.20), not continuously. Traces are the correlation ids (request → outbox `correlation_id` → worker log; request → job payload/result) rather than spans.
 - **Expected vs observed:** expected — either an operator-owned metrics/tracing backend (the plan permits OpenTelemetry only if compatible instrumentation exists) or an explicit decision to stay derived; observed — no exporter and no backend, now documented rather than implied.
-- **Status:** Accepted (22.21) — adding a second metrics stack was explicitly out of scope without an owner/backend; the operations snapshot and module metrics are the interim answer. Owner: platform/operations; revisit with 22.22 CI/observability or a deployment decision.
+- **Status:** Accepted (22.21; narrowed 23.8) — adding a second metrics stack was explicitly out of scope without an owner/backend; the operations snapshot and module metrics are the interim answer. Phase 23.8 added process-local security-event counters and 24-hour receipt counts to that snapshot, with the logger's correlation id on each event. There is still no time series, cross-instance aggregation or alerting. Owner: platform/operations; revisit with a deployment decision.
 - **Remaining risk:** no alerting on a latency/error regression, and no historical queue age; the snapshot is point-in-time.
 
 ## G78 — CI is a nightly integrity check, not a PR gate
@@ -830,7 +830,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 | G89 | The worker's BPM/workflow handlers write CRM records through the worker's own DB access, bypassing the API's ACL layer | worker | Medium | Open — documented system-scoped automation (23.4); residual risk |
 | G90 | The generated OpenAPI document is served without authentication and exposes the whole route surface | platform | Low | Open |
 | G91 | Readiness returns database reachability to an anonymous caller | platform | Low | Open |
-| G92 | The DB-free CI lane contains no API authorization assertion; the only SSRF suite is not in the include list | platform (CI) | Medium | Open |
+| G92 | The DB-free CI lane contains no API authorization assertion; SSRF/security-event suites were outside the include list | platform (CI) | Medium | Partial (23.8: SSRF/security events added; authorization still sandbox-only) |
 | G93 | The Phase 22.17 §7/§9 exception list drifted from this register after the 2026-11-03 fixes | platform (docs) | Low | **Fixed (23.0)** |
 | G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
 | G95 | The AI-agent trigger door reads only the **first 20** published agents, ordered by a random UUID, so a matching agent can be invisible | ai-agents | Medium | Open (found 23.3) |
@@ -998,14 +998,16 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 ## G92 — The DB-free CI lane proves nothing about authorization
 
 - **Module / contract:** platform (CI) — `vitest.ci.config.ts:19-62`.
-- **Impact:** the include list holds 42 named API suites plus the `packages/*` glob. **Every** API-level
-  authorization, BOLA and injection suite is excluded, because each boots the API against the database. Notably
-  `apps/api/test/ai-agent-adversarial.test.ts` — the repository's only SSRF suite — is **DB-free** and simply is not
-  in the list. Combined with the nightly-only trigger (G78), the consequence is that **no authorization assertion
-  runs in CI at all**, on any schedule.
+- **Impact:** the include list holds 47 named API suites plus the `packages/*` glob. **Every** API-level
+  authorization, BOLA and injection suite is excluded, because each boots the API against the database. The
+  DB-free SSRF suites were also outside the list, so even the provider-URL boundary was unchecked nightly.
+  Combined with the nightly-only trigger (G78), the consequence is that **no authorization assertion runs in CI
+  at all**, on any schedule.
 - **Severity:** Medium.
-- **Status:** Open — target **23.8**. Adding the DB-free security suites is a cheap, deliberate act; the trigger
-  itself stays nightly by owner decision (see `docs/security/phase-23-security-baseline.md` §6, decision D3).
+- **Status:** **Partial (23.8).** `ai-agent-adversarial.test.ts`, `phase23-5-ssrf.test.ts` and
+  `phase23-8-security-events.test.ts` are now in `vitest.ci.config.ts` (88 files / 1 419 tests), so SSRF and the
+  security-event contract run nightly. Authorization remains DB-backed and sandbox-only; target **23.10**. The
+  nightly-only trigger stays by owner decision (see `docs/security/phase-23-security-baseline.md` §6, decision D3).
 
 ## G93 — The Phase 22.17 exception list drifted from the gap register
 
