@@ -1,9 +1,81 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-12
-> **Sub-phase:** 23.8 — Security observability and PR-gated CI (delivered)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §14
+> **Latest sub-phase:** 23.9 — Operational security, backup and recovery (partially delivered; **Blocked** on G80/G81)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §15
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.9 — Operational security, backup and recovery (partially delivered; **Blocked** on G80/G81)
+
+> **Date:** 2026-11-12
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §15
+> **Status:** tasks 3–7 delivered as documentation/configuration review; tasks 1–2 are **Blocked** with
+> the missing approvals and deployment-owned items named. No database was created, no restore drill was
+> run, and no backup job was installed from this repository.
+
+### Scope delivered
+
+1. **Incident response (task 3).** New `docs/runbooks/security-incident-response.md`: severity/authority,
+   first 15 minutes, evidence preservation, suspected credential/token leak, session mass-revocation
+   (self password change, admin reset, soft delete, one-session revoke, and the reviewed-SQL bulk path),
+   JWT/API-key/encryption-key rotation, webhook replay/provider compromise, data exposure, safe
+   communication, safe diagnostics and the gaps the runbook cannot close. It uses the Phase 23.8
+   `AdminInternal/action/operations` `security` block and the request/correlation ids from
+   `docs/runbooks/platform-operations.md`.
+2. **Deployment baseline (task 4).** New `docs/security/deployment-baseline.md`: TLS termination,
+   trusted-proxy rules, CORS, secret injection, a production configuration table, least-privilege
+   database roles, filesystem/backup/retention requirements, logging/alerting, a pre-production
+   checklist and the deployment-owned items that are not in this repository. It records that
+   `docker-compose.yml` is development-only (published Postgres/Redis, `postgres:postgres`, source
+   mount, `db:seed`, dev server, placeholder JWT secret).
+3. **Tenancy decision (task 5).** New `docs/security/tenancy-decision.md`: one installation serves one
+   customer; deployment separation is acceptable only under five stated conditions and is not enforced
+   by this code; §48 tenant isolation is **Not applicable by decision**, not “verified”; the triggers and
+   minimum scope for a separate tenant-isolation phase are listed. No migration was started.
+4. **Distribution compliance (task 6).** New `docs/security/distribution-compliance.md`: no root
+   `LICENSE`; the clean-room/AGPL review has no named owner or outcome; release remains **Blocked** on an
+   owner/legal decision. No licence was created and no legal conclusion was made.
+5. **Production configuration verification (task 7).** `apps/api/src/config.ts` now also refuses, when
+   `NODE_ENV=production`, the compose placeholder `change-me-in-production` and the development database
+   fallback (`postgres:postgres@127.0.0.1/carocrm_dev`), in addition to the existing dev JWT secret,
+   empty `ENCRYPTION_KEY` and non-`enforce` extension trust. The review also confirmed the safe optional
+   defaults: `MAIL_TRANSPORT=none`, blank marketing webhook secret fails closed, empty OIDC profiles, and
+   `MALWARE_SCAN_MODE=signature`.
+6. **Blocked items recorded, not simulated.** G80 (no approved isolated recovery environment, no
+   approved RPO/RTO) and G81 (no installed scheduler, off-host destination, provisioned gpg recipient or
+   alert recipient) are marked **Blocked (2026-11-12)** in `docs/quality/known-gaps.md`; the controls
+   matrix and `docs/operations/backup-restore.md` carry the same status. Task 1's “install” and task 2's
+   “run the drill” are deployment/owner actions, so this sub-phase does not claim either.
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm exec vitest run --config vitest.ci.config.ts apps/api/test/config-jwt-secret.test.ts` | **7 tests passed** (5 existing + 2 new: compose placeholder, dev DB fallback) |
+| `pnpm exec vitest run --config vitest.ci.config.ts apps/api/test/config-jwt-secret.test.ts apps/api/test/phase23-1-security.test.ts` (after the fixture fix) | **2 files / 19 tests passed** |
+| Targeted `eslint` over `config.ts` and both touched test files | exit 0 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm ci:secrets` | clean (2,481 tracked files) |
+| `pnpm lint:arch` | OK — no new shared-core → business-domain imports (known exceptions = 2) |
+| `node scripts/verify-backup.mjs .data/demo/backup-2026-10-22T03-12-12-673Z --max-age-hours=100000` | **exit 1 — 7 problems**: no encryption marker and seven missing core tables (`users`, `roles`, `teams`, `app_settings`, `audit_log`, `outbox_events`, `jobs`); **no world-readable permission problem**. The age check was widened only to isolate the other findings, so this is not a fresh backup. |
+| `git diff --check` | exit 0 |
+| `pnpm verify` (first run) | **exit 1** — 1 failed / 3,667 passed. The failure was a stale Phase 23.1 fixture that accepted a production config with no `DATABASE_URL`; the new production DB guard correctly refused the dev fallback. The fixture was given an explicit URL; no assertion was weakened. |
+| `pnpm verify` (second run) | **exit 0** — lint, typecheck, **281 files / 3,668 tests**, web **15 files / 86 tests** |
+
+### Not run / limitations
+
+- **No backup installation and no restore drill.** The primary database was not touched, no database was
+  created, and `restore:drill --allow-restore` was not run (G80, decision D4). A backup that has not been
+  restored is not a recovery claim.
+- **No incident tabletop.** The runbook is a procedure; nobody exercised it. The absence of an on-call
+  rotation/paging route and of a bulk session-revocation endpoint is stated in the runbook §5.2/§8.
+- **No production deployment review.** TLS, secret manager, DB roles, Redis/object-storage policy, backup
+  timer and alerting are deployment-owned; the baseline lists them as unevidenced (§9), not as passed.
+- **No licence decision.** The missing `LICENSE` and the clean-room/AGPL outcome remain an owner/legal
+  blocker; the repository does not distribute under a declared licence.
+- **Compose remains development-only.** The new guard makes a copied compose placeholder fail at boot,
+  but the compose file itself still publishes dev ports and uses dev credentials; it was not converted
+  into a production artifact.
 
 ## Phase 23.8 — Security observability and PR-gated CI (delivered 2026-11-12)
 

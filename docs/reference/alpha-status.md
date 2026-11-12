@@ -42,7 +42,7 @@ see the portals status section below and PLAN §72 for the remaining priority ma
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
 | API integration tests working | done | 300 vitest tests in `apps/api/test` (+193 package unit tests) |
 | Playwright login/CRUD tests working | done | `e2e/crud.spec.ts` (`npx playwright test`) |
-| Docker deployment working | partial | `docker-compose.yml` provides postgres/redis/api; images not built yet |
+| Docker deployment working | partial | `docker-compose.yml` provides postgres/redis/api; images not built yet. It is development-only; the production requirements are in `docs/security/deployment-baseline.md` |
 | Backup and restore documented | done | `docs/operations/backup-restore.md` |
 
 ## Verification commands
@@ -63,6 +63,8 @@ pnpm --filter @carocrm/worker test  # 143 worker tests (jobs, scheduler, outbox,
 ## Deviations from PLAN (deliberate, for Alpha)
 
 - `docker-compose.yml` is dev-oriented (source mount, no built images); PLAN §65 production topology not built.
+  Phase 23.9 records the secure deployment baseline and refuses its placeholder signing key in
+  production; a production deployment artifact is deployment-owned.
 - Query grammar is EspoCRM-like JSON criteria translated to Kysely; raw SQL is never accepted (PLAN §15.2).
 - Metadata overrides are stored in `metadata_entries` + `app_settings('entity')` rather than files.
 - Attachment parent-ACL check uses the record-level ACL predicate, including the portal

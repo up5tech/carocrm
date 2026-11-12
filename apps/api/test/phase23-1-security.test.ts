@@ -51,6 +51,8 @@ describe('phase 23.1 fail-closed configuration', () => {
       ConfigSchemaRefined.parse({
         jwtSecret: 'a-strong-prod-secret-0123456789',
         encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        // Phase 23.9: production must name its own database URL, not the dev fallback.
+        databaseUrl: 'postgres://carocrm_app:strong-password@db.internal:5432/carocrm',
         // Phase 23.6: production also requires enforced extension-package trust.
         extensionTrustMode: 'enforce',
       }),

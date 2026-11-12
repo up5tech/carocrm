@@ -1,10 +1,12 @@
 # Backup and restore — operations
 
-> Phase 22.23 audit (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §22) and Phase 22.25 backup
-> automation. **Status: restore drill still blocked.** No approved isolated recovery environment
-> exists, and the owner has not approved RPO/RTO. The primary database was not altered; see
+> Phase 22.23 audit (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §22), Phase 22.25 backup
+> automation, and Phase 23.9 operational review. **Status (2026-11-12): Blocked on the deployment and
+> on owner approval.** No approved isolated recovery environment exists, the owner has not approved
+> RPO/RTO (G80), and no scheduled off-host backup or alert recipient is installed (G81). The primary
+> database was not altered and no database was created for a drill; see
 > `docs/quality/phase-22-backup-restore-rehearsal.md`, `docs/quality/phase-22-25-release-blocker-remediation.md`,
-> G80 and G81.
+> `docs/security/deployment-baseline.md` §6/§9 and `docs/runbooks/security-incident-response.md` §8.
 
 This document is the procedure, the current evidence and the rules. It is not a claim that a restore
 has been rehearsed — it has not, and a backup that has never been restored is not a validated backup.

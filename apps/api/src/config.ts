@@ -6,10 +6,23 @@ import { z } from 'zod';
 
 import { parseOidcProfiles } from './auth/oidc/oidc-profile.js';
 
+/** The development default. MUST never be accepted in production (Phase 22.4 / PLAN §9). */
+export const DEFAULT_JWT_SECRET = 'dev-only-secret-change-me';
+
+/**
+ * The placeholder `docker-compose.yml` advertises. It reads like a production instruction, so a
+ * compose file copied into a production environment must fail fast instead of booting with a known
+ * signing key (Phase 23.9, PLAN §15 task 7).
+ */
+export const COMPOSE_JWT_SECRET = 'change-me-in-production';
+
+/** The development database fallback. Production must name its own URL and role. */
+export const DEFAULT_DATABASE_URL = 'postgres://postgres:postgres@127.0.0.1:5432/carocrm_dev';
+
 const ConfigSchema = z.object({
   port: z.coerce.number().int().default(3030),
   host: z.string().default('127.0.0.1'),
-  databaseUrl: z.string().default('postgres://postgres:postgres@127.0.0.1:5432/carocrm_dev'),
+  databaseUrl: z.string().default(DEFAULT_DATABASE_URL),
   databaseAdminUrl: z.string().default('postgres://postgres:postgres@127.0.0.1:5432/postgres'),
   /**
    * Server-side ceiling on a single statement (G74). A query that waits on a lock, or a plan that
@@ -29,7 +42,7 @@ const ConfigSchema = z.object({
    */
   requestTimeoutMs: z.coerce.number().int().min(0).max(600_000).default(30_000),
   redisUrl: z.string().default('redis://127.0.0.1:6379'),
-  jwtSecret: z.string().min(8).default('dev-only-secret-change-me'),
+  jwtSecret: z.string().min(8).default(DEFAULT_JWT_SECRET),
   accessTokenTtlSeconds: z.coerce.number().int().default(900),
   refreshTokenTtlSeconds: z.coerce.number().int().default(60 * 60 * 24 * 14),
   storageRoot: z.string().default('.data/files'),
@@ -168,26 +181,36 @@ const ConfigSchema = z.object({
   platformVersion: z.string().default(PLATFORM_VERSION),
 });
 
-/** The development default. MUST never be accepted in production (Phase 22.4 / PLAN §9). */
-export const DEFAULT_JWT_SECRET = 'dev-only-secret-change-me';
-
 /**
  * Phase 22.4 (PLAN §9, task 1/3) — the development default JWT secret must never be accepted in
  * production. A known, guessable secret lets anyone forge session tokens, which is a full
  * authentication bypass. We fail closed at boot so the misconfiguration surfaces immediately
  * instead of silently shipping an insecure deployment.
  *
- * The e2e smoke run sets an explicit (non-default) secret with `NODE_ENV=production`, so it does
- * not trip this guard. Only the *literal* development default is rejected; any operator-supplied
- * secret (including one that merely meets the `min(8)` length) is accepted.
+ * Phase 23.9 adds the placeholder `docker-compose.yml` advertises, and refuses the development
+ * database fallback in production. The e2e smoke run sets an explicit secret and database URL with
+ * `NODE_ENV=production`, so it does not trip these guards.
  */
 export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
-  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.jwtSecret === DEFAULT_JWT_SECRET) {
+  if (
+    (process.env.NODE_ENV ?? '').toLowerCase() === 'production' &&
+    (value.jwtSecret === DEFAULT_JWT_SECRET || value.jwtSecret === COMPOSE_JWT_SECRET)
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['jwtSecret'],
       message:
-        'JWT_SECRET must be set to a strong, unique secret in production; the development default ("dev-only-secret-change-me") is not allowed.',
+        'JWT_SECRET must be set to a strong, unique secret in production; the development default ("dev-only-secret-change-me") and the compose placeholder ("change-me-in-production") are not allowed.',
+    });
+  }
+  // Phase 23.9: a production boot must not silently connect to the development database with its
+  // known credentials. Name the deployment's URL and least-privilege runtime role instead.
+  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.databaseUrl === DEFAULT_DATABASE_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['databaseUrl'],
+      message:
+        'DATABASE_URL must be set explicitly in production; the development fallback (postgres:postgres@127.0.0.1/carocrm_dev) is not allowed.',
     });
   }
   // Phase 23.1: an unset encryption key must not silently disable secrets-at-rest in production.

@@ -1,6 +1,14 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { ConfigSchemaRefined, DEFAULT_JWT_SECRET } from '../src/config.js';
+import { COMPOSE_JWT_SECRET, ConfigSchemaRefined, DEFAULT_JWT_SECRET } from '../src/config.js';
+
+const PRODUCTION_BASE = {
+  jwtSecret: 'a-strong-prod-secret-0123456789',
+  encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  databaseUrl: 'postgres://carocrm_app:strong-password@db.internal:5432/carocrm',
+  // Phase 23.6: production also requires enforced extension-package trust.
+  extensionTrustMode: 'enforce',
+};
 
 /**
  * Phase 22.4 (PLAN §9) — regression lock for the production JWT-secret guard.
@@ -31,24 +39,23 @@ describe('config JWT secret production guard', () => {
 
   it('accepts an operator-supplied strong secret in production', () => {
     process.env.NODE_ENV = 'production';
-    expect(() =>
-      ConfigSchemaRefined.parse({
-        jwtSecret: 'a-strong-prod-secret-0123456789',
-        encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        // Phase 23.6: production also requires enforced extension-package trust.
-        extensionTrustMode: 'enforce',
-      }),
-    ).not.toThrow();
+    expect(() => ConfigSchemaRefined.parse(PRODUCTION_BASE)).not.toThrow();
+  });
+
+  it('rejects the compose placeholder secret in production (Phase 23.9)', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, jwtSecret: COMPOSE_JWT_SECRET })).toThrow(/JWT_SECRET/);
+  });
+
+  it('rejects the development database fallback in production (Phase 23.9)', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, databaseUrl: undefined })).toThrow(/DATABASE_URL/);
   });
 
   it('requires enforced extension trust in production', () => {
     process.env.NODE_ENV = 'production';
-    const base = {
-      jwtSecret: 'a-strong-prod-secret-0123456789',
-      encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-    };
-    expect(() => ConfigSchemaRefined.parse({ ...base, extensionTrustMode: 'warn' })).toThrow(/EXTENSION_TRUST_MODE/);
-    expect(() => ConfigSchemaRefined.parse({ ...base, extensionTrustMode: 'off' })).toThrow(/EXTENSION_TRUST_MODE/);
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, extensionTrustMode: 'warn' })).toThrow(/EXTENSION_TRUST_MODE/);
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, extensionTrustMode: 'off' })).toThrow(/EXTENSION_TRUST_MODE/);
   });
 
   it('allows the development default secret outside production (dev/test)', () => {

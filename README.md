@@ -560,6 +560,10 @@ Every module route is authenticated and ACL-checked server-side; see
 | [docs/reference/docs-authoring.md](docs/reference/docs-authoring.md)             | authoring the in-app handbook: page format, the Markdown subset, what the lint refuses            |
 | [content/docs/](content/docs/en/_index.md)                                       | the handbook corpus itself (English plus the Vietnamese P0 set), rendered at `/docs`              |
 | [docs/operations/backup-restore.md](docs/operations/backup-restore.md)           | what to back up and how to restore it                                                             |
+| [docs/runbooks/security-incident-response.md](docs/runbooks/security-incident-response.md) | security incidents: containment, revocation/rotation, webhook replay, data exposure, evidence |
+| [docs/security/deployment-baseline.md](docs/security/deployment-baseline.md)     | production TLS/proxy, secrets, least-privilege DB roles and configuration checklist               |
+| [docs/security/tenancy-decision.md](docs/security/tenancy-decision.md)           | single-tenant boundary, deployment separation conditions and tenant-phase triggers                |
+| [docs/security/distribution-compliance.md](docs/security/distribution-compliance.md) | clean-room/AGPL review and the missing `LICENSE` (blocked release item)                        |
 
 Read [AGENTS.MD](AGENTS.MD) first. It fixes the rules this repository is developed under:
 smallest coherent change, no unrelated refactors, migrations reviewed before they are applied, and
@@ -569,4 +573,6 @@ tests that run against the configured database and only touch records they creat
 
 EspoCRM upstream is AGPL-3.0-or-later. This repository is a clean-room reimplementation
 (PLAN §2): behavior and public API contracts were used as reference, no upstream source,
-assets or translations were copied. A formal compliance review is required before distribution.
+assets or translations were copied. A formal compliance review is required before distribution;
+the repository has no `LICENSE` yet, so this is an explicit release blocker — see
+[docs/security/distribution-compliance.md](docs/security/distribution-compliance.md).
