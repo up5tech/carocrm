@@ -150,6 +150,39 @@ export class JobsService {
     return this.get(jobId);
   }
 
+  /**
+   * Phase 23.7 (G21) — re-submit a failed job as a new attempt. The failed row stays as the record
+   * of what happened; the operator gets a new row and its queue entry, never a rewritten history.
+   */
+  async retry(id: string): Promise<JobView> {
+    const jobId = requireJobId(id);
+    const row = await this.database.db.selectFrom('jobs').selectAll().where('id', '=', jobId).executeTakeFirst();
+    if (!row) throw new NotFoundError(`Job "${jobId}" does not exist.`);
+    if (row.status !== 'failed') {
+      throw new ValidationError('Only a failed job can be retried.', { id: jobId, status: row.status });
+    }
+    return this.enqueue({ job: row.job, data: asObject(row.target) });
+  }
+
+  /**
+   * Phase 23.7 (G21) — discard a terminal job row. Pending/running work must be cancelled first, so
+   * this cannot remove work that is still queued or executing. `job_logs` cascades.
+   */
+  async discard(id: string): Promise<{ id: string; discarded: true }> {
+    const jobId = requireJobId(id);
+    const row = await this.database.db.selectFrom('jobs').selectAll().where('id', '=', jobId).executeTakeFirst();
+    if (!row) throw new NotFoundError(`Job "${jobId}" does not exist.`);
+    if (!TERMINAL_STATUSES.has(row.status)) {
+      throw new ValidationError('Only a terminal job can be discarded; cancel it first.', { id: jobId, status: row.status });
+    }
+    await this.database.db
+      .deleteFrom('jobs')
+      .where('id', '=', jobId)
+      .where('status', 'in', [...TERMINAL_STATUSES])
+      .execute();
+    return { id: jobId, discarded: true };
+  }
+
   async queueCounts(): Promise<Record<string, number>> {
     return this.queue.counts();
   }

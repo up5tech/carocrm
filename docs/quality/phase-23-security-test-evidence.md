@@ -1,9 +1,72 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-12
-> **Sub-phase:** 23.6 — Files, attachments and extension supply chain (delivered)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §12
+> **Sub-phase:** 23.7 — Data protection, privacy and retention (delivered)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §13
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.7 — Data protection, privacy and retention (delivered 2026-11-12)
+
+### Scope delivered
+
+1. **Retention for G12/G13/G14 (task 4).** Migration `094_phase23_retention_schedules.sql` seeds five
+   schedules — the two kernel sweeps that existed but were never scheduled, plus `cleanupJobs`,
+   `cleanupProviderReceipts` and `cleanupStreamOrphans`. Every statement is terminal-state, age- and
+   batch-bounded; none is a global delete. The signature inbox now acts on `purge_after`; voice
+   receipts are minimized/deleted only when they have no normalized event; marketing receipts are
+   deleted while `marketing_events` survives the nulled `inbox_id`; terminal `jobs` disappear after 30
+   days in 500-row batches and `job_logs` cascades. Policy and ownership:
+   `docs/security/data-retention.md`.
+2. **Failed jobs (G21).** `POST /Job/:id/action/retry` re-submits a **failed** row as a new job (the
+   failure stays as history) and `POST /Job/:id/action/discard` removes an exact **terminal** row.
+   Pending/running work must be cancelled first. Regression: `apps/api/test/jobs.test.ts`.
+3. **Job metadata redaction (task 2).** `job.views.ts` deep-redacts password/secret/token/api-key/
+   authorization/cookie/credential-shaped keys in `data`, `result` and schedule `data`, with a depth
+   bound. The worker still receives the original payload; only the admin view changes. Regression:
+   the same jobs suite asserts the read does not contain the submitted values.
+4. **Key rotation (task 1).** `scripts/rotate-encryption-key.mjs` re-encrypts the five vault stores
+   inside one transaction, dry-run by default, aborts on a payload that decrypts with neither key,
+   and never prints a secret. Procedure: `docs/security/encryption-key-rotation.md`.
+5. **Audit retention/tamper evidence (task 5).** `audit_log` is deliberately excluded from automated
+   retention; 24-month retention, export-before-purge, read-only API and least-privilege DB role
+   expectations are written in `docs/security/data-retention.md` §3. Existing `denied`-event
+   redaction regression (`audit.test.ts`, `phase23-4-denial-audit.test.ts`) still passes.
+6. **G30 (partial).** `cleanupStreamOrphans` removes only old rows whose `entity_type` is a known
+   Entity Engine type **and** whose exact record is gone. Attachment rows/files remain a named
+   exception (owner platform, review 2026-12-12) because attachment reads already answer to the
+   parent ACL.
+7. **Consent/operator binding and CSV (tasks 3/6) verified, not changed.** The existing
+   marketing-automation consent/send/provider suites and the CSV formula-neutralization tests were
+   re-run against this change.
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @carocrm/worker test` | **24 files / 248 tests passed** (new retention cases included) |
+| `pnpm exec vitest run apps/api/test/jobs.test.ts apps/api/test/marketing-automation-consent.test.ts apps/api/test/marketing-automation-send.test.ts apps/api/test/marketing-automation-provider.test.ts apps/api/test/audit.test.ts apps/api/test/phase23-4-denial-audit.test.ts apps/api/test/error-payload-hygiene.test.ts apps/api/test/phase12-search-import-dashboards.test.ts` | **8 files / 94 tests passed** |
+| `node --check scripts/rotate-encryption-key.mjs` | exit 0 |
+| `pnpm ci:migrations` | **clean** — 94 files, highest `094_phase23_retention_schedules.sql` |
+| `pnpm --filter @carocrm/api typecheck && pnpm --filter @carocrm/worker typecheck` | exit 0 |
+| Transactional SQL probe (all seven retention statements, `LIMIT 0`, `ROLLBACK`) | all statements parsed/planned, 0 rows changed, no data left behind |
+| Marker probe: four `AGENT_TEST_p237_*` jobs (old completed, old pending, old running, recent completed) inside `BEGIN`/`ROLLBACK` | only the old **completed** marker was returned by `CLEANUP_JOBS_SQL`; pending, running and recent rows survived; transaction rolled back |
+| `pnpm verify` | see the final run recorded with the Phase 23.7 commit — lint 0, typecheck 0, full suite, web suite |
+
+### Not run / limitations
+
+- `scripts/rotate-encryption-key.mjs` was syntax-checked and reviewed, **not** executed with two real
+  keys: doing so would rewrite production credentials and requires a stopped-writes window and a
+  restore rehearsal. The crypto primitive's wrong-key/tamper behaviour is covered by
+  `packages/core/src/utils/crypto.test.ts`.
+- Attachment rows/files for a hard-deleted parent remain unswept (G30 residual, exception register).
+- The SPA still keeps the short-lived access token in `localStorage` (`apps/web/src/api/client.ts`)
+  so a page reload can reuse it; moving to memory-only would require updating the Playwright helpers
+  that read that key. This is a **browser-state residual**, not a server-log/error/audit exposure, and
+  the refresh cookie remains HttpOnly. Tracked in the Phase 23.10 browser-spec work.
+- No Playwright/browser run in this environment; provider receipt jobs were verified with unit
+  predicates and transactional SQL probes, not live provider deliveries.
+- No database was created, reset or truncated. The SQL probes used `BEGIN`/`ROLLBACK`; the jobs API
+  suite removes only the rows it created by exact id.
 
 ## Phase 23.6 — Files, attachments and extension supply chain (delivered 2026-11-12)
 

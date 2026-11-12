@@ -67,6 +67,20 @@ export class JobController {
     return this.jobs.cancel(id);
   }
 
+  @HttpCode(201)
+  @Post(':id/action/retry')
+  async retry(@Param('id') id: string): Promise<JobView> {
+    this.requireAdmin();
+    return this.jobs.retry(id);
+  }
+
+  @HttpCode(200)
+  @Post(':id/action/discard')
+  async discard(@Param('id') id: string): Promise<{ id: string; discarded: true }> {
+    this.requireAdmin();
+    return this.jobs.discard(id);
+  }
+
   private requireAdmin(): void {
     if (!this.scope.isAdmin) throw new AuthorizationDeniedError('Administrator access is required to manage jobs.');
   }

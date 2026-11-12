@@ -40,6 +40,12 @@ import type { Queryable } from '../db.js';
 
 export const DEFAULT_OUTBOX_RETENTION_DAYS = 7;
 export const DEFAULT_SESSION_RETENTION_DAYS = 30;
+export const DEFAULT_JOB_RETENTION_DAYS = 30;
+export const DEFAULT_SIGNATURE_RECEIPT_DAYS = 90;
+export const DEFAULT_VOICE_RECEIPT_DAYS = 90;
+export const DEFAULT_MARKETING_RECEIPT_DAYS = 30;
+export const DEFAULT_STREAM_ORPHAN_DAYS = 30;
+export const DEFAULT_RETENTION_BATCH = 500;
 
 export interface SystemJobDeps {
   db: Queryable;
@@ -73,12 +79,187 @@ export const PRUNE_SESSIONS_SQL = `
   RETURNING id
 `;
 
+/**
+ * Phase 23.7 (G14) — terminal job rows only. A pending/running job is never a retention candidate,
+ * and `job_logs` disappears through its foreign key cascade in the same statement.
+ */
+export const CLEANUP_JOBS_SQL = `
+  DELETE FROM jobs
+   WHERE id IN (
+     SELECT id FROM jobs
+      WHERE status IN ('completed', 'failed', 'cancelled')
+        AND COALESCE(finished_at, created_at) < now() - make_interval(days => $1::int)
+      ORDER BY COALESCE(finished_at, created_at)
+      LIMIT $2
+   )
+  RETURNING id
+`;
+
+/**
+ * Phase 23.7 (G12) — `purge_after` is the data-minimization deadline the ESignature policy already
+ * stamps. The normalized event row is evidence and stays; only its minimized payload is cleared.
+ */
+export const MINIMIZE_SIGNATURE_EVENTS_SQL = `
+  UPDATE signature_provider_events
+     SET event_data = '{}'::jsonb
+   WHERE id IN (
+     SELECT id FROM signature_provider_events
+      WHERE purge_after IS NOT NULL
+        AND purge_after < now()
+        AND event_data <> '{}'::jsonb
+      LIMIT $1
+   )
+  RETURNING id
+`;
+
+/**
+ * The webhook inbox is a dedup receipt, not the evidence trail; once its purge deadline passes the
+ * whole terminal receipt may go. Non-terminal states are retained so an operator can still replay.
+ */
+export const DELETE_SIGNATURE_INBOX_SQL = `
+  DELETE FROM signature_webhook_inbox
+   WHERE id IN (
+     SELECT id FROM signature_webhook_inbox
+      WHERE purge_after IS NOT NULL
+        AND purge_after < now()
+        AND state IN ('processed', 'ignored', 'duplicate', 'dead_letter')
+      LIMIT $1
+   )
+  RETURNING id
+`;
+
+/** Voice receipts keep the redacted envelope; the payload is minimized after the retention window. */
+export const MINIMIZE_VOICE_RECEIPTS_SQL = `
+  UPDATE voice_webhook_events
+     SET payload_redacted = NULL
+   WHERE id IN (
+     SELECT id FROM voice_webhook_events
+      WHERE received_at < now() - make_interval(days => $1::int)
+        AND payload_redacted IS NOT NULL
+      LIMIT $2
+   )
+  RETURNING id
+`;
+
+/**
+ * A voice receipt that produced no communication event is terminal noise; delete only those, so a
+ * receipt that is the parent of a normalized event (evidence) is never cascaded away.
+ */
+export const DELETE_VOICE_RECEIPTS_SQL = `
+  DELETE FROM voice_webhook_events
+   WHERE id IN (
+     SELECT v.id FROM voice_webhook_events v
+      WHERE v.received_at < now() - make_interval(days => $1::int)
+        AND v.processing_status IN ('processed', 'rejected', 'failed', 'enqueue_failed')
+        AND NOT EXISTS (
+          SELECT 1 FROM voice_communication_events e WHERE e.webhook_event_id = v.id
+        )
+      LIMIT $2
+   )
+  RETURNING id
+`;
+
+/** Marketing inbox rows are receipts; `marketing_events.inbox_id` is ON DELETE SET NULL. */
+export const DELETE_MARKETING_INBOX_SQL = `
+  DELETE FROM marketing_provider_webhook_inbox
+   WHERE id IN (
+     SELECT id FROM marketing_provider_webhook_inbox
+      WHERE received_at < now() - make_interval(days => $1::int)
+        AND processing_status IN ('processed', 'processed_with_errors', 'rejected')
+      LIMIT $2
+   )
+  RETURNING id
+`;
+
+/**
+ * Phase 23.7 (G30) — remove only stream rows whose entity type is a known entity type but whose
+ * exact record no longer exists. Soft-deleted records still have a row, so their stream survives.
+ * The `EXISTS` guard prevents a stream type outside the Entity Engine (a future non-record subject)
+ * from being treated as orphaned merely because it is not in `entity_records`.
+ */
+export const CLEANUP_STREAM_ORPHANS_SQL = `
+  DELETE FROM stream_items
+   WHERE id IN (
+     SELECT s.id FROM stream_items s
+      WHERE s.created_at < now() - make_interval(days => $1::int)
+        AND EXISTS (
+          SELECT 1 FROM entity_records known WHERE known.entity_type = s.entity_type
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM entity_records r WHERE r.entity_type = s.entity_type AND r.id = s.entity_id
+        )
+      ORDER BY s.created_at
+      LIMIT $2
+   )
+  RETURNING id
+`;
+
 export function noopJob(): JobHandler {
   return async () => ({
     status: 'completed',
     message: 'noop',
     result: { ok: true, at: new Date().toISOString() },
   });
+}
+
+export function cleanupJobsJob(deps: SystemJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    const days = retentionDays(context.data, 'retentionDays', DEFAULT_JOB_RETENTION_DAYS);
+    const batch = retentionDays(context.data, 'batchSize', DEFAULT_RETENTION_BATCH);
+    context.progress(20, `removing terminal jobs older than ${String(days)} days`);
+    const result = await deps.db.query(CLEANUP_JOBS_SQL, [days, batch]);
+    const deleted = countDeleted(result.rows.length, result.rowCount);
+    deps.log.info({ deleted, days, batch }, 'job retention finished');
+    return { status: 'completed', message: `Removed ${String(deleted)} jobs`, result: { deleted, days } };
+  };
+}
+
+/**
+ * Phase 23.7 (G12/G13): minimize or delete provider receipts on their own windows. The signature
+ * inbox uses the deadline the ESignature policy already stamped; voice and marketing use the
+ * schedule's `voiceDays` / `marketingDays` because their receipts carry no per-row deadline.
+ */
+export function cleanupProviderReceiptsJob(deps: SystemJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    const signatureDays = retentionDays(context.data, 'signatureDays', DEFAULT_SIGNATURE_RECEIPT_DAYS);
+    const voiceDays = retentionDays(context.data, 'voiceDays', DEFAULT_VOICE_RECEIPT_DAYS);
+    const marketingDays = retentionDays(context.data, 'marketingDays', DEFAULT_MARKETING_RECEIPT_DAYS);
+    const batch = retentionDays(context.data, 'batchSize', DEFAULT_RETENTION_BATCH);
+
+    context.progress(10, 'minimizing signature event payloads');
+    const signatureEvents = await deps.db.query(MINIMIZE_SIGNATURE_EVENTS_SQL, [batch]);
+    context.progress(30, 'removing purged signature inbox receipts');
+    const signatureInbox = await deps.db.query(DELETE_SIGNATURE_INBOX_SQL, [batch]);
+    context.progress(50, 'minimizing voice receipt payloads');
+    const voiceMinimized = await deps.db.query(MINIMIZE_VOICE_RECEIPTS_SQL, [voiceDays, batch]);
+    context.progress(70, 'removing terminal voice receipts without events');
+    const voiceDeleted = await deps.db.query(DELETE_VOICE_RECEIPTS_SQL, [voiceDays, batch]);
+    context.progress(85, 'removing marketing inbox receipts');
+    const marketingDeleted = await deps.db.query(DELETE_MARKETING_INBOX_SQL, [marketingDays, batch]);
+
+    const result = {
+      signatureEventsMinimized: countDeleted(signatureEvents.rows.length, signatureEvents.rowCount),
+      signatureInboxDeleted: countDeleted(signatureInbox.rows.length, signatureInbox.rowCount),
+      voiceReceiptsMinimized: countDeleted(voiceMinimized.rows.length, voiceMinimized.rowCount),
+      voiceReceiptsDeleted: countDeleted(voiceDeleted.rows.length, voiceDeleted.rowCount),
+      marketingInboxDeleted: countDeleted(marketingDeleted.rows.length, marketingDeleted.rowCount),
+    };
+    deps.log.info({ ...result, signatureDays, voiceDays, marketingDays, batch }, 'provider receipt retention finished');
+    return { status: 'completed', message: 'Provider receipt retention finished', result };
+  };
+}
+
+/** Phase 23.7 (G30) — bounded orphan-stream cleanup; no record row is touched. */
+export function cleanupStreamOrphansJob(deps: SystemJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    const days = retentionDays(context.data, 'retentionDays', DEFAULT_STREAM_ORPHAN_DAYS);
+    const batch = retentionDays(context.data, 'batchSize', DEFAULT_RETENTION_BATCH);
+    context.progress(20, `removing stream rows older than ${String(days)} days whose record is gone`);
+    const result = await deps.db.query(CLEANUP_STREAM_ORPHANS_SQL, [days, batch]);
+    const deleted = countDeleted(result.rows.length, result.rowCount);
+    deps.log.info({ deleted, days, batch }, 'stream orphan cleanup finished');
+    return { status: 'completed', message: `Removed ${String(deleted)} orphan stream rows`, result: { deleted, days } };
+  };
 }
 
 export function cleanupOutboxJob(deps: SystemJobDeps): JobHandler {
@@ -267,6 +448,9 @@ export function registerSystemJobs(registry: JobRegistry, deps: SystemJobDeps): 
   registry.register('system.noop', noopJob());
   registry.register('system.cleanupOutbox', cleanupOutboxJob(deps));
   registry.register('system.pruneSessions', pruneSessionsJob(deps));
+  registry.register('system.cleanupJobs', cleanupJobsJob(deps));
+  registry.register('system.cleanupProviderReceipts', cleanupProviderReceiptsJob(deps));
+  registry.register('system.cleanupStreamOrphans', cleanupStreamOrphansJob(deps));
   registry.register('system.sendReminders', sendRemindersJob(deps));
   // Only installed when the process can reach the attachment storage.
   const storage = deps.storage;

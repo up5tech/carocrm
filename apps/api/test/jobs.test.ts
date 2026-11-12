@@ -105,6 +105,50 @@ describe('one-off jobs (PLAN §24)', () => {
     expect(bad.status).toBe(422);
   });
 
+  it('redacts credential-shaped job metadata in the admin view (Phase 23.7)', async () => {
+    const created = await runJob('system.noop', {
+      marker: runId,
+      password: 'not-a-real-password',
+      nested: { accessToken: 'not-a-real-token', keep: 'visible' },
+    });
+    expect(created.status).toBe(201);
+    expect(created.body['data']).toMatchObject({ marker: runId, password: '[REDACTED]' });
+    expect(created.body['data']).toMatchObject({ nested: { accessToken: '[REDACTED]', keep: 'visible' } });
+
+    const single = await call('GET', `/api/v1/Job/${String(created.body['id'])}`, adminToken);
+    expect(JSON.stringify(single.body)).not.toContain('not-a-real-password');
+    expect(JSON.stringify(single.body)).not.toContain('not-a-real-token');
+  });
+
+  it('retries a failed job as a new row and discards terminal rows only (Phase 23.7, G21)', async () => {
+    const failed = await runJob('system.noop', { marker: runId, retry: true });
+    const failedId = String(failed.body['id']);
+    await ctx.database.db
+      .updateTable('jobs')
+      .set({ status: 'failed', finished_at: new Date(), message: 'AGENT_TEST failure' })
+      .where('id', '=', failedId)
+      .execute();
+
+    const retried = await call('POST', `/api/v1/Job/${failedId}/action/retry`, adminToken);
+    expect(retried.status).toBe(201);
+    expect(retried.body['status']).toBe('pending');
+    expect(retried.body['id']).not.toBe(failedId);
+    expect(retried.body['data']).toMatchObject({ marker: runId, retry: true });
+    jobIds.push(String(retried.body['id']));
+
+    const pendingRetry = await call('POST', `/api/v1/Job/${String(retried.body['id'])}/action/retry`, adminToken);
+    expect(pendingRetry.status).toBe(422);
+    expect(messageOf(pendingRetry.body)).toContain('Only a failed job');
+
+    const discarded = await call('POST', `/api/v1/Job/${failedId}/action/discard`, adminToken);
+    expect(discarded.status).toBe(200);
+    expect(discarded.body).toEqual({ id: failedId, discarded: true });
+    expect((await call('GET', `/api/v1/Job/${failedId}`, adminToken)).status).toBe(404);
+
+    const discardPending = await call('POST', `/api/v1/Job/${String(retried.body['id'])}/action/discard`, adminToken);
+    expect(discardPending.status).toBe(422);
+  });
+
   it('rejects a job name the worker registry could never hold', async () => {
     const res = await call('POST', '/api/v1/Job', adminToken, { jobName: 'cleanup' });
     expect(res.status).toBe(422);
