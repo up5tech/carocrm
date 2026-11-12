@@ -15,6 +15,7 @@ import { DatabaseService } from '../database/database.service.js';
 import type { ExtensionHost } from './extension-host.js';
 import { EXTENSION_HOST } from './extension-host.js';
 import { applyExtensionMigrations } from './extension-store.js';
+import { extensionTrustFromConfig } from './extension-trust.js';
 
 /**
  * Extension administration (PLAN §38.3, §19.1).
@@ -192,7 +193,12 @@ export class ExtensionService {
   }
 
   private packages(): ExtensionPackage[] {
-    return [...scanExtensionPackages(this.config.extensionsDir).packages];
+    // Phase 23.6: the installer sees exactly the packages the next boot would trust. Under
+    // `enforce`, an unsigned or altered package is absent from the list, so it cannot be installed.
+    const scan = scanExtensionPackages(this.config.extensionsDir, { trust: extensionTrustFromConfig(this.config) });
+    for (const error of scan.errors) log.error({ dir: error.dir, error: error.message }, 'extension package refused');
+    for (const warning of scan.warnings) log.warn({ dir: warning.dir, warning: warning.message }, 'extension package trust warning');
+    return [...scan.packages];
   }
 
   private async installedRows(): Promise<Map<string, InstalledRow>> {

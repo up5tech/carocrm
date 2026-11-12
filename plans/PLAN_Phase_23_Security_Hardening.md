@@ -156,8 +156,9 @@ This is the starting position, not a promise. Phase 23.0 must confirm or correct
 | — | No OAuth/OIDC/SSO; no SAML/SCIM (PLAN §17.3, `compatibility-matrix.md:19`) | Medium | 23.3 |
 | — | No multi-tenancy; §48 "Tenant isolation" unmet (`README.md:221`) | High (design) | 23.9 decision |
 | — | No repository `LICENSE`; formal clean-room/AGPL compliance review required before distribution (`README.md:568-572`) | High (release) | 23.9 decision |
-| — | Extension packages have no signature verification (`compatibility-matrix.md:219-220`) | Medium | 23.6 |
-| — | Attachment barrel still ships a permissive default for standalone use (`compatibility-matrix.md:245`) and API-user attachment policies are not built | Medium | 23.6 |
+| G98 | Extension packages have no signature verification (`compatibility-matrix.md:219-220`) | Medium | **Fixed 23.6** (Ed25519 whole-package signature; enforce in production) |
+| — | Attachment barrel still ships a permissive default for standalone use and API-user attachment policies are not built | Medium | **Fixed 23.6** (no default provider; API-key parent/scope policy) |
+| G97 | Dependency-vulnerability audit is manual, not in the mandatory gate | Low | Accepted 23.6 (network-dependent; release checklist) |
 
 ### 2.3 Contradictions that 23.0 must resolve before any fix
 
@@ -460,6 +461,29 @@ Close direct-object access and untrusted-package risks.
 - No attachment, recording, transcript, signed document, or export is downloadable without an ACL-checked parent.
 - An untrusted or altered extension package cannot register providers/hooks without the approved trust check.
 - The lockfile and CI runner conventions are unchanged apart from the reviewed audit step.
+
+### Status — delivered 2026-11-12
+
+1. **Attachment direct-object access.** `ATTACHMENT_PROVIDERS` no longer registers a parent-ACL checker;
+   a module without `PARENT_ACL_CHECK_TOKEN` fails at boot. `AppModule` keeps the real record-ACL
+   checker. API keys need `read`/`write` scope, may only upload to a record they can read, and always
+   read through the parent ACL (never the uploader shortcut). Tests: foreign-parent upload → 403,
+   API-key scope/orphan policy, traversal, metadata/download checksum.
+2. **File validation.** `SignatureScanner` now requires PDF/ZIP/legacy-Office container magic, closing
+   the "executable under `application/pdf`" path. Existing coverage for EICAR, PE/ELF/shebang, image
+   magic, NUL text, checksums, direct/chunked size limits, path keys and local/S3/MinIO storage remains
+   in `attachments-storage.test.ts`, `packages/files/**` and the e-signature suites.
+3. **Extension trust.** New `packages/extension-sdk/src/trust/` verifies an Ed25519 signature over a
+   canonical digest of every package file (path, size, sha256), against `EXTENSION_TRUSTED_KEYS`.
+   `EXTENSION_TRUST_MODE` is `enforce` in production (other values are rejected), `warn` in development,
+   `off` only for tooling. The API, worker and admin installer share the policy; verification happens
+   before manifest parsing or backend import. Symlinked packages are refused. Tests cover signed,
+   unsigned, altered, unknown-key, all three modes, PEM/base64 keys and production config.
+4. **Dependency integrity.** One `pnpm-lock.yaml` and `pnpm install --frozen-lockfile` are unchanged. A
+   mandatory audit was **not** added: `pnpm audit` requires the network, and task 4 permits adding it
+   only if it does not. G97 records the manual release check.
+5. **Named exception.** G98 records that the three sample packages in `modules/` are unsigned
+   development fixtures; production `enforce` refuses them until an operator signs them.
 
 ---
 

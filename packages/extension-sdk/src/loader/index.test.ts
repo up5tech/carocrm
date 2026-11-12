@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe('scanExtensionPackages', () => {
   it('returns nothing when the directory does not exist', () => {
-    expect(scanExtensionPackages(join(workspace(), 'absent'))).toEqual({ packages: [], errors: [] });
+    expect(scanExtensionPackages(join(workspace(), 'absent'))).toEqual({ packages: [], errors: [], warnings: [] });
   });
 
   it('ignores directories without a manifest and collects the rest in id order', () => {

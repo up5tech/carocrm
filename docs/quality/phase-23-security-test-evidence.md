@@ -1,9 +1,62 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-12
-> **Sub-phase:** 23.5 — Injection, SSRF, XSS and webhook authenticity (delivered)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §11
+> **Sub-phase:** 23.6 — Files, attachments and extension supply chain (delivered)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §12
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.6 — Files, attachments and extension supply chain (delivered 2026-11-12)
+
+### Scope delivered
+
+1. **Attachment direct-object access (task 1).** `ATTACHMENT_PROVIDERS` no longer registers
+   `PERMISSIVE_PARENT_ACL_CHECKER`; a standalone module without `PARENT_ACL_CHECK_TOKEN` now fails at
+   boot. `AppModule` supplies the record-ACL checker. Every read (`GET /Attachment/:id`,
+   `/:id/file`, `/:id/url`) resolves admin, then visibility, then parent ACL; the uploader shortcut is
+   kept for human sessions only. **API-user policy:** a key needs `read` for reads and `write` for
+   writes; it may only upload to a record it can read (no orphan uploads), and it always reads through
+   the parent ACL — never the uploader shortcut, so an orphan is unreadable to a key.
+2. **File validation (task 2).** `SignatureScanner` now requires the declared container's magic number
+   (`%PDF-` for PDF, `PK` for ZIP/OpenXML, the OLE header for legacy Office), in addition to EICAR,
+   PE/ELF/Java/Mach-O/shebang, image magic and NUL-in-text checks. The existing suites already cover
+   the sha256 checksum on upload/download, direct and chunked size ceilings, contiguous-part completion,
+   local disk and the S3/MinIO drivers, and pre-signed URL expiry. `sanitizeSegment`/`buildStorageKey`
+   strip path punctuation and leading dots, and the API test now uploads `../../escape.txt`.
+3. **Extension package trust (task 3).** New `packages/extension-sdk/src/trust/` implements Ed25519
+   signatures over a canonical digest of every package file. `EXTENSION_TRUSTED_KEYS` is a JSON map of
+   `keyId -> PEM/base64 SPKI`; `EXTENSION_TRUST_MODE` is `enforce` (production default; `warn`/`off` are
+   rejected there), `warn` (development default) or `off` (local tooling only). The API, worker and admin
+   installer share `apps/api/src/extensions/extension-trust.ts`; verification happens before manifest
+   parsing or backend import. A package containing a symlink is refused (the digest and importer would
+   otherwise escape the directory).
+4. **Dependency integrity (task 4).** The single `pnpm-lock.yaml` and `pnpm install --frozen-lockfile`
+   are unchanged. No mandatory audit step was added because `pnpm audit` needs the network and task 4
+   permits adding it only when it does not; **G97** records the manual release check.
+5. **Named exception (task 5).** The three sample packages in `modules/` stay unsigned development
+   fixtures; production `enforce` refuses them. **G98** records the exception and the signing path in
+   `docs/extension-sdk.md` §8.
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm exec vitest run packages/extension-sdk/src/trust/index.test.ts packages/extension-sdk/src/loader/index.test.ts packages/files/src/scanner/index.test.ts` | **27 passed** (signed/unsigned/altered/unknown-key, enforce/warn/off, denied registration, PEM+base64 keys; container magic) |
+| `pnpm exec vitest run apps/api/test/attachments.test.ts apps/api/test/attachments-storage.test.ts` | **31 passed** (foreign-parent 403, API-key scope/orphan policy, traversal, checksum, chunking, scanner) |
+| `pnpm exec vitest run apps/api/test/config-jwt-secret.test.ts apps/api/test/extensions.test.ts` | **22 passed** (production requires `enforce`; sample packages load under dev `warn`) |
+| `pnpm --filter @carocrm/extension-sdk build && pnpm --filter @carocrm/files build` | exit 0 |
+| `pnpm --filter @carocrm/api typecheck && pnpm --filter @carocrm/worker typecheck` | exit 0 |
+| `pnpm verify` | **exit 0** — lint 0, typecheck 0, `test` **280 files / 3 660 tests**, `test:web` 15 files / 86 tests |
+
+### Not run / limitations
+
+- The S3/MinIO checks are the existing driver/unit contract tests; no live bucket was contacted, so
+  server-side pre-signed URL behaviour is verified against the adapter contract, not a real endpoint.
+- No Playwright run; the attachment surface is API-only (the SPA has no file panel), and the extension
+  admin screen's browser spec is unchanged.
+- Sample extension packages are unsigned by design (G98); `enforce` is exercised with generated
+  keypairs in the SDK suite, not with the sample packages.
+- No new database or destructive operation was used; API tests boot against the configured primary
+  database and clean only the rows they create.
 
 ## Phase 23.5 — Injection, SSRF, XSS and webhook authenticity (delivered 2026-11-12)
 

@@ -33,6 +33,7 @@ import type { ExtensionHost as ExtensionHostType } from './extensions/extension-
 import { setExtensionHost } from './extensions/extension-host.js';
 import { createExtensionHostModule } from './extensions/extension-host.module.js';
 import { readInstalledExtensions } from './extensions/extension-store.js';
+import { extensionTrustFromConfig } from './extensions/extension-trust.js';
 import { OMNICHANNEL_WEBHOOK_PREFIX } from './omnichannel/omnichannel-module.js';
 
 /** Phase 23.5 (G33) — the marketing provider door and its documented alias. */
@@ -52,6 +53,7 @@ export async function loadExtensionHost(config: AppConfig): Promise<ExtensionHos
     platformVersion: config.platformVersion,
     enabledIds: state.enabled,
     disabledIds: state.disabled,
+    trust: extensionTrustFromConfig(config),
   });
 }
 

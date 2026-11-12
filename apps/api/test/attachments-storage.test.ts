@@ -5,7 +5,13 @@ import { EICAR_SIGNATURE } from '@carocrm/files';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { ATTACHMENT_CONTROLLERS, ATTACHMENT_PROVIDERS, FILE_STORAGE_TOKEN } from '../src/attachment/index.js';
+import type { ParentAclChecker } from '../src/attachment/index.js';
+import {
+  ATTACHMENT_CONTROLLERS,
+  ATTACHMENT_PROVIDERS,
+  FILE_STORAGE_TOKEN,
+  PARENT_ACL_CHECK_TOKEN,
+} from '../src/attachment/index.js';
 import { DatabaseService } from '../src/database/database.service.js';
 import type { ModuleTestContext } from './module-test-app.js';
 import { authHeader, bootModuleTestApp, buildMultipart } from './module-test-app.js';
@@ -93,7 +99,13 @@ beforeAll(async () => {
   // A small ceiling lets the suite send a genuinely oversized body; the limit comes from config, so
   // the assertions below read it back instead of hard-coding 2 MB.
   process.env.UPLOAD_MAX_MB = '2';
-  ctx = await bootModuleTestApp({ providers: ATTACHMENT_PROVIDERS, controllers: ATTACHMENT_CONTROLLERS });
+  // This suite writes only orphan attachments; the checker still has to exist because the barrel
+  // deliberately has no permissive default (Phase 23.6).
+  const parentAcl: ParentAclChecker = { canReadParent: () => false };
+  ctx = await bootModuleTestApp({
+    providers: [...ATTACHMENT_PROVIDERS, { provide: PARENT_ACL_CHECK_TOKEN, useValue: parentAcl }],
+    controllers: ATTACHMENT_CONTROLLERS,
+  });
   app = ctx.app;
 });
 

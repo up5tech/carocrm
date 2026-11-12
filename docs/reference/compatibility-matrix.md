@@ -216,8 +216,12 @@ keys, install directory layout, `metadata/` + `Migrations/` + `backend/` layout,
 - **Frontend contributions are data only** (navigation entries, plus everything metadata already
   drives). Shipping a React component from a package would need a build-time Vite plugin and is not
   supported in this phase.
-- **No signature verification**: packages are trusted code installed by an administrator. PLAN §71
-  recommends signature checks; they remain a documented gap, not a silent omission.
+- **Package signature verification (Phase 23.6)**: `extension.sig` carries an Ed25519 signature over a
+  canonical digest of every package file (path, size, sha256), verified by `packages/extension-sdk/src/trust/`
+  against `EXTENSION_TRUSTED_KEYS`. `EXTENSION_TRUST_MODE=enforce` refuses an unsigned or altered package
+  before metadata or backend code is read; `warn` loads it with a finding (development default); `off` is
+  refused in production and is only for local tooling. The sample packages in `modules/` are development
+  fixtures and remain unsigned, so production `enforce` refuses them until an operator signs them.
 
 ## Attachments and file storage (PLAN §25)
 
@@ -244,8 +248,10 @@ still needs a documentation pass.
   ours; upstream's allowlist is per-installation and was not verifiable here.
 - Downloads enforce admin / uploader / parent-ACL access; `AppModule` wires `PARENT_ACL_CHECK_TOKEN` to
   the record ACL (`AclApiService` + the record store), so an attachment is readable by an admin, its
-  uploader, or anyone who can read its parent record. The barrel still ships the permissive default for
-  standalone use.
+  uploader, or anyone who can read its parent record. The barrel has **no permissive default** since
+  Phase 23.6: an integrator must provide the token or the module fails to boot. API keys need the
+  matching key scope, may only upload to a record they can read, and always read through that record's
+  ACL (never the uploader shortcut); an orphan attachment is unreadable to a key.
 - No attachment UI yet: the SPA has no file field or panel, so uploads and downloads are API-only.
 
 ## Outbound email (PLAN §28)

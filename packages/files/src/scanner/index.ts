@@ -92,6 +92,14 @@ export class SignatureScanner implements MalwareScanner {
       return { clean: false, provider: this.name, reason: `declared as "${input.mimeType}" but the content is not an image` };
     }
 
+    // Phase 23.6 — a container type is not a licence to skip the magic number. Allowing arbitrary
+    // bytes under `application/pdf` let a Windows executable through under a benign label; the
+    // container families we accept have a fixed header, so require it.
+    const container = containerKind(declared);
+    if (container !== null && !container.test(head)) {
+      return { clean: false, provider: this.name, reason: `declared as "${input.mimeType}" but the content is not a ${container.label}` };
+    }
+
     return { clean: true, provider: this.name };
   }
 }
@@ -99,6 +107,34 @@ export class SignatureScanner implements MalwareScanner {
 /** Office/PDF containers legitimately carry binary payloads; only extensions decide here. */
 function allowsExecutablePayload(declared: string): boolean {
   return CONTAINER_MIME_PREFIXES.some((prefix) => declared.startsWith(prefix));
+}
+
+interface ContainerKind {
+  readonly label: string;
+  readonly test: (head: Buffer) => boolean;
+}
+
+function containerKind(declared: string): ContainerKind | null {
+  if (declared === 'application/pdf') {
+    return { label: 'PDF document', test: (head) => head.subarray(0, 5).toString('latin1') === '%PDF-' };
+  }
+  if (
+    declared === 'application/zip' ||
+    declared === 'application/x-zip-compressed' ||
+    declared.startsWith('application/vnd.openxmlformats')
+  ) {
+    return { label: 'ZIP container', test: (head) => head.length >= 4 && head[0] === 0x50 && head[1] === 0x4b };
+  }
+  if (declared === 'application/msword' || declared === 'application/vnd.ms-excel' || declared === 'application/vnd.ms-word') {
+    return {
+      label: 'legacy Office container',
+      test: (head) =>
+        head.length >= 8 &&
+        head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0 &&
+        head[4] === 0xa1 && head[5] === 0xb1 && head[6] === 0x1a && head[7] === 0xe1,
+    };
+  }
+  return null;
 }
 
 /** Runs every scanner in order; the first rejection wins and a broken scanner fails closed. */

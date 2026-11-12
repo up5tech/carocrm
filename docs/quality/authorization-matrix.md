@@ -244,7 +244,7 @@ Enforcement = the code point that decides. "Role-granted" means the decision fol
 | **Document** read | ✅ | 🔎 ACL + owner | 🔎 if shared/linked | ✅ | ✅ (esignature) |
 | sign/execute | ✅ | 🔎 ACL | ⛔ | ✅ | ✅ system principal |
 | **Report** read/run | ✅ | 🔎 owner/role | ⛔ | ✅ | ✅ as owner (§3) |
-| **Attachment** read/upload | ✅ | 🔎 parent ACL | 🔎 parent ACL | ✅ | ✅ |
+| **Attachment** read/upload | ✅ | 🔎 parent ACL | 🔎 parent ACL | 🔎 key scope + parent ACL; uploads must name a readable parent | ✅ |
 | **AI Agent Run** start/read | ✅ (audit) | 🔎 own only (§5) | ⛔ | ✅ | — |
 | tool execute | ✅ | 🔎 as initiator + allowlist + approval | ⛔ | ✅ | — |
 | **Webhook ingest** | — | — | — | — | ✅ verified signature (§6) |
@@ -345,7 +345,7 @@ gate; the SPA only renders the answer.
 | Field read / field write | 🔎 stripped / 403 | 🔎 stripped / 403 | ⛔ | ✅ | 🔎 key roles | 🔎 portal field rules | ⛔ 401 |
 | CSV export / report / dashboard | 🔎 same ACL predicate | 🔎 | ⛔ 404/403 | ✅ | 🔎 | — (portal dashboards are separate) | ⛔ 401 |
 | Global search / autocomplete / related selector | 🔎 filtered rows | 🔎 | ⛔ absent | ✅ | 🔎 | 🔎 linked records | ⛔ 401 |
-| Attachment / recording / transcript download | 🔎 parent ACL or uploader | 🔎 parent ACL | ⛔ 403, no bytes | ✅ | 🔎 | ⛔ internal visibility gate | ⛔ 401 |
+| Attachment / recording / transcript download | 🔎 parent ACL or uploader | 🔎 parent ACL | ⛔ 403, no bytes | ✅ | 🔎 key scope; parent ACL only (no uploader/orphan shortcut) | ⛔ internal visibility gate | ⛔ 401 |
 | Audit history of a record | 🔎 record ACL (G96) | 🔎 | ⛔ 403/404 | ✅ | 🔎 | — (no portal audit surface) | ⛔ 401 |
 | Worker door (scheduled sweep) | — | — | — | — | — | — | ✅ capability only — no user exists by design |
 | Provider webhook | — | — | — | — | — | — | ✅ verified signature before state change (§14.2) |

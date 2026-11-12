@@ -32,8 +32,23 @@ describe('config JWT secret production guard', () => {
   it('accepts an operator-supplied strong secret in production', () => {
     process.env.NODE_ENV = 'production';
     expect(() =>
-      ConfigSchemaRefined.parse({ jwtSecret: 'a-strong-prod-secret-0123456789', encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }),
+      ConfigSchemaRefined.parse({
+        jwtSecret: 'a-strong-prod-secret-0123456789',
+        encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        // Phase 23.6: production also requires enforced extension-package trust.
+        extensionTrustMode: 'enforce',
+      }),
     ).not.toThrow();
+  });
+
+  it('requires enforced extension trust in production', () => {
+    process.env.NODE_ENV = 'production';
+    const base = {
+      jwtSecret: 'a-strong-prod-secret-0123456789',
+      encryptionKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    };
+    expect(() => ConfigSchemaRefined.parse({ ...base, extensionTrustMode: 'warn' })).toThrow(/EXTENSION_TRUST_MODE/);
+    expect(() => ConfigSchemaRefined.parse({ ...base, extensionTrustMode: 'off' })).toThrow(/EXTENSION_TRUST_MODE/);
   });
 
   it('allows the development default secret outside production (dev/test)', () => {

@@ -72,6 +72,9 @@ const WorkerConfigSchema = z.object({
   runForMs: z.coerce.number().int().min(0).max(86400000).default(0),
   /** Directory holding extension packages (PLAN §38); must match the API's EXTENSIONS_DIR. */
   extensionsDir: z.string().default('extensions'),
+  /** Phase 23.6 — must match the API's `EXTENSION_TRUST_MODE` / `EXTENSION_TRUSTED_KEYS`. */
+  extensionTrustMode: z.enum(['off', 'warn', 'enforce']).default('warn'),
+  extensionTrustedKeys: z.string().default('{}'),
   /** Version extension manifests are checked against. */
   platformVersion: z.string().default('1.0.0'),
 });
@@ -116,6 +119,7 @@ function applyDotEnv(content: string): void {
 }
 
 export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
+  const production = (env.NODE_ENV ?? '').toLowerCase() === 'production';
   return WorkerConfigSchema.parse({
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
@@ -148,6 +152,8 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     encryptionKey: env.ENCRYPTION_KEY,
     runForMs: env.WORKER_RUN_MS,
     extensionsDir: env.EXTENSIONS_DIR,
+    extensionTrustMode: env.EXTENSION_TRUST_MODE ?? (production ? 'enforce' : 'warn'),
+    extensionTrustedKeys: env.EXTENSION_TRUSTED_KEYS,
     platformVersion: env.PLATFORM_VERSION,
   });
 }

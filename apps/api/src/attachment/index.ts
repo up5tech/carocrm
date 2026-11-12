@@ -5,8 +5,9 @@
  *   controllers: [...ATTACHMENT_CONTROLLERS]
  *   providers:   [...ATTACHMENT_PROVIDERS]
  *
- * Needs CONFIG_TOKEN, DatabaseService and REQUEST_SCOPE_TOKEN from the host module, plus
- * `@fastify/multipart` on the Fastify instance (bootstrap.ts registers both).
+ * Needs CONFIG_TOKEN, DatabaseService, REQUEST_SCOPE_TOKEN and PARENT_ACL_CHECK_TOKEN from the host
+ * module, plus `@fastify/multipart` on the Fastify instance (bootstrap.ts registers both). There is
+ * deliberately no permissive default checker: an unwired module fails at boot (Phase 23.6).
  *
  * `FILE_STORAGE_TOKEN` is built from `STORAGE_DRIVER` (local | s3 | minio) and
  * `MALWARE_SCANNER_TOKEN` from `MALWARE_SCAN_MODE`; an extension can replace either with its own
@@ -20,12 +21,7 @@ import type { Provider, Type } from '@nestjs/common';
 
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
-import {
-  FILE_STORAGE_TOKEN,
-  MALWARE_SCANNER_TOKEN,
-  PARENT_ACL_CHECK_TOKEN,
-  PERMISSIVE_PARENT_ACL_CHECKER,
-} from './attachment.constants.js';
+import { FILE_STORAGE_TOKEN, MALWARE_SCANNER_TOKEN } from './attachment.constants.js';
 import { AttachmentController } from './attachment.controller.js';
 import { AttachmentService } from './attachment.service.js';
 import { ChunkedUploadController } from './chunked-upload.controller.js';
@@ -40,7 +36,6 @@ export {
   isBlockedExtension,
   MALWARE_SCANNER_TOKEN,
   PARENT_ACL_CHECK_TOKEN,
-  PERMISSIVE_PARENT_ACL_CHECKER,
   UPLOAD_EXPIRY_HOURS,
 } from './attachment.constants.js';
 export { AttachmentController } from './attachment.controller.js';
@@ -83,7 +78,7 @@ export const ATTACHMENT_PROVIDERS: Provider[] = [
     inject: [CONFIG_TOKEN],
     useFactory: (config: AppConfig) => createMalwareScanner(config),
   },
-  { provide: PARENT_ACL_CHECK_TOKEN, useValue: PERMISSIVE_PARENT_ACL_CHECKER },
+  // `PARENT_ACL_CHECK_TOKEN` is intentionally absent: the integrator must wire a real checker.
   AttachmentService,
   ChunkedUploadService,
 ];

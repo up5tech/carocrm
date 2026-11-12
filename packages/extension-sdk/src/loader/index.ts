@@ -8,6 +8,8 @@ import { errorMessage,ExtensionError } from '../errors/index.js';
 import type { ExtensionManifest } from '../manifest/index.js';
 import { parseManifestJson } from '../manifest/index.js';
 import { mergeMetadataSources, readMetadataDocument } from '../metadata/index.js';
+import type { ExtensionTrustPolicy } from '../trust/index.js';
+import { verifyExtensionPackage } from '../trust/index.js';
 import type { ExtensionBackend, ExtensionDomainEventSubscription, ExtensionHookRegistration, ExtensionJobRegistration } from '../types/index.js';
 import { isRecord } from '../types/index.js';
 
@@ -38,8 +40,15 @@ export interface ExtensionPackage {
 
 export interface ScanResult {
   readonly packages: readonly ExtensionPackage[];
-  /** Directories that could not be read as a package; the scan continues without them. */
+  /** Directories that could not be read or were refused by the trust policy. */
   readonly errors: readonly { readonly dir: string; readonly message: string }[];
+  /** Non-fatal trust findings (`warn` mode); the package still loaded. */
+  readonly warnings: readonly { readonly dir: string; readonly message: string }[];
+}
+
+export interface ScanOptions {
+  /** Phase 23.6 package signature policy. Omitted means `off` for backwards-compatible tooling tests. */
+  readonly trust?: ExtensionTrustPolicy | undefined;
 }
 
 export interface LoadedExtensionPackage extends ExtensionPackage {
@@ -50,12 +59,13 @@ export interface LoadedExtensionPackage extends ExtensionPackage {
 const MANIFEST_FILE = 'manifest.json';
 
 /** Reads every extension directory below `directory`. A missing directory is simply empty. */
-export function scanExtensionPackages(directory: string): ScanResult {
+export function scanExtensionPackages(directory: string, options: ScanOptions = {}): ScanResult {
   const root = resolve(directory);
-  if (!existsSync(root)) return { packages: [], errors: [] };
+  if (!existsSync(root)) return { packages: [], errors: [], warnings: [] };
 
   const packages: ExtensionPackage[] = [];
   const errors: { dir: string; message: string }[] = [];
+  const warnings: { dir: string; message: string }[] = [];
 
   for (const entry of readdirSync(root).sort()) {
     const dir = join(root, entry);
@@ -64,8 +74,19 @@ export function scanExtensionPackages(directory: string): ScanResult {
     if (!existsSync(manifestPath)) continue;
 
     try {
-      const manifest = parseManifestJson(readFileSync(manifestPath, 'utf8'), { id: entry, dir });
       const packageDir = resolve(dir);
+      if (options.trust !== undefined) {
+        const decision = verifyExtensionPackage(packageDir, options.trust);
+        if (!decision.trusted) {
+          const message = `package "${entry}" is not trusted: ${decision.reason ?? 'signature verification failed'}`;
+          if (options.trust.mode === 'enforce') {
+            errors.push({ dir, message });
+            continue;
+          }
+          warnings.push({ dir, message });
+        }
+      }
+      const manifest = parseManifestJson(readFileSync(manifestPath, 'utf8'), { id: entry, dir });
       packages.push({
         id: manifest.id,
         dir: packageDir,
@@ -77,7 +98,7 @@ export function scanExtensionPackages(directory: string): ScanResult {
       errors.push({ dir, message: errorMessage(error) });
     }
   }
-  return { packages, errors };
+  return { packages, errors, warnings };
 }
 
 /** Reads and validates the metadata documents of a package. */

@@ -7,6 +7,7 @@ import { ExtensionHost } from '../host/index.js';
 import type { ExtensionPackage, LoadedExtensionPackage } from '../loader/index.js';
 import { loadExtensionPackage, readMetadataSource, scanExtensionPackages } from '../loader/index.js';
 import { resolveExtensions, toResolvable } from '../resolver/index.js';
+import type { ExtensionTrustPolicy } from '../trust/index.js';
 
 /**
  * Assembles the {@link ExtensionHost} for a process (PLAN §38.3).
@@ -37,12 +38,17 @@ export interface LoadExtensionsOptions {
   readonly disabledIds?: ReadonlySet<string> | undefined;
   /** Import backend modules. The API and the worker both want this; read-only tooling may not. */
   readonly loadBackends?: boolean | undefined;
+  /** Phase 23.6 package signature policy; omitted keeps the historical no-check behaviour. */
+  readonly trust?: ExtensionTrustPolicy | undefined;
 }
 
 export async function loadExtensions(options: LoadExtensionsOptions): Promise<ExtensionHost> {
-  const scan = scanExtensionPackages(options.directory);
+  const scan = scanExtensionPackages(options.directory, { trust: options.trust });
   for (const error of scan.errors) {
     log.error({ dir: error.dir, error: error.message }, 'extension package could not be read');
+  }
+  for (const warning of scan.warnings) {
+    log.warn({ dir: warning.dir, warning: warning.message }, 'extension package trust warning');
   }
 
   const disabledIds = options.disabledIds ?? new Set<string>();

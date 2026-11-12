@@ -39,6 +39,22 @@ describe('SignatureScanner', () => {
     expect((await scanner.scan(input({ head: pdf, mimeType: 'application/pdf' }))).clean).toBe(true);
   });
 
+  it('requires the container magic number for a declared container type', async () => {
+    const pe = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(64, 0)]);
+    const asPdf = await scanner.scan(input({ head: pe, name: 'invoice.pdf', mimeType: 'application/pdf' }));
+    expect(asPdf.clean).toBe(false);
+    expect(asPdf.reason).toContain('not a PDF');
+
+    const textAsPdf = await scanner.scan(input({ head: Buffer.from('just text'), mimeType: 'application/pdf' }));
+    expect(textAsPdf.clean).toBe(false);
+
+    const textAsDocx = await scanner.scan(input({
+      head: Buffer.from('not a zip'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }));
+    expect(textAsDocx.clean).toBe(false);
+  });
+
   it('flags text files with binary content and images that are not images', async () => {
     expect((await scanner.scan(input({ head: Buffer.from('abc\u0000def'), mimeType: 'text/csv' }))).reason).toContain('NUL');
     const notAnImage = Buffer.concat([Buffer.from('%PDF-1.7'), Buffer.alloc(16)]);

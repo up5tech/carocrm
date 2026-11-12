@@ -20,6 +20,7 @@ export type ExtensionErrorCode =
   | 'EXTENSION_METADATA_INVALID'
   | 'EXTENSION_MIGRATION_FAILED'
   | 'EXTENSION_PATH_ESCAPE'
+  | 'EXTENSION_SIGNATURE_INVALID'
   | 'EXTENSION_DISABLED';
 
 export class ExtensionError extends Error {

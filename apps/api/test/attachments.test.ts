@@ -4,8 +4,15 @@ import type { FileStorage } from '@carocrm/files';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { AttachmentDto } from '../src/attachment/index.js';
-import { ATTACHMENT_CONTROLLERS, ATTACHMENT_PROVIDERS, FILE_STORAGE_TOKEN } from '../src/attachment/index.js';
+import type { AttachmentDto, ParentAclChecker } from '../src/attachment/index.js';
+import {
+  ATTACHMENT_CONTROLLERS,
+  ATTACHMENT_PROVIDERS,
+  AttachmentService,
+  buildStorageKey,
+  FILE_STORAGE_TOKEN,
+  PARENT_ACL_CHECK_TOKEN,
+} from '../src/attachment/index.js';
 import type { ModuleTestContext } from './module-test-app.js';
 import { authHeader, bootModuleTestApp, buildMultipart } from './module-test-app.js';
 
@@ -16,7 +23,15 @@ const CONTENT = 'hello attachment world';
 const SHA256_OF_CONTENT = createHash('sha256').update(CONTENT).digest('hex');
 
 beforeAll(async () => {
-  ctx = await bootModuleTestApp({ providers: ATTACHMENT_PROVIDERS, controllers: ATTACHMENT_CONTROLLERS });
+  // Phase 23.6: the barrel no longer ships a permissive checker. This suite wires a narrow fixture
+  // that allows exactly the parent record its upload test names; everything else is denied.
+  const parentAcl: ParentAclChecker = {
+    canReadParent: (entityType, recordId) => entityType === 'Account' && recordId === 'parent-1',
+  };
+  ctx = await bootModuleTestApp({
+    providers: [...ATTACHMENT_PROVIDERS, { provide: PARENT_ACL_CHECK_TOKEN, useValue: parentAcl }],
+    controllers: ATTACHMENT_CONTROLLERS,
+  });
   app = ctx.app;
 });
 
@@ -134,6 +149,76 @@ describe('attachment read + download', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/Attachment/does-not-exist', headers: authHeader(ctx.adminToken) });
     expect(res.statusCode).toBe(404);
     expect((res.json() as { error: { code: string } }).error.code).toBe('RECORD_NOT_FOUND');
+  });
+});
+
+describe('attachment parent authorization and path handling (Phase 23.6)', () => {
+  it('refuses an upload whose parent the caller cannot read', async () => {
+    const res = await upload(ctx.adminToken, {
+      filename: 'foreign.txt',
+      contentType: 'text/plain',
+      data: 'foreign',
+      fields: { parentId: 'parent-not-readable', parentType: 'Account' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect((res.body as { error?: { code?: string } }).error?.code).toBe('AUTHORIZATION_DENIED');
+  });
+
+  it('neutralises traversal in the filename and keeps the storage key inside its scope', async () => {
+    const res = await upload(ctx.adminToken, {
+      filename: '../../escape.txt',
+      contentType: 'text/plain',
+      data: 'traversal',
+    });
+    expect(res.statusCode).toBe(201);
+    const dto = res.body as unknown as AttachmentDto;
+    expect(dto.name).toBe('escape.txt');
+    expect(dto.name).not.toContain('..');
+
+    expect(buildStorageKey('Account', 'id-1', '../../x.txt')).toBe('Account/id-1.txt');
+    expect(buildStorageKey(null, 'id-2', 'a/b/../c.txt')).toBe('attachment/id-2.txt');
+    expect(buildStorageKey('../../etc', 'id-3', 'x')).toBe('etc/id-3');
+  });
+
+  it('applies the API-user attachment policy: parent-bound writes and record-derived reads', async () => {
+    const service = app.get(AttachmentService);
+    const parentUpload = await upload(ctx.adminToken, {
+      filename: 'record.txt',
+      contentType: 'text/plain',
+      data: 'record',
+      fields: { parentId: 'parent-1', parentType: 'Account' },
+    });
+    expect(parentUpload.statusCode).toBe(201);
+    const parentAttachmentId = String(parentUpload.body['id']);
+
+    const orphan = await upload(ctx.adminToken, { filename: 'orphan.txt', contentType: 'text/plain', data: 'orphan' });
+    expect(orphan.statusCode).toBe(201);
+    const orphanId = String(orphan.body['id']);
+
+    const apiPrincipal = {
+      userId: 'api-key-user',
+      userName: 'api-key',
+      userType: 'api' as const,
+      roles: [],
+      teams: [],
+      keyId: 'key-1',
+      keyScopes: ['read'] as const,
+    };
+
+    await ctx.scope.runAs(apiPrincipal, async () => {
+      // A record-bound file is readable through the record ACL...
+      await expect(service.getById(parentAttachmentId)).resolves.toMatchObject({ id: parentAttachmentId });
+      // ...but an orphan has no record to consult, so the API policy refuses it.
+      await expect(service.getById(orphanId)).rejects.toMatchObject({ code: 'AUTHORIZATION_DENIED' });
+      // And an API key may not create an orphan in the first place.
+      await expect(
+        service.upload({ filename: 'api-orphan.txt', mimeType: 'text/plain', body: Buffer.from('x') }),
+      ).rejects.toMatchObject({ code: 'AUTHORIZATION_DENIED' });
+    });
+
+    await ctx.scope.runAs({ ...apiPrincipal, keyScopes: [] }, async () => {
+      await expect(service.getById(parentAttachmentId)).rejects.toMatchObject({ code: 'AUTHORIZATION_DENIED' });
+    });
   });
 });
 

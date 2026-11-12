@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { PLATFORM_VERSION } from '@carocrm/extension-sdk';
+import { parseTrustedKeys, PLATFORM_VERSION } from '@carocrm/extension-sdk';
 import { z } from 'zod';
 
 import { parseOidcProfiles } from './auth/oidc/oidc-profile.js';
@@ -120,6 +120,14 @@ const ConfigSchema = z.object({
    */
   extensionsDir: z.string().default('extensions'),
   /**
+   * Phase 23.6 — extension package signature policy. `enforce` refuses an unsigned or altered
+   * package before its metadata or backend is read; `warn` loads it with a warning (development);
+   * `off` disables verification and is refused in production. Production defaults to `enforce`.
+   */
+  extensionTrustMode: z.enum(['off', 'warn', 'enforce']).default('warn'),
+  /** JSON object of trusted `keyId -> Ed25519 public key` (PEM or base64 SPKI DER). */
+  extensionTrustedKeys: z.string().default('{}'),
+  /**
    * The OAuth **client ids** of the installed connectors, as a JSON object keyed by provider key,
    * e.g. `{"google-workspace":"1234.apps.googleusercontent.com"}`.
    *
@@ -192,6 +200,24 @@ export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
       message: 'ENCRYPTION_KEY must be set in production (openssl rand -hex 32); an empty key disables secrets-at-rest encryption.',
     });
   }
+  // Phase 23.6: production must verify extension packages; a deployment may still have no keys,
+  // in which case every package is refused (fail closed) rather than silently trusted.
+  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.extensionTrustMode !== 'enforce') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['extensionTrustMode'],
+      message: 'EXTENSION_TRUST_MODE must be "enforce" in production; unsigned extension packages are not accepted.',
+    });
+  }
+  try {
+    parseTrustedKeys(value.extensionTrustedKeys);
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['extensionTrustedKeys'],
+      message: error instanceof Error ? error.message : 'EXTENSION_TRUSTED_KEYS is not valid.',
+    });
+  }
   // Phase 23.3 (PLAN §17.3): a malformed OIDC profile refuses the boot. A profile that only fails
   // on the first sign-in would leave the deployment half-configured and the failure hard to read.
   try {
@@ -242,6 +268,7 @@ function loadDotEnv(): void {
 
 export function buildConfig(): AppConfig {
   loadDotEnv();
+  const production = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
   return ConfigSchemaRefined.parse({
     port: process.env.APP_PORT,
     host: process.env.APP_HOST,
@@ -283,6 +310,8 @@ export function buildConfig(): AppConfig {
     marketingWebhookSecret: process.env.MARKETING_WEBHOOK_SECRET,
     encryptionKey: process.env.ENCRYPTION_KEY,
     extensionsDir: process.env.EXTENSIONS_DIR,
+    extensionTrustMode: process.env.EXTENSION_TRUST_MODE ?? (production ? 'enforce' : 'warn'),
+    extensionTrustedKeys: process.env.EXTENSION_TRUSTED_KEYS,
     integrationOauthClientIds: process.env.INTEGRATION_OAUTH_CLIENT_IDS,
     oidcProfiles: process.env.OIDC_PROFILES,
     oidcStateTtlSeconds: process.env.OIDC_STATE_TTL_SECONDS,

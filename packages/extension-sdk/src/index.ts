@@ -6,4 +6,5 @@ export * from './manifest/index.js';
 export * from './metadata/index.js';
 export * from './resolver/index.js';
 export * from './semver/index.js';
+export * from './trust/index.js';
 export * from './types/index.js';

@@ -835,6 +835,8 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 | G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
 | G95 | The AI-agent trigger door reads only the **first 20** published agents, ordered by a random UUID, so a matching agent can be invisible | ai-agents | Medium | Open (found 23.3) |
 | G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
+| G97 | Dependency-vulnerability audit is manual; it is not in the mandatory CI gate | platform / supply chain | Low | Accepted (23.6; release checklist) |
+| G98 | The three sample extension packages in `modules/` are unsigned, so production `enforce` refuses them | extensions / supply chain | Low | Accepted (23.6; development fixtures) |
 
 ## G83 — Three worker doors cannot be called by the worker
 
@@ -1055,3 +1057,32 @@ does **not** re-run the failed work, so the route's contract overstates what it 
   finding is recorded here rather than fixed opportunistically.
 - **Remaining risk:** until it is fixed, an installation with more than 20 published agents has agents
   whose triggers silently never fire.
+
+## G97 — Dependency-vulnerability auditing is manual, not part of the mandatory gate
+
+- **Module / contract:** platform (supply chain) — `package.json`, `.github/workflows/quality-gate.yml`.
+- **Impact:** the repository keeps one `pnpm-lock.yaml` and installs with `--frozen-lockfile`, so a
+  dependency cannot change without a lockfile diff. It does **not** automatically learn that an already
+  pinned version has a published advisory. `pnpm audit` queries the registry, so making it a mandatory
+  step would add a network-dependent failure mode to a nightly gate that currently runs offline after
+  install (task 4 explicitly permits adding it only if it is not network-dependent).
+- **Severity:** Low — a lockfile diff is still reviewed, and Dependabot/registry advisories are the
+  operator's normal channel, but an advisory can sit unnoticed between reviews.
+- **Status:** Accepted (23.6). The owner runs `pnpm audit --prod` (and `pnpm audit --audit-level high`)
+  as part of the release checklist and records the result with the release; no second package manager
+  or vendored scanner is introduced. Revisit when the gate gains a network-capable, isolated audit job
+  (23.8).
+
+## G98 — The sample extension packages are unsigned, so production `enforce` refuses them
+
+- **Module / contract:** extensions — `modules/account-health-fields`, `modules/webhook-integration`,
+  `modules/project-domain`; `EXTENSION_TRUST_MODE=enforce`.
+- **Impact:** the three packages are development fixtures used by `apps/api/test/extensions.test.ts`
+  and the module guide. They have no `extension.sig`, so an installation that sets
+  `EXTENSIONS_DIR=modules` in production with the default `enforce` will list none of them. That is the
+  trust check working as designed, but it is a surprising first-run experience.
+- **Severity:** Low — it fails closed (no code loads); nothing is silently trusted.
+- **Status:** Accepted (23.6). Signing them in the repository would require committing a private key or
+  a release-key workflow; neither belongs in this phase. The module guide and
+  `docs/extension-sdk.md` §8 document the signing procedure, and `warn` is the development default so
+  the fixtures still load locally. Revisit when the sample packages become release artifacts (23.9).

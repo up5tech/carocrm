@@ -60,13 +60,13 @@ export function isAllowedMimeType(mimeType: string): boolean {
 }
 
 /**
- * Parent-record gate for uploads, downloads and metadata reads. The default provider always
- * allows; the integrator registers an ACL-aware checker (see AppModule).
+ * Parent-record gate for uploads, downloads and metadata reads.
+ *
+ * Phase 23.6 — there is deliberately **no permissive default**. The barrel's provider list no
+ * longer registers a checker, so an integrator that forgets to wire one gets a DI failure at boot
+ * instead of an attachment API that serves every parent record. `AppModule` provides the real
+ * checker (record ACL through `AclApiService`); a module test provides its own narrow fixture.
  */
 export interface ParentAclChecker {
   canReadParent(entityType: string, recordId: string, scope: RequestScope): Promise<boolean> | boolean;
 }
-
-export const PERMISSIVE_PARENT_ACL_CHECKER: ParentAclChecker = {
-  canReadParent: () => true,
-};

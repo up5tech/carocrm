@@ -140,6 +140,15 @@ export class AttachmentService {
     if (parentId !== null && parentType !== null && input.parentChecked !== true) {
       await this.assertParentReadable(parentType, parentId);
     }
+    // Phase 23.6 — API-user attachment policy: a key may only create a file attached to a record it
+    // can read. An orphan upload has no parent ACL, so its only access rule would be "the uploader" —
+    // a rule that follows the key, not the business record, and leaves bytes nobody can audit against
+    // a record. Human sessions keep the existing orphan behaviour for drafts and avatars.
+    if (principal.userType === 'api' && parentId === null) {
+      throw new AuthorizationDeniedError('API keys may only upload an attachment to a record they can read.', {
+        policy: 'API_USER_PARENT_REQUIRED',
+      });
+    }
 
     const id = generateId();
     const storageKey = buildStorageKey(parentType, id, safeName);
@@ -244,6 +253,7 @@ export class AttachmentService {
   async remove(id: string): Promise<AttachmentDto> {
     const row = await this.loadRow(id);
     const principal = this.scope.requirePrincipal();
+    this.assertApiKeyCapability('write');
     const isCreator = row.created_by_id !== null && row.created_by_id === principal.userId;
     if (!this.scope.isAdmin && !isCreator) {
       throw new AuthorizationDeniedError('Only the uploader or an administrator may delete this attachment.', { id });
@@ -293,10 +303,21 @@ export class AttachmentService {
   private async assertRowReadable(row: Selectable<AttachmentsTable>): Promise<void> {
     if (this.scope.isAdmin) return;
     const principal = this.scope.requirePrincipal();
+    this.assertApiKeyCapability('read');
     // §5.4/§10.3 — an internal attachment never crosses the portal boundary, even when the parent
     // case is readable: the visibility gate runs before the parent-ACL and author shortcuts.
     const visibility = toStreamVisibility(row.visibility, 'internal');
     if (!canViewStreamVisibility(visibility, principal)) {
+      throw new AuthorizationDeniedError('No access to this attachment.', { id: row.id });
+    }
+    // Phase 23.6 — an API key reads through the parent record's ACL, never through the uploader
+    // shortcut. A key is a machine credential: it can outlive the person and the record relationship
+    // that justified the upload, so re-resolving the record on every read is the only stable rule.
+    if (principal.userType === 'api') {
+      if (row.parent_type !== null && row.parent_id !== null) {
+        const allowed = await this.parentAcl.canReadParent(row.parent_type, row.parent_id, this.scope);
+        if (allowed) return;
+      }
       throw new AuthorizationDeniedError('No access to this attachment.', { id: row.id });
     }
     if (row.created_by_id !== null && row.created_by_id === principal.userId) return;
@@ -305,6 +326,19 @@ export class AttachmentService {
       if (allowed) return;
     }
     throw new AuthorizationDeniedError('No access to this attachment.', { id: row.id });
+  }
+
+  /** Phase 23.6 — service-level API-key scope check (the guard is the first line, not the only one). */
+  private assertApiKeyCapability(action: 'read' | 'write'): void {
+    const principal = this.scope.principal;
+    if (principal?.userType !== 'api' || principal.keyScopes === undefined) return;
+    const scopes = principal.keyScopes;
+    const allowed = action === 'write' ? scopes.includes('write') : scopes.includes('read') || scopes.includes('write');
+    if (!allowed) {
+      throw new AuthorizationDeniedError('This API key does not allow the requested attachment operation.', {
+        scopes: [...scopes],
+      });
+    }
   }
 
   private async loadRow(id: string): Promise<Selectable<AttachmentsTable>> {
@@ -328,7 +362,9 @@ export function buildStorageKey(parentType: string | null, id: string, filename:
 }
 
 function sanitizeSegment(value: string): string {
-  const cleaned = value.replace(/[^A-Za-z0-9_.-]/g, '');
+  // Phase 23.6: a segment never carries path punctuation, and leading dots are removed so a value
+  // such as `../../etc` cannot leave a `..`-looking key even before the separator check.
+  const cleaned = value.replace(/[^A-Za-z0-9_.-]/g, '').replace(/^\.+/, '');
   return cleaned === '' || cleaned === '.' || cleaned === '..' ? 'attachment' : cleaned;
 }
 

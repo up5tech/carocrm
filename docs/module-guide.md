@@ -212,7 +212,9 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
 - **Read path** enforces admin / uploader / parent-ACL on every read, not only on upload
   (`GET /Attachment/:id/file`, `GET /Attachment/:id`, `GET /Attachment/:id/url`). `AppModule` registers
   `PARENT_ACL_CHECK_TOKEN` against `AclApiService` + the record store, so anyone who can read the parent
-  record can read its attachments; the barrel's permissive default only applies to standalone use.
+  record can read its attachments. The barrel deliberately has **no permissive default** (Phase 23.6):
+  a module that forgets the token fails at boot instead of serving every parent. API keys additionally
+  need `read`/`write` scope, may only upload to a readable record, and read through the parent ACL.
 - **Chunked uploads** (`/api/v1/AttachmentUpload`): `init` reserves `{name, mimeType, totalSize,
   chunkSize?}` in `file_uploads`, `:id/part` takes `index` + `file` in any order, `:id/complete`
   replays the parts in index order through the *same* attachment path (so the checks are identical),
@@ -357,8 +359,14 @@ Full guide: [`docs/extension-sdk.md`](extension-sdk.md). What a module author ne
 - **Extension tables**: `installed_extensions` + `extension_migrations` (migration `010`), kept apart
   from `schema_migrations` so a package can neither claim nor re-run a kernel migration. Uninstall
   drops the activation row only; applied SQL is never rolled back.
+- **Package trust (Phase 23.6)**: `extension.sig` is an Ed25519 signature over a canonical digest of
+  every package file; the loader verifies it with `EXTENSION_TRUSTED_KEYS` before reading metadata or
+  importing the backend. `EXTENSION_TRUST_MODE` is `enforce` in production, `warn` in development, and
+  `off` only for local tooling. An unsigned or altered package is skipped (enforce) or loaded with a
+  warning (warn) — see `docs/extension-sdk.md` §8 for the signing format.
 - Sample packages live in `modules/` (field package, integration, custom domain module); point
-  `EXTENSIONS_DIR=modules` to try them, then `POST /api/v1/Extension/action/install`.
+  `EXTENSIONS_DIR=modules` to try them, then `POST /api/v1/Extension/action/install`. They are unsigned
+  development fixtures, so production `enforce` refuses them until they are signed.
 
 ## Workflow engine (PLAN §35 — Phase 15)
 

@@ -1,5 +1,5 @@
 import { log } from '@carocrm/core/logger/index.js';
-import { ExtensionError, ExtensionHost, loadExtensions } from '@carocrm/extension-sdk';
+import { ExtensionError, ExtensionHost, extensionTrustPolicy, loadExtensions } from '@carocrm/extension-sdk';
 
 import type { Queryable } from './db.js';
 import { isRecord } from './db.js';
@@ -18,6 +18,9 @@ import type { WorkerConfig } from './env.js';
  */
 
 export async function loadWorkerExtensions(config: WorkerConfig): Promise<ExtensionHost> {
+  // Build the policy before the empty-installation shortcut: malformed key configuration must fail
+  // the worker even when no package happens to be enabled (the API config does the same at boot).
+  const trust = extensionTrustPolicy(config.extensionTrustMode, config.extensionTrustedKeys);
   const state = await readInstalledIds(config);
   if (state.enabled.size === 0) return ExtensionHost.empty();
   return loadExtensions({
@@ -25,6 +28,9 @@ export async function loadWorkerExtensions(config: WorkerConfig): Promise<Extens
     platformVersion: config.platformVersion,
     enabledIds: state.enabled,
     disabledIds: state.disabled,
+    // Phase 23.6: the worker imports the same backend code as the API, so it applies the same
+    // package signature policy (and the same trusted-key set) before importing anything.
+    trust,
   });
 }
 

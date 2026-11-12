@@ -179,7 +179,7 @@ in this phase.
 
 ## 8. Security
 
-Extension packages are **trusted code** in a self-hosted installation (PLAN §38.4):
+Extension packages are **untrusted code until a trusted key signs them** (PLAN §38.4, Phase 23.6):
 
 - a package is loaded from a deployment-owned directory, so there is no upload endpoint and no
   runtime path an attacker can choose;
@@ -191,8 +191,66 @@ Extension packages are **trusted code** in a self-hosted installation (PLAN §38
 - secrets a package stores are its own responsibility; the sample integration encrypts its signing
   secrets with `ENCRYPTION_KEY` and refuses private-network webhook destinations (PLAN §48).
 
-There is no signature verification yet. For a multi-tenant or hosted deployment, add integrity
-checks to the loader before accepting packages from anyone but the platform operator.
+### Package signatures and trust modes
+
+`packages/extension-sdk/src/trust/` verifies an Ed25519 signature over a canonical digest of **every**
+regular file in the package, excluding `extension.sig` itself. The digest is, for files sorted by
+POSIX-relative path:
+
+```
+<path>\n<size>\n<sha256 hex>\n
+```
+
+The signature file sits at the package root:
+
+```json
+{ "keyId": "caro-release-2026", "algorithm": "ed25519", "signature": "<base64 64-byte signature>" }
+```
+
+Configuration (shared by the API and the worker):
+
+| Variable | Meaning |
+|---|---|
+| `EXTENSION_TRUSTED_KEYS` | JSON object `keyId -> public key` (PEM or base64 SPKI DER). Malformed JSON/key fails the boot. |
+| `EXTENSION_TRUST_MODE` | `enforce` (refuse untrusted), `warn` (load + log), `off` (no check). Production defaults to `enforce` and **rejects** the other values. |
+
+`enforce` is applied before the manifest is parsed or any backend module is imported, in both the API
+and the worker. The admin installer uses the same policy, so it cannot install a package the next boot
+would refuse. A package that contains a symbolic link is refused, because the digest and the backend
+importer would otherwise read outside the package.
+
+Signing a package (the private key never leaves the release host):
+
+```js
+import { createHash, sign } from 'node:crypto';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const dir = process.argv[2];
+const privateKey = readFileSync(process.argv[3], 'utf8');
+const keyId = process.argv[4];
+const files = [];
+(function walk(prefix = '') {
+  for (const entry of readdirSync(join(dir, prefix), { withFileTypes: true })) {
+    const path = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isSymbolicLink()) throw new Error(`symlink: ${path}`);
+    if (entry.isDirectory()) walk(path);
+    else if (entry.name !== 'extension.sig') files.push(path);
+  }
+})();
+const canonical = files.sort().map((path) => {
+  const bytes = readFileSync(join(dir, path));
+  return `${path}\n${bytes.length}\n${createHash('sha256').update(bytes).digest('hex')}\n`;
+}).join('');
+writeFileSync(join(dir, 'extension.sig'), JSON.stringify({
+  keyId, algorithm: 'ed25519',
+  signature: sign(null, Buffer.from(canonical, 'utf8'), privateKey).toString('base64'),
+}));
+```
+
+`warn` exists for development and for a staged migration; it is not a production posture. The sample
+packages in `modules/` are unsigned development fixtures, so a production `enforce` installation will
+refuse them until they are signed.
 
 ## 9. Tests
 
