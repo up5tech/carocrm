@@ -629,6 +629,27 @@ Re-run the Phase 22 release gate with the Phase 23 evidence and produce an hones
 - No extra database was created and no destructive setup was introduced.
 - The distribution compliance question has a recorded owner decision.
 
+### Status — review executed 2026-11-13: **NO-GO**
+
+`docs/quality/phase-23-security-release-review.md` records the decision and its evidence. `pnpm ci:gate` exits 0
+(88 files / 1 421 tests, worker 248, web 86, secrets clean over 2 487 tracked files) and the focused integration
+batch passes 18 files / 185 tests, but three gate rows fail:
+
+| Gate row | Result |
+|---|---|
+| No open Critical/High finding | **FAIL** — G81 (High, no installed encrypted off-host backup) stays Blocked |
+| Backup + restore evidence or owner acceptance | **FAIL** — G80/G81 Blocked by decision D4; no drill has run |
+| Distribution compliance owner decision | **FAIL** — no `LICENSE`, no owner outcome |
+| §48 controls tested or signed | **PASS with unsigned exceptions** — no High/Critical exception has owner acceptance |
+| Nightly DB-free gate green, no weakened test | **PASS** (nightly-only, G78 stays an exception) |
+| No extra database / destructive setup | **PASS** |
+| No committed secrets or unsafe artifacts | **PASS** |
+| Safe provider/config defaults | **PASS** |
+
+A conditional alpha/pilot GO is possible only under the review's §8 conditions (synthetic data or written G80/G81
+acceptance, deployment secrets set, no external distribution, local verification repeated). The decision flips to
+GO when G80/G81 have evidence, the licence question is answered and the High/Critical exceptions are owner-signed.
+
 ---
 
 ## 18. Security Test Matrix

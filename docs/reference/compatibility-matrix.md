@@ -1,8 +1,16 @@
 # Compatibility matrix (PLAN §60)
 
 Baseline: EspoCRM 9.3.x behavior, observed through public documentation — clean-room,
-no upstream source used (PLAN §2). Status is as of 2026-10-12 (CRM Kernel Alpha + PLAN tasks 17–22,
-search/import/export/dashboards, the extension SDK, the workflow engine and the BPM engine).
+no upstream source used (PLAN §2). Status is as of **2026-11-13** (CRM Kernel Alpha + PLAN tasks 17–22,
+search/import/export/dashboards, the extension SDK, the workflow engine, the BPM engine, and Phase 23 security
+hardening). Rows Phase 23 changed say so inline; the review that produced this date is
+`docs/quality/phase-23-security-release-review.md` (decision **NO-GO** for production — backup/restore and the
+licence question remain open).
+
+**Not in this matrix because they are not built:** SAML, SCIM and enterprise directory sync (deferred with a
+rationale in `docs/runbooks/advanced-integrations.md` §15); multi-tenancy (single-tenant by decision,
+`docs/security/tenancy-decision.md`); a DTO-derived OpenAPI contract (route inventory only, G1); a production
+deployment artifact (deployment-owned, `docs/security/deployment-baseline.md`).
 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|

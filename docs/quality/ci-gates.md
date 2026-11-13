@@ -28,16 +28,21 @@ no secrets, no deploy, no provider callback, no artifact upload, 45-minute timeo
 | Layer | In the scheduled gate? | Command | What it proves |
 |---|---|---|---|
 | 1 — fast | **Required** | `pnpm lint` (UI conventions + eslint), `pnpm lint:arch`, `pnpm typecheck`, `pnpm build` | Formatting/static rules, module boundaries, strict types in both projects, production build. |
-| 1 — unit | **Required** | `pnpm test:ci` | **88 files / 1 419 pure tests**: every `packages/*/src` suite plus **47** API contract/domain suites that import no boot helper, `DatabaseService` or pool. Phase 23.8 added the adversarial/SSRF and security-event suites. |
+| 1 — unit | **Required** | `pnpm test:ci` | **88 files / 1 421 pure tests**: every `packages/*/src` suite plus **47** API contract/domain suites that import no boot helper, `DatabaseService` or pool. Phase 23.8 added the adversarial/SSRF and security-event suites. |
 | 1 — worker | **Required** | `pnpm test:worker` | **248** worker tests against `FakeDb`, fake queues and fake providers (no Postgres/Redis). |
 | 2 — contract | **Required** (the pure subset) | included in `test:ci`, plus `pnpm ci:migrations` | Provider adapter conformance (`phase22-provider-contract`), job payload round-trips (`test:worker`), domain contracts, money/decimal rules, event-formatter pure tests. The migration check reads the SQL files only: unique/increasing numeric prefixes, no empty file, and no `DROP DATABASE`/`DROP SCHEMA`/`TRUNCATE`/unqualified `DELETE` without a reviewed `-- migration-safety: allow-destructive` marker. It never connects to a database. |
 | 3 — integration | **Sandbox-only** | `pnpm verify` against the configured DB, or a focused `vitest run` | Persistence, API, ACL, provider fakes with the real database. Never in CI: no DB service, no `DATABASE_URL` secret, no migration. |
 | 4 — browser | **Manual/approved** | `pnpm test:e2e`, Playwright specs | Critical UI journeys; browser cache and a booting app are prerequisites. Artifacts sanitized and failure-only. |
 | 5 — extended | **Manual/approved** | `scripts/perf-baseline.ts`, backup/restore rehearsal, sandbox provider checks | Performance baselines, recovery exercise, provider sandbox — see 22.20/22.23. |
-| Secret scan | **Required** | `pnpm ci:secrets` | 2 244 tracked files scanned for private keys, AWS/GitHub/Slack/Stripe/Google/OpenAI token shapes and a tracked `.env` file. Values are never printed. |
+| Secret scan | **Required** | `pnpm ci:secrets` | **2 487** tracked files scanned for private keys, AWS/GitHub/Slack/Stripe/Google/OpenAI token shapes and a tracked `.env` file. Values are never printed. |
 
 `pnpm ci:gate` is the exact sequence: `lint` → `lint:arch` → `typecheck` → `build` → `ci:migrations` →
 `test:ci` → `test:worker` → `test:web` → `ci:secrets`.
+
+**Phase 23.11 re-ran this exact sequence on 2026-11-13 from the committed tree: exit 0** — 88 files / 1 421 API
+and package tests, 24 files / 248 worker tests, 15 files / 86 web tests, migrations 94 clean, secret scan clean over
+2 487 tracked files. The release review (`docs/quality/phase-23-security-release-review.md`) is NO-GO for reasons
+unrelated to this gate: G80/G81 and the distribution decision.
 
 ### Why `test:ci` is a separate config
 

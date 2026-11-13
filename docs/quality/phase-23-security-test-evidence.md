@@ -1,9 +1,27 @@
 # Phase 23 Security Test Evidence
 
 > **Date:** 2026-11-13
-> **Latest sub-phase:** 23.10 — Security regression suite and OWASP mapping (delivered 2026-11-13)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §16
+> **Latest sub-phase:** 23.11 — Security release review and go/no-go (**NO-GO**, 2026-11-13)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §17
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.11 — Security release review (executed 2026-11-13, decision **NO-GO**)
+
+The decision, the gate table and the residual risks live in
+`docs/quality/phase-23-security-release-review.md`. This section records only the commands the review ran, so the
+evidence and the decision cannot drift apart.
+
+| Command | Result |
+|---|---|
+| `pnpm ci:gate` | **exit 0** — lint + UI conventions, `lint:arch`, typecheck (API + web), build, `ci:migrations` (94 files), `test:ci` **88 files / 1 421 tests**, `test:worker` **24 / 248**, `test:web` **15 / 86**, `ci:secrets` clean (2 487 tracked files) |
+| Focused integration batch: `phase23-1`, `phase23-2` (×3), `phase23-3` (×3), `phase23-4` (×2), `phase23-5`, `phase23-8`, `phase23-10`, `acl-matrix`, `auth`, `audit`, `error-payload-hygiene`, `attachments`, `rate-limit` | **18 files / 185 tests passed**, exit 0, against the configured primary database |
+| `no_proxy='*' NO_PROXY='*' npx playwright test e2e/security-session-storage.spec.ts` | **3 / 3 passed** (run recorded under 23.10) |
+| Artifact audit: `git status --short`, `git ls-files` scan for `.env`, `test-results`, dumps, `.data/` | clean; only `.env.example` is tracked |
+| Safe-default source review (`apps/api/src/config.ts`) | `MAIL_TRANSPORT=none`, `MALWARE_SCAN_MODE=signature`, `OIDC_PROFILES=[]`, `CORS_ORIGINS=''` (fails closed), `EXTENSION_TRUST_MODE` `enforce` in production, empty `ENCRYPTION_KEY` refused in production |
+
+**Not run by the review:** the restore drill, a backup installation, live provider checks, a production deployment
+review and the GitHub scheduled workflow. Each is either Blocked (G80/G81), credential-dependent, deployment-owned
+or requires a branch push; none is reported as a pass.
 
 ## Phase 23.10 — Security regression suite and OWASP mapping (delivered 2026-11-13)
 

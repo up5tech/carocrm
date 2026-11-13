@@ -218,10 +218,18 @@ a lint that fails a release on a dead link or a missing page), served at `/docs`
 [docs/reference/docs-authoring.md](docs/reference/docs-authoring.md).
 
 _Not built yet_ — real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
-provider until an IMAP/Graph adapter is installed), API-user attachment policies, multi-tenancy.
+provider until an IMAP/Graph adapter is installed); SAML, SCIM and enterprise directory sync
+(deferred with a written rationale — generic OIDC is built); multi-tenancy (one installation serves
+one customer by decision, see [docs/security/tenancy-decision.md](docs/security/tenancy-decision.md));
+a DTO-derived OpenAPI contract (the served document is a route inventory, G1).
 Several provider integrations are delivered but flagged experimental until exercised against a real
 account (the Twilio and Asterisk voice adapters, for one); each module's compatibility note states
 which parts that applies to.
+
+**Operational blockers (Phase 23 review, 2026-11-13).** The security workstream is complete, but its release
+review is **NO-GO for production**: no encrypted off-host backup is installed and no restore drill has run
+(G80/G81), no `LICENSE`/distribution decision is recorded, and the High/Critical exceptions await owner
+signatures. See [docs/quality/phase-23-security-release-review.md](docs/quality/phase-23-security-release-review.md).
 
 Marketing Automation ships all its phases, but **sending still requires operator configuration**: the
 live adapter wraps the platform's `MailTransport` and is named by the `marketingAutomation` →

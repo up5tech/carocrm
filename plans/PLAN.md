@@ -2867,8 +2867,9 @@ backup/restore blockers G80/G81 are closed or explicitly accepted.
 
 ## Phase 23 — Security Hardening
 
-Status: **In progress** — sub-phases **23.0–23.9 delivered or explicitly blocked, 23.10 delivered**, **23.11
-(release review) not started**. 23.0 (baseline audit) completed 2026-11-09; 23.1 (fail-closed configuration and
+Status: **Complete — release decision NO-GO (2026-11-13)**. Sub-phases 23.0–23.10 are delivered or explicitly
+blocked and **23.11 (release review) is executed**; the gate fails on G80/G81, the missing `LICENSE`/distribution
+decision and unsigned High/Critical exceptions — see `docs/quality/phase-23-security-release-review.md`. 23.0 (baseline audit) completed 2026-11-09; 23.1 (fail-closed configuration and
 cryptographic primitives) 2026-11-09; 23.2 (auth hardening: rate budget, lockout, password reset, enforceable MFA,
 sessions, API keys) 2026-11-10; 23.3 (external identity and OAuth correctness: generic OIDC as a **provider
 profile**, G47/G50/G51/G84 closed, SAML/SCIM deferred with a rationale) 2026-11-11; 23.4 (authorization across
@@ -2877,7 +2878,8 @@ marketing HMAC) 2026-11-12; 23.6 (attachment ACL, extension signatures) 2026-11-
 key rotation) 2026-11-12; 23.8 (security events, DB-free suites in the nightly gate) 2026-11-12; 23.9 (incident
 runbook, deployment baseline, tenancy and compliance decisions) 2026-11-12, with backup installation and the
 restore drill **Blocked** on G80/G81; 23.10 (security regression suite, OWASP map, exception-register reconciliation
-and the localStorage-token browser spec) 2026-11-13. Scope, work order, owner decisions and acceptance criteria live in
+and the localStorage-token browser spec) 2026-11-13; 23.11 (release review and go/no-go) 2026-11-13, decision
+**NO-GO for production**, conditional alpha/pilot only under the review's §8. Scope, work order, owner decisions and acceptance criteria live in
 `plans/PLAN_Phase_23_Security_Hardening.md`. The Phase 23.0 baseline, the §48 control matrix and the single
 exception list live in `docs/security/`.
 

@@ -1,5 +1,11 @@
 # Phase 22.24 — Release Readiness and Residual Risk Review
 
+> **Superseded for the release decision (2026-11-13).** Phase 23 re-ran the gate; its review
+> [`phase-23-security-release-review.md`](phase-23-security-release-review.md) is the current decision
+> (**NO-GO for production**, conditional alpha/pilot only under its §8). This document stays as the Phase 22 record:
+> its scope, method and evidence are unchanged, and its G69/G75/G79 flake notes remain the reason the DB-free gate
+> plus focused suites — not one `pnpm verify` run — is what the release decision rests on.
+
 > **Date:** 2026-10-29
 > **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §23
 > **Decision: NO-GO for a production release.** The verified scope is substantially hardened, but two

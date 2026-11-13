@@ -93,6 +93,27 @@
 | G80 | The restore drill is blocked: no approved isolated recovery environment, no approved RPO/RTO | platform (operations) | Medium | **Blocked (23.9, 2026-11-12)** — tooling ready, both approvals unnamed/outstanding; no drill run |
 | G81 | No automated, encrypted, off-host backup; the existing demo artifact is partial and world-readable | platform (operations/security) | High | **Blocked (23.9, 2026-11-12)** — tooling shipped, no installed backup/off-host copy/alert recipient |
 | G82 | The movement history exposed a limit with no way to page deeper | sales (inventory read) | Medium | Fixed (22.27) |
+| G83 | Three worker doors cannot be called by the worker — they lack `@Public()` | sales / marketing-automation | Medium | Fixed (23.4) |
+| G84 | The OAuth callback never compares a redirect URI | advanced-integrations | Medium | Fixed (23.3) |
+| G88 | Every module system principal carries `sysAdmin`, so record ACL is bypassed for worker and public-intake writes | platform | Medium | Mitigated (23.4) |
+| G89 | The worker's BPM/workflow handlers write CRM records through the worker's own DB access | worker | Medium | Open — exception G89 |
+| G90 | `GET /api/v1/OpenApi` is served without authentication | platform | Low | Open — exception G90 |
+| G91 | Readiness returns database reachability to an anonymous caller | platform | Low | Open — exception G91 |
+| G92 | The DB-free CI lane has no API authorization assertion | platform (CI) | Medium | Partial (23.8/23.10) — exception G92 |
+| G93 | The Phase 22.17 exception list drifted from this register | platform (docs) | Low | Fixed (23.0) |
+| G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
+| G95 | The AI-agent trigger door reads only the first 20 published agents, ordered by a random UUID | ai-agents | Medium | Open — exception G95 |
+| G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
+| G97 | Dependency-vulnerability audit is manual, not in the mandatory gate | platform | Low | Accepted (23.6) |
+| G98 | The three sample extension packages in `modules/` are unsigned | extensions | Low | Accepted (23.6) |
+
+**Phase 23.11 status note (2026-11-13).** The Phase 23 security workstream is finished and its release review is
+recorded in `docs/quality/phase-23-security-release-review.md` with a **NO-GO** decision. Two rows block a
+production release: **G81** (High — no installed, encrypted, off-host backup) and **G80** (no approved recovery
+environment or RPO/RTO), both **Blocked** by owner decision D4, plus the release-wide `LICENSE`/distribution
+blocker that this register tracks by decision, not by G-ID. Every other open row above is a live exception with a
+named owner and a review date in `docs/security/exception-register.md`; the exception register, not this table, is
+the authoritative list of what is accepted. No new finding was raised by 23.11.
 
 ---
 
