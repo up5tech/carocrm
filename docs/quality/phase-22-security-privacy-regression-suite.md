@@ -150,3 +150,10 @@ closed; G47, G48, G49, G64 and G65 remain live and are carried forward with a ne
 register additionally adds findings that this table never covered (G33, G50, G51, G52) and two Phase 23 release
 blockers (the missing `LICENSE`, the multi-tenancy decision).
 
+**Phase 23.10 re-check (2026-11-13).** Every row above was re-read against
+[`docs/security/exception-register.md`](../../docs/security/exception-register.md), which is now the only live list.
+Current state: **closed** — G37, G38, G39, G63, G47, G50, G51, G65, G33 (23.5), G84 and G86; **live with an owner and
+a review date** — G48, G49, G64 (SPA error text, 142 call sites), G77, G78, G80, G81, G89, G90, G91, G92, G95, G97, G98
+and the two release blockers (`LICENSE`/AGPL review, single-tenant by decision). No row was deleted from this document;
+the table above stays as the Phase 22.17 record. New findings continue in the register, never here.
+

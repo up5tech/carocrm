@@ -1,9 +1,113 @@
 # Phase 23 Security Test Evidence
 
-> **Date:** 2026-11-12
-> **Latest sub-phase:** 23.9 — Operational security, backup and recovery (partially delivered; **Blocked** on G80/G81)
-> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §15
+> **Date:** 2026-11-13
+> **Latest sub-phase:** 23.10 — Security regression suite and OWASP mapping (delivered 2026-11-13)
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §16
 > **Baseline:** `docs/security/phase-23-security-baseline.md`
+
+## Phase 23.10 — Security regression suite and OWASP mapping (delivered 2026-11-13)
+
+> **Date:** 2026-11-13
+> **Plan:** `plans/PLAN_Phase_23_Security_Hardening.md` §16
+> **Status:** all six tasks addressed; the OWASP map and the exception register are now the two
+> sources of truth for “which test proves which control”. No database was created, reset or truncated.
+
+### Scope delivered
+
+1. **Cross-surface regression suite (tasks 1–2).** New
+   `apps/api/test/phase23-10-security-regression.test.ts` (18 tests) fills the §18 cells that had no
+   single test of their own: an anonymous caller is refused with `AUTHENTICATION_REQUIRED` on **13**
+   P0 surfaces (list, detail, create, update, delete, mass update, audit history, global search,
+   entity search, CSV export, export columns, own sessions, attachment metadata), the refused write
+   leaves no record, the field-level ACL still strips a read-denied field through **global search**
+   and **entity search** (and a `where` filter on it is not an oracle), and **CSV export** answers to
+   the same decision — a read-denied column is blank and a value beginning with `=` is neutralised
+   in every exported cell. The file follows the existing `phase22-*` / `phase23-*` conventions and
+   boots the configured primary database, so it belongs to the sandbox layer, not the DB-free gate.
+2. **Browser security spec (task 3).** New `e2e/security-session-storage.spec.ts` pins the
+   **localStorage access-token residual** recorded in 23.7: exactly one JWT-shaped value exists in
+   script-readable storage, it is an `access` token with `exp - iat <= 3600`, the `CRM-REFRESH`
+   cookie is absent from `document.cookie` while `CRM-CSRF` is readable by design, a reload restores
+   the session from that token alone, and signing out clears the token and both session cookies. The
+   spec documents the residual instead of pretending it is gone: moving the token to memory must
+   change the spec deliberately.
+3. **OWASP / §48 / G-ID map (task 4).** The table below is the mapping required by §16 task 4; it
+   covers the P0 rows of the §18 matrix and every Phase 23 suite, not only the new one.
+4. **Exception register reconciled (task 5).** `docs/security/exception-register.md` now carries the
+   five findings Phase 23.4/23.8/23.9 left in `known-gaps.md` without a register row (G89, G90, G91,
+   G92, G95), each with owner, scope, mitigation and a review date. `docs/quality/phase-22-security-privacy-regression-suite.md`
+   §9 points at that register and records the current status of every Phase 22.17 row.
+5. **Status documents (task 6).** `plans/PLAN_Phase_23_Security_Hardening.md` §16 and
+   `plans/PLAN.md` §57 record 23.10; `docs/quality/ci-gates.md` records which layer the new suite and
+   the browser spec run in.
+
+### Test → OWASP ASVS / API Security Top 10 → §48 → G-ID
+
+`ASVS` refers to OWASP ASVS v4 chapter/requirement; `API` to the OWASP API Security Top 10 (2023).
+
+| Test | Control pinned | OWASP | PLAN §48 control | G-ID |
+|---|---|---|---|---|
+| `phase23-10-security-regression.test.ts` — anonymous surfaces | a missing principal fails closed before any handler runs, and the refusal echoes nothing | API2 / ASVS V2.1 | Every request carries a verified principal | — |
+| `phase23-10-security-regression.test.ts` — search field ACL | a read-denied field is stripped from global and entity search, and cannot be used as a value oracle | API3 / ASVS V4.1 | Field-level permissions consistent across list/detail/search/export | — |
+| `phase23-10-security-regression.test.ts` — CSV export | export requires `read`, blanks a denied column, and neutralises a formula in every cell | API3, API4 / ASVS V5.3, V12.3 | CSV import/export field ACL + formula neutralisation | — |
+| `phase23-1-security.test.ts` | CSRF entropy and constant-time compare, API-key `timingSafeEqual`, CORS fail-closed, refresh CSRF | API2, API8 / ASVS V3.1, V14.3 | CSRF protection, CORS allowlist, API-key hashing | G87, G94 |
+| `config-jwt-secret.test.ts` | dev JWT secret, empty encryption key, compose placeholder and dev database URL refused in production | API8 / ASVS V14.3 | Secrets fail closed; secure defaults | — |
+| `phase23-2-security.test.ts` | per-source auth budget, per-account lockout, no enumeration | API2, API4 / ASVS V2.2 | Login throttling and lockout | — |
+| `phase23-2-password-reset.test.ts` | single-use, expiring, rate-limited reset token; sessions revoked; no enumeration | API2 / ASVS V2.5 | Self-service password reset | — |
+| `phase23-2-sessions-apikeys.test.ts` | session list/revoke, refresh rotation + reuse detection, API-key rotate/scope/IP | API2 / ASVS V3.2, V3.3 | Session and API-key lifecycle | — |
+| `phase23-3-oidc-token.test.ts` | id_token signature (RS/PS/ES only), issuer, audience, expiry, nonce | API2 / ASVS V3.5 | OIDC token verification | G51, G52 |
+| `phase23-3-oidc-signin.test.ts` | single-use state, nonce, PKCE S256, exact redirect URI, explicit linking rule | API2 / ASVS V3.5 | OAuth/OIDC correctness | G50, G51, G84 |
+| `phase23-3-oauth-connector.test.ts` | token refresh before the call, one bounded retry, deterministic connection selection | API10 / ASVS V3.5 | Connector token lifecycle | G47, G50, G51 |
+| `phase23-4-denial-audit.test.ts` | every `AUTHORIZATION_DENIED` writes a redacted `denied` audit row | API5 / ASVS V7.1 | Audit logging incl. denials | F3 |
+| `phase23-4-idor.test.ts` | attachment metadata/file/URL and audit history denied independently of the parent | API1 / ASVS V4.2 | No record/field/file reachable without the parent ACL | G96 |
+| `acl-matrix.test.ts` | role × record-scope × field matrix, including bulk update/delete scoping | API1, API3, API5 / ASVS V4.1–V4.2 | Permission tests for every CRUD endpoint | — |
+| `phase23-5-ssrf.test.ts` | one address classifier, empty allowlist refuses every fetch, redirects pinned, IPv6/link-local/metadata | API7 / ASVS V5.2 | SSRF protection | G86 |
+| `ai-agent-adversarial.test.ts` | AI provider URL safety and prompt-injection boundary (DB-free) | API7, LLM01 / ASVS V5.2 | Untrusted URLs; AI tool boundary | — |
+| `marketing-automation-events.test.ts` | HMAC-SHA256 over `timestamp.rawBody`, mandatory timestamp, stale/malformed replay refused | API10 / ASVS V5.5 | Webhook signature + replay protection | G33 |
+| `attachments-storage.test.ts` | magic-number/MIME mismatch, size and chunked limits, checksums, path keys, local/S3/MinIO | ASVS V12.2, V12.3 | MIME/file validation | — |
+| `packages/extension-sdk/src/trust/index.test.ts` | Ed25519 whole-package signature, unknown/altered keys, three modes, production `enforce` | ASVS V10.3 / supply chain | Untrusted extension packages | G98 |
+| `jobs.test.ts` | job/schedule metadata deep redaction; retry/discard only terminal rows | ASVS V8.2 / API4 | Secrets never in job views; bounded retention | G21 |
+| `apps/worker/src/handlers/job-handlers.test.ts` | retention statements are terminal-only, age- and batch-bounded; no global delete | ASVS V8.3 | Retention for receipts/jobs/stream orphans | G12, G13, G14, G30 |
+| `phase23-8-security-events.test.ts` | event vocabulary, correlation id, counts only — never actors, addresses or payloads | ASVS V7.1 | Security observability | G77 |
+| `phase22-security-injection.test.ts` | entity/field/operator/sort allowlists; no arbitrary SQL from filters or templates | API8 / ASVS V5.3.1 | Query-engine allowlists | — |
+| `e2e/email-template.spec.ts` | GrapesJS template content cannot execute script | ASVS V5.3 | XSS in templates | — |
+| `e2e/security-session-storage.spec.ts` | one bounded access token in script-readable storage; HttpOnly refresh cookie; reload and sign-out clear it | API2 / ASVS V3.2, V3.4 | Secure cookies / session management | residual (23.7) |
+
+### Commands actually run
+
+| Command | Result |
+|---|---|
+| `pnpm exec vitest run apps/api/test/phase23-10-security-regression.test.ts` | **1 file / 18 tests passed** |
+| `pnpm exec eslint apps/api/test/phase23-10-security-regression.test.ts e2e/security-session-storage.spec.ts --max-warnings=0` | exit 0 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm ci:gate` | **exit 0** — lint, `lint:arch`, typecheck, build, `ci:migrations` (94 files), `test:ci` **88 files / 1 421 tests**, `test:worker` **24 / 248**, `test:web` **15 / 86**, `ci:secrets` clean (2 485 tracked files) |
+| `no_proxy='*' NO_PROXY='*' npx playwright test e2e/security-session-storage.spec.ts` | **3 tests passed** (token-storage contract, reload restore, sign-out clears) on the first successful run; the first attempt is recorded below |
+
+### Not run / limitations
+
+- **The residual is pinned, not removed.** The SPA still keeps the access token in `localStorage`
+  (`apps/web/src/api/client.ts`); the browser spec proves the exposure is bounded to one short-lived
+  `access` token and that the refresh token stays in an `HttpOnly` cookie. Eliminating the residual is
+  an SPA change, not a test change, and is not claimed here.
+- **G92 is unchanged in substance.** The new API suite boots the configured database, so it stays in
+  the sandbox layer; `vitest.ci.config.ts` is deliberately not extended with it. Authorization still
+  has no DB-free assertion in the nightly lane, which is why G92 remains an exception.
+- **The browser spec requires the Playwright stack** (API build, SPA dev server, Chromium). Its result
+  is recorded honestly in the command table; a skipped or environment-blocked run is not a pass.
+- **Harness defect found and fixed, not papered over.** The first run failed before any test: the
+  Playwright webServer started the API with `NODE_ENV=production` and no `DATABASE_URL`, so the Phase
+  23.9 production boot guard correctly refused the development fallback
+  (`DATABASE_URL must be set explicitly in production`). The guard is right; the harness was stale. The
+  webServer now boots with `NODE_ENV=test` against the configured database (the guard's own coverage stays
+  in `config-jwt-secret.test.ts`), with the reason in a comment in `playwright.config.ts`. No guard was
+  weakened and no connection string was hard-coded.
+- **First spec assertion corrected, not loosened.** The initial version asserted the storage dump did
+  not contain the admin password as a substring; the admin password is `admin`, which also appears in the
+  cached i18n catalog, so the assertion was meaningless. It now asserts no stored **value equals** the
+  password and no storage **key** names a password/secret/refresh token — the actual property under test.
+- **The DB-backed suite ran against the configured primary database.** It created two `AGENT_TEST_`
+  accounts and two roles, and removed the accounts by exact id in `afterAll`; the roles are reused by
+  name on the next run (`onConflict` update) and are not deleted. No table was cleared.
 
 ## Phase 23.9 — Operational security, backup and recovery (partially delivered; **Blocked** on G80/G81)
 

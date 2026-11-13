@@ -585,6 +585,22 @@ Turn every fixed control into a durable, mapped regression test.
 - Security tests cover entity/API/provider/file/async paths, not only login.
 - Every test's command, environment, result, and limitation appears in the evidence report.
 
+### Status — delivered 2026-11-13
+
+All six tasks are addressed. Evidence: `docs/quality/phase-23-security-test-evidence.md` §"Phase 23.10".
+
+| Task | Outcome |
+|---|---|
+| 1 — `phase23-10-*` suites | New `apps/api/test/phase23-10-security-regression.test.ts` (18 tests) in the existing suite hierarchy; no second runner and no parallel hierarchy. It boots the configured database, so it stays in the sandbox layer. |
+| 2 — §18 matrix coverage | P0 cells that had no single-owner test are pinned: an anonymous caller across 13 surfaces, field ACL through global/entity search, CSV export ACL and formula neutralisation. |
+| 3 — Browser spec | New `e2e/security-session-storage.spec.ts` pins the localStorage **residual** (one bounded `access` token, `HttpOnly` refresh cookie, reload restore, sign-out clears). The residual is bounded, not removed. |
+| 4 — OWASP map | The evidence report maps 25 test suites/cases to OWASP ASVS v4 / API Security Top 10 (2023), the §48 control and the G-ID. |
+| 5 — Register reconciliation | `docs/security/exception-register.md` gains G89, G90, G91, G92 and G95 with an owner, mitigation and review date; the Phase 22.17 §9 table points here and records every row's current status. |
+| 6 — Checks | The focused suite, ESLint, typecheck, the DB-free gate and the browser spec are recorded with actual results and limitations; no assertion was weakened and no database was created. |
+
+**Residual risk:** G92 (authorization has no DB-free assertion in the nightly lane) and the localStorage access
+token stay explicit exceptions; the browser spec makes the second one observable instead of leaving it as prose.
+
 ---
 
 ## 17. Phase 23.11 — Security Release Review and Go/No-Go

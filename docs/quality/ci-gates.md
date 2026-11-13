@@ -155,3 +155,16 @@ throwaway branch was pushed), so the workflow-trigger half of task 5 remains dep
 | The full local gate (configured DB, AGENTS.md §3) | `pnpm verify` |
 | Focused pure tests | `pnpm test:ci <path>` |
 | Worker only | `pnpm test:worker` |
+| Browser security spec (23.10) | `no_proxy='*' NO_PROXY='*' npx playwright test e2e/security-session-storage.spec.ts` |
+
+## 11. Phase 23.10 additions and the layer they belong to
+
+- `apps/api/test/phase23-10-security-regression.test.ts` boots the API and the configured database, so it is a
+  **sandbox-layer** suite (like `acl-matrix.test.ts`). It is deliberately **not** in `vitest.ci.config.ts`: the
+  nightly lane has no database service, and adding it would either provision one or silently skip the assertions.
+  G92 therefore remains an exception.
+- `e2e/security-session-storage.spec.ts` is a **Playwright** spec. It runs only where the browser stack is
+  available (`npx playwright test` with the `no_proxy` workaround above); it is not part of `pnpm ci:gate` and its
+  absence in CI is not a passing check.
+- The DB-free gate is unchanged by 23.10: `pnpm test:ci` still runs the explicit `PURE_API_TESTS` include list, and
+  no new security suite was added to it because none of the new assertions is DB-free.
