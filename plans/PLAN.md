@@ -2905,11 +2905,13 @@ demonstrated security regression; and the final review records an honest go/no-g
 # 58. API Endpoint Inventory Plan
 
 Status (2026-11-13): **started** — `api-spec/README.md` defines the format, `authentication.yaml` (20 routes incl.
-OIDC), `metadata.yaml` (4 routes) and `users.yaml` (26 User/Role/Team/ApiUser/ApiKey routes, administrator-only except
-the assignee picker) are documented, and `scripts/check-api-spec.mjs` (`pnpm ci:api-spec`, part of `pnpm ci:gate`)
-statically proves every documented `method + path` exists in a controller and fails on a phantom or duplicate entry.
-Coverage: **50 of 915 `/api` routes**; `--strict` is the completion gate and is not enabled yet. The remaining groups
-are listed in `api-spec/README.md` §4.
+OIDC), `metadata.yaml` (4 routes), `users.yaml` (26 User/Role/Team/ApiUser/ApiKey routes, administrator-only except
+the assignee picker) and `entities.yaml` (13 generic `:entity` route shapes: CRUD, relations, restore, mass actions and
+row actions, each with its ACL level, record-scope rule and query grammar) are documented, and
+`scripts/check-api-spec.mjs` (`pnpm ci:api-spec`, part of `pnpm ci:gate`) statically proves every documented
+`method + path` exists in a controller and fails on a phantom or duplicate entry. Coverage: **63 of 915 `/api`
+routes**; `--strict` is the completion gate and is not enabled yet. The remaining groups are listed in
+`api-spec/README.md` §4.
 
 Create a machine-readable endpoint registry:
 

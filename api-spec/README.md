@@ -2,7 +2,7 @@
 
 > **Started:** 2026-11-13
 > **Plan:** `plans/PLAN.md` §58 — “Create a machine-readable endpoint registry.”
-> **Status:** in progress. Three groups are documented (`authentication`, `metadata`, `users`); the remaining
+> **Status:** in progress. Four groups are documented (`authentication`, `metadata`, `users`, `entities`); the remaining
 > groups are listed in §4 and are added one file at a time. `pnpm ci:api-spec` already fails on a
 > phantom or malformed entry, so every documented endpoint is guaranteed to exist in the source.
 
@@ -100,7 +100,7 @@ known-missing documentation would be turned off.
 | OIDC sign-in (`/Oidc/*`) | `authentication.yaml` | documented (2026-11-13) |
 | Metadata | `metadata.yaml` | documented (2026-11-13) |
 | Users, roles, teams, API users and API keys | `users.yaml` | documented (2026-11-13) — 26 routes; every route except `GET /User/assignable` is administrator-only |
-| Generic entity CRUD, relations, mass actions | `entities.yaml` | not started |
+| Generic entity CRUD, relations, mass actions | `entities.yaml` | documented (2026-11-13) — 13 route shapes under the `:entity` wildcard, with ACL level and record-predicate rules |
 | Relationships | `relationships.yaml` | not started |
 | Attachments and chunked upload | `attachments.yaml` | not started |
 | Activities, calendar, stream | `activities.yaml`, `stream.yaml` | not started |
@@ -113,7 +113,8 @@ known-missing documentation would be turned off.
 | Phase 19 modules (AI agents, chat, sales, service desk, …) | one file per module | not started |
 
 `pnpm ci:api-spec` prints the current counts (documented, matched, missing, undocumented) on every run, so
-the coverage row above can be checked instead of trusted.
+the coverage row above can be checked instead of trusted. At the time of writing it reports 4 files,
+63 documented endpoints, 63 matched and 0 problems, against 915 `/api` routes in the controllers.
 
 ## 5. Adding a group
 

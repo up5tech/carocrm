@@ -1,0 +1,165 @@
+# PLAN §58 — generic record API. One entry per route shape; `:entity` is a metadata entity name
+# (Account, Contact, Lead, …). Source: apps/api/src/entity/entity.controller.ts and entity.service.ts.
+#
+# Permissions come from `AclApiService.assertAccess(entity, action)` plus a record predicate:
+# a record outside the caller's scope answers 404, not 403, so list and by-id reads agree.
+# The wildcard controller is registered after every static /api/v1/<Name> controller.
+group: entities
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/:entity
+    auth: authenticated
+    permissions: "read on the entity, AND a record-scope predicate applied in SQL (own/team/portal/project)"
+    request: "query: where? (JSON), select? (comma-separated field list), orderBy? (or order?), offset?, maxSize? (or limit?), total?"
+    response: "200 { list: Record[], offset, count, total? } — total is omitted when total=false"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "offset default 0; maxSize default 20, clamped to 500; ?total=false skips the count(*)"
+    sorting: "orderBy=field,asc|desc,field2 — a bare direction binds to the previous field; unknown fields are refused"
+    filtering: "where is JSON (EspoCRM-like): {field,value,attributeData:{operator}} or {field:{operator:value}} or {and|or:[...]}; operators equals, notEquals, greaterThan, greaterThanOrEqual, lessThan, lessThanOrEqual, like/contains, isNull, isNotNull, in, notIn, between, equalsExact; fields and operators are validated against metadata"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/:entity
+    auth: authenticated
+    permissions: "create on the entity; the record scope is written from the caller's read level"
+    request: "body: Record<string, unknown> — fields not in metadata, immutable fields (entityType, createdById, modifiedById, deletedAt, deleted) and non-writable fields are dropped; computed fields run after the supplied values"
+    response: "201 Record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_records row, name/assigned owner defaults, entity_links rows for link fields, formula/automation side effects, version=1]
+    idempotency: none; each call creates a record
+  - method: GET
+    path: /api/v1/:entity/:id
+    auth: authenticated
+    permissions: "read on the entity, AND the loaded record must match the read predicate"
+    request: "query: select? (comma-separated field list)"
+    response: "200 Record — link fields carry resolved labels"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PUT
+    path: /api/v1/:entity/:id
+    auth: authenticated
+    permissions: "edit on the entity, AND the record must match the edit predicate"
+    request: "body: partial Record; optional version (optimistic concurrency); omitted fields stay unchanged"
+    response: "200 Record with the incremented version"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_records row and version+1, link/attachment rows for changed link fields, formula/automation side effects, audit row]
+    idempotency: "idempotent for the same body unless version is supplied; a stale version answers 409"
+  - method: PATCH
+    path: /api/v1/:entity/:id
+    auth: authenticated
+    permissions: "edit on the entity, AND the record must match the edit predicate"
+    request: "same as PUT — PATCH is an alias on this controller, partial semantics in both"
+    response: "200 Record with the incremented version"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PUT]
+    idempotency: same as PUT
+  - method: DELETE
+    path: /api/v1/:entity/:id
+    auth: authenticated
+    permissions: "delete on the entity, AND the record must match the delete predicate"
+    request: none
+    response: "200 { status: true } — not 204, and not the deleted record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_records row soft-deleted (deletedAt/deleted set), audit row; an entity whose metadata sets record.removable=false answers 422 and nothing changes]
+    idempotency: a second delete answers 404 because the row is no longer visible
+  - method: POST
+    path: /api/v1/:entity/:id/restore
+    auth: authenticated
+    permissions: "delete on the entity, AND the deleted record must match the delete predicate"
+    request: none
+    response: "200 Record — the restored record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [deletedAt/deleted cleared on entity_records, audit row; relations and links were never removed, so they reappear]
+    idempotency: restoring a live record answers 404
+  - method: GET
+    path: /api/v1/:entity/:id/:relation
+    auth: authenticated
+    permissions: "read on the parent entity AND read on the relation target entity; the parent record must match its read predicate"
+    request: "query: where?, select?, orderBy?, offset?, maxSize?, total? — same grammar as the entity list"
+    response: "200 { list: Record[], offset, count, total? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: "offset default 0; maxSize default 20, clamped to 500"
+    sorting: "orderBy as on the entity list"
+    filtering: "where as on the entity list, applied to the relation, not to the parent"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PUT
+    path: /api/v1/:entity/:id/:relation/:relatedId
+    auth: authenticated
+    permissions: "edit on the parent entity AND edit on the relation target entity; both records are loaded, the parent through the edit predicate"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_links row (unique per pair), the relation's link attribute updated to match, audit row; an unknown relation or a non-link relation answers 422]
+    idempotency: linking an already-linked pair leaves one row and answers success
+  - method: DELETE
+    path: /api/v1/:entity/:id/:relation/:relatedId
+    auth: authenticated
+    permissions: "edit on the parent entity AND edit on the relation target entity"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_links row removed, the relation's link attribute cleared, audit row; records themselves are untouched]
+    idempotency: unlinking an absent pair answers success
+  - method: POST
+    path: /api/v1/:entity/action/massUpdate
+    auth: authenticated
+    permissions: "edit on the entity; field-level write permissions are checked once for the shared payload, then every record goes through the normal update path"
+    request: "body { ids: string[] (or selection), data: object } — at most 200 ids"
+    response: "200 { count, ids } — only the ids actually updated; ids the caller cannot see are skipped"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_records rows and versions+1 per updated record, formula/automation side effects, audit rows; a failure past field ACL aborts the rest of the batch]
+    idempotency: "repeating with the same payload is a no-op for the same records, but version still increments; an empty or non-array ids answers 422, more than 200 ids answers 422 and changes nothing"
+  - method: POST
+    path: /api/v1/:entity/action/massDelete
+    auth: authenticated
+    permissions: "delete on the entity; each record must also match the delete predicate"
+    request: "body { ids: string[] (or selection) } — at most 200 ids"
+    response: "200 { count, ids } — only the ids actually deleted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [entity_records rows soft-deleted, audit rows; a record whose entity sets removable=false aborts with 422 after the earlier ones were deleted]
+    idempotency: "repeating skips the already-deleted ids and reports a smaller count; the 200-id cap is enforced before anything is deleted"
+  - method: POST
+    path: /api/v1/:entity/action/rowActions
+    auth: authenticated
+    permissions: "no record access; the answer is computed from the caller's edit/delete/stream levels on the entity"
+    request: none
+    response: "200 { open, edit, assign, follow, delete } — booleans for the row menu"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
