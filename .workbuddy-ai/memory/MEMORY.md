@@ -3,6 +3,21 @@
 Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
 `docs/modules/<module>/` and `docs/implementation/` — do not duplicate it here.
 
+## Product positioning (owner decision, 2026-11-13)
+
+- **CaroCRM is single-tenant by design**: one deployment = one customer organisation. No tenant id,
+  tenant-aware queries, per-tenant schema, workspace isolation, cross-tenant tests, SCIM for multiple
+  orgs, or hosted multi-tenant SaaS. Isolation between customers is deployment-owned — see the five
+  conditions in `docs/security/tenancy-decision.md` §2. Do not propose a "tenant isolation phase"
+  unless the owner explicitly reverses this.
+- `tenant_ref` (migration 056) / `tenantRef` in `advanced-integrations` are **provider-account labels**,
+  not tenant isolation fields. Dead tenant surface: `packages/core/src/context/index.ts`,
+  `packages/acl/src/types/index.ts`, `packages/core/src/logger/index.ts`.
+- Standing owner decisions: CI stays **nightly-only** (G78, decision D3 reaffirmed 2026-11-09);
+  SAML/SCIM deferred; generic OIDC shipped in Phase 23.3. Do not reopen these to make a plan look complete.
+- Differentiator vs Twenty CRM = breadth of built-in business modules, not platform DX. REST +
+  `api-spec/` is the single API paradigm; no GraphQL.
+
 ## Naming
 
 - Phase-19 modules use **plain** ids (`sales`, `projects`, `customer-success`,

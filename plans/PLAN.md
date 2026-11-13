@@ -2902,6 +2902,29 @@ demonstrated security regression; and the final review records an honest go/no-g
 
 ---
 
+## Phase 24 — Single-Tenant Product Completion (P0 / P1 / P2)
+
+Status: **Planned** (2026-11-13). Scope, priority definitions, owner decisions and acceptance criteria
+live in `plans/PLAN_Phase_24_Product_Completion.md`. This phase sequences the P0/P1/P2 recommendations
+from the system review: **P0** ratifies the single-tenant boundary, closes the Phase 23 NO-GO blockers
+(G80/G81 and the distribution/licence decision), ships a production installation/upgrade path,
+completes the `api-spec/` registry to `--strict` with a typed client, and makes release documentation
+truthful; **P1** adds real inbound mail, a bounded installation-wide email/calendar sync decision,
+outbound events/webhooks and provider sandbox evidence; **P2** completes UX (optimistic writes,
+charts, rich text, locales) and closes residual gaps with single-tenant JSONB/EAV scale baselines.
+
+**Product decision (owner, 2026-11-13): CaroCRM is single-tenant by design — one deployment serves one
+customer organisation.** Phase 24 contains no tenant-isolation work; the trigger list in
+`docs/security/tenancy-decision.md` §4 becomes a change-control guard, not a roadmap item.
+
+Acceptance:
+
+The Phase 23 NO-GO blockers are closed or owner-accepted; no tracked document promises tenant-ready
+APIs; `pnpm ci:api-spec --strict` passes; a production installation can be installed, upgraded and
+recovered from documented artifacts; and the final review records an honest go/no-go with residual risks.
+
+---
+
 # 58. API Endpoint Inventory Plan
 
 Status (2026-11-13): **started** — `api-spec/README.md` defines the format, `authentication.yaml` (20 routes incl.
