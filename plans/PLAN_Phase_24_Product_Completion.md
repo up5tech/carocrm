@@ -52,8 +52,8 @@ Reuse the Phase 22/23 vocabulary: `Implemented and verified` · `Implemented, in
 |---|---|---|
 | D1 | Ratify **single-tenant as the permanent product boundary** for this release line, superseding the "deferred to a separate phase" wording in `docs/security/tenancy-decision.md` | Ratified as stated by the owner on 2026-11-13; record it, do not re-ask |
 | D2 | Are the still-open P0 release blockers (G80/G81 backup + restore, `LICENSE`/distribution, unsigned High exceptions) accepted for an alpha/pilot, or must they close before any release? | Must close before a production GO; alpha/pilot follows `docs/quality/phase-23-security-release-review.md` §8 |
-| D3 | G1 disposition: accept the route-inventory deviation and make `api-spec/` canonical, or fund Zod→OpenAPI schema generation for ~772 routes? | Accept the deviation; complete `api-spec/` to `--strict`; keep the generated document as a route inventory |
-| D4 | Approved recovery environment, RPO and RTO for the restore drill | 24.2 is **Blocked**; never create a routine test database as a workaround |
+| D3 | G1 disposition: accept the route-inventory deviation and make `api-spec/` canonical, or fund Zod→OpenAPI schema generation for ~772 routes? | Accept the deviation; complete `api-spec/` to `--strict`; keep the generated document as a route inventory. Machine-readable payload schemas for the bounded generated-client surface in 24.4 remain mandatory; full DTO-derived OpenAPI is not required |
+| D4 | Explicit, task-specific approval to restore into an existing isolated recovery target, with target identity, permitted writes, RPO and RTO | The restore-drill task in 24.2 is **Blocked**; never create a target or use the primary as a workaround. Independent P0 work may continue under §5.1 |
 | D5 | Scope of email/calendar sync for a single-tenant installation (24.7), and which provider sandbox accounts exist | Inbound IMAP + Microsoft Graph only; Google Calendar push and SES/SendGrid stay out of scope |
 | D6 | Should a metadata `plan/apply` CLI be built in 24.8, or is the extension SDK + registry enough? | **No new CLI this phase**; extend the existing extension SDK and `api-spec` tooling instead |
 | D7 | Does the nightly-only CI decision (G78) change? | **No** — stands as recorded; only add DB-free coverage to the existing nightly lane |
@@ -78,12 +78,12 @@ Phase 23 made the security controls verifiable. Phase 24 turns the remaining pro
 
 **Explicitly out of scope, permanently for this release line:** tenant ids, tenant-aware queries, per-tenant schemas, workspace/tenant administration, per-tenant rate limits or billing, SCIM for multiple organisations, cross-tenant negative tests, hosted multi-tenant SaaS, and a "tenant isolation phase". The trigger list in `docs/security/tenancy-decision.md` §4 becomes a change-control guard, not a roadmap item.
 
-**Consequences for Phase 24 features:** inbound mail and calendar sync are **installation-wide** configuration, not per-workspace; API keys, OIDC profiles and outbound webhooks belong to the installation; exports, reports, dashboards, search and AI context never span customers; upgrade, backup and restore are per-installation procedures.
+**Consequences for Phase 24 features:** inbound mail and calendar sync are administered at **installation level**, not per-workspace. One organisation may have multiple personal/shared mailboxes, calendars and OAuth connections, each with explicit ownership, credential scope and ACL; single-tenant does not imply one mailbox or shared visibility. API keys, OIDC profiles and outbound webhooks belong to the installation; exports, reports, dashboards, search and AI context never span customers; upgrade, backup and restore are per-installation procedures.
 
 ### 1.2 Primary outcomes by priority
 
 - **P0 — release and positioning:** a ratified single-tenant charter, closed NO-GO blockers, a production installation/upgrade path, a machine-checked API contract, truthful release documentation, and a final go/no-go review.
-- **P1 — capability gaps:** real inbound mail, a bounded installation-wide email/calendar sync decision, an outbound event/webhook catalogue with a generated typed client, and provider sandbox evidence.
+- **P1 — capability gaps:** real inbound mail, a bounded installation-administered email/calendar sync decision, an outbound event/webhook catalogue with a generated typed client, and provider sandbox evidence.
 - **P2 — experience and debt:** optimistic writes, one data-fetching paradigm, charts and rich text, locale expansion, JSONB/EAV scale baselines, remaining gap closure and dead tenant cleanup.
 
 ### 1.3 Boundary with Phase 23
@@ -158,11 +158,11 @@ Continue the G-ID register from **G99**. Do not renumber history; fix known-gaps
 
 ## 5. Priority Definitions and Roadmap Overview
 
-- **P0 — release-blocking.** Without it there is no honest production GO for a single-tenant installation. Do P0 first; a P0 blocker stops the next sub-phase.
+- **P0 — release-blocking.** Without it there is no honest production GO for a single-tenant installation. Prioritise P0 work, but a release blocker stops only dependent implementation, not unrelated sub-phases.
 - **P1 — capability.** Materially closes a product gap for an installed single-tenant deployment, but an alpha/pilot can run without it.
 - **P2 — experience and debt.** Improves adoption and maintainability; never used to justify delaying a P0 blocker.
 
-Implement in order. Each sub-phase ends with a short evidence report and must not auto-continue if it exposes a new P0 architectural issue.
+Use the dependency order in §5.1, not an absolute numeric sequence. Each sub-phase ends with a short evidence report. A new P0 architectural issue stops the affected dependency chain; record its scope before continuing independent work. No blocked task may be marked complete because other work progressed.
 
 | Sub-phase | Name | Priority | Key output |
 |---|---|---|---|
@@ -173,12 +173,22 @@ Implement in order. Each sub-phase ends with a short evidence report and must no
 | 24.4 | Canonical API contract and typed client | P0 | `api-spec/` complete to `--strict`, G1 disposition, generated `packages/api-client` |
 | 24.5 | Release truthfulness | P0 | Changelog, release notes, versioning, corrected README/migration counts, status drift fixed |
 | 24.6 | Real inbound mail | P1 | IMAP/Graph adapter replacing the null provider, dedupe, thread linking, email-to-case |
-| 24.7 | Installation-wide email/calendar sync | P1 | Bounded scope decision, one-org configuration, sync evidence |
+| 24.7 | Installation-wide email/calendar sync | P1 | Bounded scope decision, installation-administered connections, sync evidence |
 | 24.8 | Outbound events and developer surface | P1 | Webhook/event catalogue, signed deliveries, typed client consumption; no GraphQL, no new CLI by default |
 | 24.9 | Provider sandbox certification | P1 | Documented live/sandbox verification for voice, e-sign, marketing and sync adapters |
 | 24.10 | UX completion | P2 | Optimistic writes, one data-fetching paradigm, charts, rich text, locales, refreshed UX docs |
 | 24.11 | Quality debt and single-tenant scale | P2 | Remaining gaps, dead tenant cleanup, JSONB/EAV baselines, pagination snapshot decision |
 | 24.12 | Product release review and go/no-go | P0 | Final evidence, updated status docs, honest recommendation |
+
+### 5.1 Dependencies and stop rules
+
+- **24.0 → review → 24.1** is the mandatory entry sequence. This plan revision is not approval to start implementation.
+- After 24.1, **24.2, 24.3 and 24.4 may proceed independently** when their own prerequisites and the requested task scope permit. D4 gates restore execution, not API-contract or deployment-artifact work. Continue independent tasks within 24.2 while recovery approval is missing.
+- **24.5** may reconcile existing release facts immediately after 24.1; final installation/API claims depend on verified 24.3/24.4 outputs. Keep incomplete claims explicitly blocked or partial.
+- **24.6 → 24.7** for inbound-mail sync; **24.4 → 24.8** for generated-client consumption; **24.6/24.7 → 24.9** for certification of new sync adapters. Existing adapters may be assessed independently.
+- **24.10 and 24.11** may proceed after 24.1 when their local prerequisites are met. P1/P2 work must not displace actionable P0 work; if only external owner/legal/recovery decisions remain, record that fact and the reviewed work order before continuing lower-priority work. Do not auto-start an unrequested sub-phase.
+- **24.12 is a terminal review, not a prerequisite for P1/P2.** Run it after P0 implementation evidence is available, or to report a NO-GO with explicit blockers. P1/P2 may be partial, deferred or blocked with owners and residual risks; their completion is not required for a production GO unless a finding makes them release-blocking.
+- An **implementation blocker** prevents work that depends on it. A **release blocker** prevents production GO until fixed or explicitly dispositioned under §18 and §22; it does not prohibit unrelated implementation. Neither permits unsafe database operations or acceptance by the coding agent.
 
 ---
 
@@ -195,7 +205,7 @@ Re-establish the true state of the product before planning fixes, and record the
 3. Record the current baseline numbers rather than reusing the review's: migration count, `pnpm ci:gate` result, `api-spec/` coverage (documented/matched/undocumented against the live controller route table), locale count, dependency state, and open G-IDs.
 4. Inventory the in-flight §58 registry work and confirm `pnpm ci:api-spec` is part of `pnpm ci:gate`. Note which groups are unfinished in `api-spec/README.md` §4.
 5. Inventory every document that still promises multi-tenancy or tenant-ready APIs (§1.1) and every dead tenant field. Classify `tenant_ref`/`tenantRef` separately as a provider-account label.
-6. Record D1–D7 from §0.3. D1 is already given by the owner; do not re-ask it. D4 missing means 24.2 starts `Blocked`.
+6. Record D1–D7 from §0.3. D1 is already given by the owner; do not re-ask it. D4 missing means the restore-drill task in 24.2 starts `Blocked`; identify independent tasks that may continue under §5.1.
 7. Produce `docs/quality/phase-24-priority-decisions.md` and a recommended P0-first work order.
 
 ### Acceptance criteria
@@ -239,9 +249,9 @@ Close the two failing rows of the Phase 23.11 release gate, or record an explici
 
 ### Tasks
 
-1. Obtain D4: an approved isolated recovery environment, RPO and RTO. Without it, mark this sub-phase `Blocked` with the missing approval named; do not create a routine test database.
+1. Obtain D4: explicit, task-specific owner approval for a restore into an **already-existing isolated recovery target**, including target identity, permitted writes, RPO and RTO. This operational approval is not permission to provision another database, schema or container. Without it, mark the restore task `Blocked`; perform only archive integrity/freshness checks without contacting a recovery database, and continue independent work under §5.1.
 2. Install the encrypted off-host backup using `scripts/backup.mjs`, `scripts/verify-backup.mjs`, `scripts/restore-drill.mjs` and the systemd/timer templates from 23.9. Verify encryption, least-privilege permissions, key provisioning, retention, freshness alerting and off-host storage.
-3. Run `pnpm restore:drill` in the approved environment, record duration and consistency checks (database + attachments + queue state), and confirm the configured primary database is untouched. Update G80/G81 with evidence.
+3. After D4 is recorded, inspect the restore script and run `pnpm restore:drill` with the approved target environment variable and explicit `--allow-restore`; an unflagged verification pass is not restore evidence. Retain its primary-target refusal and never add `--allow-clean` without separate task-specific destructive-operation approval. Record duration and consistency checks (database + attachments + queue state), and confirm the configured primary database is untouched. Keep recovery workers and outbound effects disabled. Update G80/G81 with actual evidence.
 4. Record the distribution decision from `docs/security/distribution-compliance.md` §5: a root `LICENSE` or explicit proprietary notice, a named clean-room/AGPL reviewer and outcome, third-party notices, and a link from README and the release record. The coding agent prepares the records; the owner/legal decision is not made by the agent.
 5. Obtain owner signatures on the High/Critical exceptions in `docs/security/exception-register.md` (G81 and the two High release/design rows). An agent may not sign them.
 6. Resolve G1's proposed accepted deviation by D3 and record the sign-off in `docs/quality/known-gaps.md` and the exception register.
@@ -288,18 +298,18 @@ Make the public REST contract machine-checkable and usable, without adding a sec
 
 ### Tasks
 
-1. Record D3. **Recommended default:** accept G1's deviation — `GET /api/v1/OpenApi` stays a generated route inventory (772 paths, auth schemes declared, no DTO schemas), `docs/architecture/contract-catalog.md` stays the prose convention reference, and `api-spec/*.yaml` becomes the **canonical reviewed contract** for permissions, request/response shapes, side effects and idempotency. Generate payload schemas only if the owner explicitly funds it.
+1. Record D3. **Recommended default:** accept G1's deviation — `GET /api/v1/OpenApi` stays a generated route inventory (772 paths, auth schemes declared, no DTO schemas), `docs/architecture/contract-catalog.md` stays the prose convention reference, and `api-spec/` becomes the **canonical reviewed contract** for permissions, request/response shapes, side effects and idempotency. Full DTO-derived OpenAPI remains optional, but machine-readable payload schemas for every generated-client operation are mandatory. Before generation, extend the existing registry with stable operation identifiers and schema references to versioned JSON Schema documents under `api-spec/`; preserve the existing prose fields. Define supported types, required/optional and nullable fields, parameters, status codes and error envelopes; verify each schema against the actual Zod/controller contract. Extend the existing checker and tooling, not a second registry or validation framework. Free-text shape descriptions are not type-generation inputs.
 2. Continue the §58 registry one group at a time using `api-spec/README.md` §2/§5: relationships, attachments, activities/stream, search, reports, workflows, jobs, admin, i18n and one file per Phase 19 module. Read each controller, guard, Zod schema and service side effect; never infer permissions from the SPA.
-3. Enable `pnpm ci:api-spec --strict` as the completion gate once coverage is complete, and keep the unflagged `pnpm ci:api-spec` inside `pnpm ci:gate` (per `api-spec/README.md` §3, `--strict` is registry-wide and must not be a flaky required check while groups are missing).
+3. Keep the unflagged `pnpm ci:api-spec` inside `pnpm ci:gate` only while coverage is incomplete. Once all routes are documented, switch that existing nightly gate to `pnpm ci:api-spec --strict` and update `api-spec/README.md` §3 and the CI gate documentation. Add a DB-free regression test proving that a newly added undocumented route fails strict checking. Do not add a PR gate or change the nightly-only decision.
 4. Resolve G90 (`GET /api/v1/OpenApi` is unauthenticated, route inventory only) with an owner decision: keep it public with a documented rationale, or require authentication. Do not silently change the contract.
-5. Replace the `packages/api-client/src/index.ts` placeholder with a typed client generated from the canonical contract. Keep the existing `apps/web/src/api/client.ts` as the compatibility surface until a staged migration is proven; do not rewrite 2,401 lines in one change.
+5. Replace the `packages/api-client/src/index.ts` placeholder with a typed client generated from the schema-backed canonical contract. At 24.0, name a bounded initial set of operations and a real consumer; complete their schemas before generating request/response types. All `/api` routes need registry coverage, but full typed-client coverage is not required in this phase. Publish the supported-operation list and reject generation for missing/unresolved schemas rather than falling back to `any` or inferred prose types. Check deterministic generation and stale-output detection in the existing nightly tooling. Keep `apps/web/src/api/client.ts` as the compatibility surface until a staged migration is proven; do not rewrite 2,401 lines in one change.
 6. Add contract tests that fail on a phantom endpoint, a missing ACL declaration, a changed error code, or a changed response envelope `{error:{code,message,details}}`.
 7. Update `plans/PLAN.md` §58 status, `api-spec/README.md` §4 coverage, `docs/architecture/contract-catalog.md` and `docs/reference/compatibility-matrix.md` so all four agree.
 
 ### Acceptance criteria
 
-- `pnpm ci:api-spec --strict` passes with every `/api` route documented and matched.
-- The generated client compiles and is used by at least one new consumer without breaking the SPA's existing calls.
+- `pnpm ci:api-spec --strict` passes with every `/api` route documented and matched, and runs in the existing nightly gate; an undocumented-route regression fails the gate.
+- Every operation in the reviewed initial client scope has validated machine-readable request/response schemas. Generated types compile, generation is reproducible, stale output fails checking, and at least one real consumer uses the client without breaking the SPA's existing calls. Registry coverage and typed-client coverage are reported separately.
 - G1 is closed or carries an owner-signed accepted deviation with a target; G90 has a recorded decision.
 - No GraphQL endpoint, second contract registry, or second HTTP client generation pipeline exists.
 
@@ -333,13 +343,13 @@ Make the version, notes, README and status documents describe the product that a
 
 ### Objective
 
-Replace the null inbound provider with a working, installation-wide adapter.
+Replace the null inbound provider with working adapters administered at installation level, retaining mailbox-specific ownership, credentials and ACL.
 
 ### Tasks
 
 1. Implement `InboundMailProvider` (`packages/mail/src/inbound/index.ts:37-50`) for the D5-selected sources — default IMAP and Microsoft Graph — behind the existing provider port. Keep `NullInboundProvider` as the explicit unconfigured default that fails clearly.
 2. Bind the adapter by configuration in `apps/api/src/email/index.ts:67` instead of unconditionally. `POST /api/v1/Email/action/pollInbound` (`apps/api/src/email/email.controller.ts:47-50`) must remain unchanged in contract.
-3. Harden `pollInbound()` (`apps/api/src/email/email.service.ts:207-233`): message-id dedupe, bounded polls, cursor/watermark, MIME parsing, attachment handling through the existing ACL/malware path, bounce/auto-reply suppression, and idempotent ingestion.
+3. Harden `pollInbound()` (`apps/api/src/email/email.service.ts:207-233`): dedupe by connection/mailbox plus provider-stable identity (including IMAP UIDVALIDITY+UID where relevant), bounded polls, mailbox-specific cursor/watermark, MIME parsing, attachment handling through the existing ACL/malware path, bounce/auto-reply suppression, and idempotent ingestion. Do not dedupe unrelated mailboxes globally by a provider-local id; test overlapping ids across connections.
 4. Preserve the `service-desk/email-to-case.service.ts:132` flow; add thread linking to the matching CRM record and consent/suppression checks before any outbound effect.
 5. Store provider credentials in the credential vault encrypted with `ENCRYPTION_KEY`; use `MAIL_TRANSPORT=memory` in tests and never poll a real mailbox in CI.
 6. Add fixture-based tests for new/duplicate/malformed/bounce messages, a failing provider, a partially processed batch, and restart safety. Update `README.md` §"Not built yet" and `docs/reference/compatibility-matrix.md` email row.
@@ -361,16 +371,16 @@ Decide and deliver a bounded sync scope appropriate to one organisation.
 ### Tasks
 
 1. Record D5 with evidence: what exists today (Microsoft 365 Graph change notifications per `docs/compatibility/advanced-integrations/providers.md:89`), what does not (Google Calendar push `:63,369`, SES/SendGrid/Graph send and the email UI per `docs/reference/compatibility-matrix.md:284-286,299`), and what a single-tenant operator actually needs.
-2. Deliver only the approved scope, configured **once per installation** — not per workspace or per user tenant. Reuse the connector framework and OAuth/credential vault rather than adding a second integration layer.
+2. Deliver only the approved scope, **administered at installation level**, not per workspace or tenant. Permit multiple personal/shared mailboxes, calendars and OAuth connections inside the same organisation using the existing connector and account models. Define each connection's owner, delegated credential scopes, mailbox-specific cursor and record/field ACL; personal mailbox content must not become installation-wide readable. If D5 chooses a one-mailbox first release, record that explicit product limitation rather than attributing it to single-tenancy. Reuse the connector framework and OAuth/credential vault rather than adding a second integration layer.
 3. If calendar sync is approved, implement incremental sync with a stored cursor, webhook/channel verification where the provider supports it, and a documented no-push fallback for Google Calendar. Do not claim push support that does not exist.
 4. Verify thread/activity linking, timezone handling through `formatDateTime`/`formatClock`, and ACL-filtered visibility of synced emails/events.
 5. Document the operator setup, the credential scope, rate limits and the failure/recovery path in `docs/runbooks/`. Do not enable any provider by default.
-6. Add fake-provider tests for initial sync, incremental sync, duplicate events, revoked credentials and provider outage.
+6. Add fake-provider tests for initial sync, incremental sync, duplicate events, revoked credentials and provider outage, plus independent cursors and overlapping provider ids across two connections, and denial of access to another user's private synced records.
 
 ### Acceptance criteria
 
 - The compatibility matrix and provider docs name exactly what is implemented, deferred and why.
-- Sync is installation-wide, opt-in, and fails clearly when unconfigured.
+- Sync is installation-administered, opt-in, and fails clearly when unconfigured; supported mailbox/connection counts are documented, with ownership and ACL enforced independently of the single-tenant boundary.
 - No live provider credential or real customer mailbox is used by automated tests.
 
 ---
@@ -490,7 +500,7 @@ Re-run the release gate with the P0 evidence and give an honest decision for a s
 
 - The single-tenant boundary is ratified and no tracked document contradicts it.
 - G80/G81 have restore evidence or a written owner acceptance; the distribution/licence question has a recorded outcome.
-- `pnpm ci:api-spec --strict` passes and the public API contract has one canonical source.
+- `pnpm ci:api-spec --strict` passes in the existing nightly gate and the public API contract has one canonical source; the reviewed initial typed-client scope has schema-backed generated types and a verified consumer.
 - A production installation can be installed, upgraded and recovered from the documented artifacts without dev defaults.
 - No High/Critical exception is unsigned; no security control was weakened for this phase.
 - No extra database was created and no destructive setup was introduced.
@@ -507,7 +517,7 @@ Every Phase 24 deliverable is checked against the product boundary before it is 
 | 24.2 backup/restore | One backup set, one RPO/RTO, one restore per installation | A shared backup store or a cross-customer restore |
 | 24.3 install/upgrade | One set of secrets, one migration chain, one worker/queue | Shared worker/Redis/DB across customers without the five conditions |
 | 24.4 API contract | One installation-wide route table; permissions are roles/teams inside the org | A tenant-scoped route, header or credential |
-| 24.6/24.7 mail & sync | Installation-wide mailbox/connector config | Per-workspace sync or per-customer OAuth app assumption |
+| 24.6/24.7 mail & sync | Installation-administered connections; multiple mailboxes/calendars within one organisation retain ownership, scopes, ACL and independent cursors | Tenant/workspace isolation model, or treating private mailbox contents as installation-wide readable |
 | 24.8 events & extensions | One event bus; extensions trust-signed for this installation | An extension runtime processing another customer's data |
 | 24.10/24.11 UX & scale | Scale one organisation's data volume | Cross-customer reporting, search or AI context |
 
@@ -526,7 +536,7 @@ Follow `AGENTS.MD` §4: `pnpm lint:changed` during development and a full verifi
 - Playwright: the shell exports `HTTP_PROXY`; run e2e with `no_proxy='*' NO_PROXY='*'`. Move `test-results` aside before re-running a spec to avoid bulk-delete guards.
 - `pnpm --filter @carocrm/web build` fails at `emptyDir(dist)`; use `vite build --outDir /tmp/...` when a web build is needed.
 - `entity_records` uses `created_at` / `modified_at` (never `updated_at`); `ValidationError` → HTTP 422; entity ACL `delete:'no'` blocks DELETE even for admins, so clean up such rows by id.
-- `pnpm ci:api-spec --strict` is registry-wide; it will fail until every `/api` route is documented. Keep the unflagged form in the nightly gate.
+- `pnpm ci:api-spec --strict` is registry-wide; it will fail until every `/api` route is documented. Keep the unflagged form in the nightly gate during registry completion only; 24.4 must switch the existing nightly gate to strict once coverage is complete.
 
 ---
 
@@ -537,7 +547,7 @@ Follow `AGENTS.MD` §4: `pnpm lint:changed` during development and a full verifi
 - Prefer transactions and rollback for database-only effects; never assume a transaction rolls back an email, webhook, queue job or file upload.
 - Fake every external effect. Never send real customer email/SMS/WhatsApp, place calls, create signature requests, charge money, run live campaigns, poll a real mailbox, or publish production webhooks from tests. Sandbox verification (24.9) is manual and documented.
 - Migrations are additive, reviewed and forward-only. A destructive migration requires explicit task-specific approval and stops the sub-phase.
-- No extra database, schema, container or shadow copy — including for restore rehearsal. The approved isolated recovery environment in 24.2 is an operational exercise, not routine test-database creation.
+- Never provision an extra database, schema, container or shadow copy for tests or restore rehearsal. Routine verification uses the configured primary database only. The sole separate-target operation is the 24.2 operational restore exercise: it requires explicit task-specific D4 approval of an **already-existing isolated recovery target** and permitted writes, as required by `AGENTS.MD` §3. It must never target the primary. Missing target or approval means archive-only checks and a `Blocked` restore drill, not an improvised database or a claimed successful restore.
 
 ---
 
@@ -554,7 +564,7 @@ Standing decisions (nightly-only CI D3/G78, SAML/SCIM deferral, single-tenant bo
 - [ ] Single-tenant charter ratified; no tracked document promises tenant-ready APIs; no tenant code introduced.
 - [ ] G80/G81 closed with restore evidence, or owner-accepted in writing; distribution/licence outcome recorded.
 - [ ] Production install and upgrade exercised from documented artifacts with no dev defaults.
-- [ ] `pnpm ci:api-spec --strict` green; G1 disposition and G90 decision recorded; typed client usable.
+- [ ] `pnpm ci:api-spec --strict` green and enforced in the existing nightly gate; G1 disposition and G90 decision recorded; reviewed initial typed-client operations have machine-readable schemas, reproducible generation and a verified consumer.
 - [ ] `CHANGELOG.md`, release notes (`en`/`vi`), README, migration counts, PLAN §57/§58/§60 and gap register are truthful.
 - [ ] `pnpm ci:gate` green; no security control weakened; no unsigned High/Critical exception.
 - [ ] Final go/no-go review written with residual P1/P2 risks and owners.
@@ -578,13 +588,13 @@ Standing decisions (nightly-only CI D3/G78, SAML/SCIM deferral, single-tenant bo
 
 ## 24. Final Coding-Agent Instructions
 
-Implement in order and in small increments.
+Implement in small increments following the dependencies and stop rules in §5.1, not an absolute numeric sequence.
 
 1. **Start with Phase 24.0 only.** Return the baseline inventory, the §2 reconciliation and owner decisions D1–D7 before editing code. D1 is already decided: single-tenant by design.
 2. For each sub-phase, list the intended files, tests, migration impact, configuration impact, external effects and risk before editing.
-3. Implement only the current sub-phase unless a blocker requires a narrowly scoped prerequisite fix. Do not start P1 work while a P0 blocker is open.
+3. Implement only the requested sub-phase unless a blocker requires a narrowly scoped prerequisite fix. Follow §5.1: prioritise actionable P0 work, distinguish release blockers from implementation blockers, and record external blockers before proposing independent P1/P2 work. 24.12 is a terminal review, not a prerequisite for that work.
 4. Run the smallest relevant checks first (`pnpm lint:changed`, then the focused Vitest file), then `pnpm ci:gate` and the scoped integration suites.
-5. Use the configured primary database only under `AGENTS.MD` §3. Never provision an extra database/schema and never reset or truncate it.
+5. Use the configured primary database for routine verification under `AGENTS.MD` §3. Only the explicitly approved 24.2 operational restore may use an already-existing isolated recovery target under D4 and §21; never restore into the primary. Never provision an extra database/schema, reset or truncate application data, or infer destructive-operation approval from this plan.
 6. Use synthetic test records and fake providers; sandbox checks are manual and never part of CI.
 7. Review changed files for secrets, weakened assertions, disabled authorization, unrelated diffs, migration risk and accidental artifacts.
 8. Update the priority-decision record, gap register, exception register (by reference only) and test-evidence report with actual results.
