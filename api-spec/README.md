@@ -69,9 +69,15 @@ often contain `:` and `{}`.
 
 ```bash
 pnpm ci:api-spec            # documented endpoints must exist; schema must be valid
-pnpm ci:api-spec --strict   # additionally require every /api/v1 route to be documented
+pnpm ci:api-spec --strict   # additionally require every /api route to be documented (registry-wide)
 pnpm ci:api-spec --print    # dump the parsed registry (debugging the parser)
 ```
+
+pnpm forwards arguments after the script name to the command, so no `--` separator is needed;
+`pnpm ci:api-spec -- --strict` behaves the same. Verified on 2026-11-13 with pnpm 10: `--print` reached the
+script and `--strict` reached it too (exiting 1 while 891 routes were undocumented). If a future package-manager
+change swallows the flag, the checker silently loses `--strict`, so the CI gate invokes the script through
+`pnpm ci:api-spec` without flags and the strict run is a documented manual command, not the gate.
 
 The checker fails when:
 
@@ -115,5 +121,7 @@ the coverage row above can be checked instead of trusted.
 2. Read the controller (route + guards + `@Public()`), the DTO/Zod schema and the service's side effects —
    do not infer permissions from the SPA.
 3. Run `pnpm ci:api-spec`; a phantom path means the controller and the file disagree.
-4. Run `pnpm ci:api-spec --strict` for the group when its area is complete.
+4. Run `pnpm ci:api-spec` until the file is green. `--strict` is **registry-wide**, not per group: it fails
+   while *any* `/api` route is undocumented, so it is the completion gate for the whole directory, not a
+   check you can turn on for one finished group.
 5. Update the coverage table above and `docs/quality/ci-gates.md` if the gate contract changed.
