@@ -633,11 +633,11 @@ Re-run the Phase 22 release gate with the Phase 23 evidence and produce an hones
 
 `docs/quality/phase-23-security-release-review.md` records the decision and its evidence. `pnpm ci:gate` exits 0
 (88 files / 1 421 tests, worker 248, web 86, secrets clean over 2 487 tracked files) and the focused integration
-batch passes 18 files / 185 tests, but three gate rows fail:
+batch passes 18 files / 185 tests, but two gate rows fail:
 
 | Gate row | Result |
 |---|---|
-| No open Critical/High finding | **FAIL** — G81 (High, no installed encrypted off-host backup) stays Blocked |
+| No open Critical/High authorization, injection, SSRF, secret-exposure or authentication-bypass finding | **PASS** — every finding in those classes is fixed or carries a named exception; G81 is High but is an operational backup gap, tested by the backup/restore row instead |
 | Backup + restore evidence or owner acceptance | **FAIL** — G80/G81 Blocked by decision D4; no drill has run |
 | Distribution compliance owner decision | **FAIL** — no `LICENSE`, no owner outcome |
 | §48 controls tested or signed | **PASS with unsigned exceptions** — no High/Critical exception has owner acceptance |

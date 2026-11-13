@@ -61,7 +61,7 @@ gate plus the focused suites above are what this review rests on.
 
 | Gate criterion | Evidence | Result |
 |---|---|---|
-| No known Critical/High authorization, injection, SSRF, secret-exposure or authentication-bypass finding remains open | All Phase 23 Critical/High findings are fixed (G31/G40/G41/G43/G54 pre-23; G81 is the only High left and it is operational, not a code bypass) | **FAIL — G81 High open, Blocked** |
+| No known Critical/High authorization, injection, SSRF, secret-exposure or authentication-bypass finding remains open | Every finding in these classes is fixed or carries a named exception: G31/G40/G41/G43/G54 were fixed pre-23; the live rows in these classes are G89/G92/G95 (Medium) and G90/G91 (Low). G81 is High but it is an **operational backup** gap, outside the classes this criterion names — it fails the backup/restore row below, not this one | **PASS** — no open Critical/High authorization, injection, SSRF, secret-exposure or authentication-bypass finding |
 | Every §48 control has a passing test, an executed verification, or a signed accepted exception | `docs/security/security-controls-matrix.md`; 23.10 map; exception register | **PASS with unsigned exceptions** — no agent-signed row; High/Critical acceptances must come from the owner |
 | The required (nightly) DB-free gate passes and no security test was weakened | `pnpm ci:gate` exit 0; regression-detection proof in 23.8; the temporary failing test was removed, not merged | **PASS** (not PR-gated — G78 stays an exception) |
 | Encrypted off-host backup and a restore drill have evidence, or the owner explicitly accepts the blocker | `scripts/backup.mjs` + `verify-backup.mjs` and the systemd template exist; nothing is installed; no drill has run | **FAIL — G80/G81 Blocked** |
@@ -70,7 +70,7 @@ gate plus the focused suites above are what this review rests on.
 | No secrets, real customer records, database dumps, browser storage or unsafe artifacts are committed | Secret scan clean over 2 487 tracked files; artifact audit clean; test data is `AGENT_TEST_`-marked and removed by exact id | **PASS** |
 | Optional providers and security settings default to safe modes; an unconfigured provider fails clearly | Safe-default review in §2; marketing send refuses `PROVIDER_NOT_BOUND`; OIDC list empty; mail `none`; production boot refuses placeholders | **PASS** |
 
-**Overall: NO-GO.** Three gate rows fail and one passes only with exceptions no agent may sign.
+**Overall: NO-GO.** Two gate rows fail — the backup/restore evidence and the distribution decision — and the §48 row passes only with exceptions no agent may sign.
 
 ## 5. Closed by Phase 23
 
