@@ -1,0 +1,320 @@
+# PLAN §58 — identity administration: users, roles, teams, API users and API keys.
+# Source: apps/api/src/auth/identity.controller.ts, apps/api/src/auth/identity.service.ts
+# Every route here except `GET /User/assignable` calls `IdentityService.requireAdmin()`, so the
+# permission is administrator even where the controller carries no decorator.
+# Format and required fields: api-spec/README.md §2.
+group: users
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/User
+    auth: authenticated
+    permissions: administrator
+    request: "query: offset?, maxSize?, where? (user name contains), isActive? (true|false), type? (admin|regular|api|portal|system), roleId?, teamId?"
+    response: "200 { list: UserRow[], total, offset, count } — ordered by userName, ascending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 20); total is the filtered count"
+    sorting: "fixed: userName ascending"
+    filtering: "user name substring plus isActive/type/roleId/teamId; a misspelt isActive or type is refused, not ignored"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/User/assignable
+    auth: authenticated
+    permissions: authenticated — internal users only; a portal principal is refused
+    request: "query: q? (user name contains)"
+    response: "200 { list: [{ id, name }] } — active internal accounts, at most 500, ordered by userName"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the answer is bounded at 500 by the server"
+    sorting: "fixed: userName ascending"
+    filtering: "q substring on user_name only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/User/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 UserRow { id, userName, firstName, lastName, emailAddress, isAdmin, isActive, type, roles/assignedRoleIds, portalId, contactId, portalRoleIds, title, phone, created/modified }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/User
+    auth: authenticated
+    permissions: administrator
+    request: "CreateUserSchema { userName, firstName?, lastName?, emailAddress?, password?, isAdmin?, isActive?, assignedRoleIds?, teamIds?, type?, portalId?, contactId?, portalRoleIds?, title?, phone? }"
+    response: "201 UserRow"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [users row, argon2 password hash, users_teams memberships, audit row]
+    idempotency: none; the user name is unique and a repeat answers 409
+  - method: PATCH
+    path: /api/v1/User/:id
+    auth: authenticated
+    permissions: administrator
+    request: "UpdateUserSchema (CreateUserSchema.partial) — omitted keys are left unchanged, null clears a nullable field"
+    response: "200 UserRow"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [users row, users_teams recomputed when teamIds is present, audit row; a rule that would leave no active administrator answers 422]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/User/:id
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller, not a full replacement"
+    response: "200 UserRow"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/User/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, DUPLICATE_RECORD, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [users row soft-deleted, every session revoked, users_teams memberships removed, audit row; deleting your own account answers 409, deleting the last active administrator answers 422]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/User/:id/password-reset
+    auth: authenticated
+    permissions: administrator
+    request: "ResetPasswordSchema { password } (8–512 characters)"
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [password hash, every session of the target revoked, audit row]
+    idempotency: none; each call sets the password again and revokes sessions
+  - method: GET
+    path: /api/v1/Role
+    auth: authenticated
+    permissions: administrator
+    request: "query: offset?, maxSize?, q?"
+    response: "200 { list: Role[], total, offset, count }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "offset (default 0) and maxSize (default 20)"
+    sorting: "service-defined order"
+    filtering: "q substring on the role name"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Role/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 Role { id, name, permissions, fieldPermissions }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Role
+    auth: authenticated
+    permissions: administrator
+    request: "CreateRoleSchema { id?, name, permissions?, fieldPermissions? } — levels are yes|all|team|own|no"
+    response: "201 Role"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [roles row, audit row]
+    idempotency: none; a duplicate id or name answers 409
+  - method: PATCH
+    path: /api/v1/Role/:id
+    auth: authenticated
+    permissions: administrator
+    request: "partial Role { name?, permissions?, fieldPermissions? }"
+    response: "200 Role"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [roles row, audit row; the change applies to every holder on their next request]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/Role/:id
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller"
+    response: "200 Role"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/Role/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [roles row soft-deleted, audit row; a role still assigned to users, API users or teams answers 422 with rule=roleInUse, in which case nothing changes]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/Team
+    auth: authenticated
+    permissions: administrator
+    request: "query: offset?, maxSize?"
+    response: "200 { list: Team[], total, offset, count }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "offset (default 0) and maxSize (default 20)"
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Team/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 Team { id, name, userIds, roleIds, isPrivate }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Team
+    auth: authenticated
+    permissions: administrator
+    request: "CreateTeamSchema { id?, name, userIds?, roleIds?, isPrivate? }"
+    response: "201 Team"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [teams row, users_teams rows for userIds, teams_roles rows for roleIds, audit row]
+    idempotency: none; a duplicate id or name answers 409
+  - method: PATCH
+    path: /api/v1/Team/:id
+    auth: authenticated
+    permissions: administrator
+    request: "partial Team { name?, userIds?, roleIds?, isPrivate? }"
+    response: "200 Team"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [teams row, membership and role join tables replaced for the keys that were sent, audit row]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/Team/:id
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller"
+    response: "200 Team"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/Team/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [teams row soft-deleted, users_teams and teams_roles rows removed for the team, audit row; records that referenced the team keep their data]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/ApiUser
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: [{ id, userName, isActive, roles[], createdAt, activeKeys, lastUsedAt }], total } — never a secret"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the API-account list is not paged"
+    sorting: "fixed: userName ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ApiUser
+    auth: authenticated
+    permissions: administrator
+    request: "CreateApiUserSchema { userName, assignedRoleIds?, scopes?, allowedIps? } (strict object)"
+    response: "201 { id, userName, keyId, secret } — the secret is returned only in this response"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [api_users row, api_keys row with a hashed secret, audit row]
+    idempotency: none; every call creates an account and a key
+  - method: POST
+    path: /api/v1/ApiUser/:apiUserId/key
+    auth: authenticated
+    permissions: administrator
+    request: "ApiKeyOptionsSchema { scopes?, allowedIps? } (optional body, strict object)"
+    response: "201 { id, userName, keyId, secret } — the secret is returned once"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [additional api_keys row with a hashed secret; other keys of the account stay valid]
+    idempotency: none; each call issues a new key
+  - method: POST
+    path: /api/v1/ApiKey/:keyId/rotate
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "201 { id, userName, keyId, secret } — the new secret is returned once"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: new api_keys row inheriting scopes and allowedIps, the old key revoked, audit row]
+    idempotency: none; rotating an already-revoked key issues another replacement
+  - method: GET
+    path: /api/v1/ApiKey/:apiUserId
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: [{ id, apiUserId, createdAt, lastUsedAt, revokedAt, scopes[], allowedIps[] }] } — no secret, ever"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/ApiKey/:keyId
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [api_keys.revoked_at set; an unknown key id still answers success because the update is scoped by id]
+    idempotency: safe to repeat

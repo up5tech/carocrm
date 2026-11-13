@@ -2,7 +2,7 @@
 
 > **Started:** 2026-11-13
 > **Plan:** `plans/PLAN.md` §58 — “Create a machine-readable endpoint registry.”
-> **Status:** in progress. Two groups are documented (`authentication`, `metadata`); the remaining
+> **Status:** in progress. Three groups are documented (`authentication`, `metadata`, `users`); the remaining
 > groups are listed in §4 and are added one file at a time. `pnpm ci:api-spec` already fails on a
 > phantom or malformed entry, so every documented endpoint is guaranteed to exist in the source.
 
@@ -75,7 +75,7 @@ pnpm ci:api-spec --print    # dump the parsed registry (debugging the parser)
 
 pnpm forwards arguments after the script name to the command, so no `--` separator is needed;
 `pnpm ci:api-spec -- --strict` behaves the same. Verified on 2026-11-13 with pnpm 10: `--print` reached the
-script and `--strict` reached it too (exiting 1 while 891 routes were undocumented). If a future package-manager
+script and `--strict` reached it too (exiting 1 while most `/api` routes were still undocumented). If a future package-manager
 change swallows the flag, the checker silently loses `--strict`, so the CI gate invokes the script through
 `pnpm ci:api-spec` without flags and the strict run is a documented manual command, not the gate.
 
@@ -99,7 +99,7 @@ known-missing documentation would be turned off.
 | Authentication, sessions, MFA, password reset | `authentication.yaml` | documented (2026-11-13) |
 | OIDC sign-in (`/Oidc/*`) | `authentication.yaml` | documented (2026-11-13) |
 | Metadata | `metadata.yaml` | documented (2026-11-13) |
-| Users, roles, teams | `users.yaml` | not started |
+| Users, roles, teams, API users and API keys | `users.yaml` | documented (2026-11-13) — 26 routes; every route except `GET /User/assignable` is administrator-only |
 | Generic entity CRUD, relations, mass actions | `entities.yaml` | not started |
 | Relationships | `relationships.yaml` | not started |
 | Attachments and chunked upload | `attachments.yaml` | not started |
