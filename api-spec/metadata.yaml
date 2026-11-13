@@ -1,0 +1,54 @@
+# PLAN §58 — metadata.
+# Source: apps/api/src/metadata/metadata.controller.ts
+# Format and required fields: api-spec/README.md §2.
+group: metadata
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Metadata
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 metadata document (entities, fields, layouts, ACL, navigation groups) translated for the request locale; X-Metadata-Version header"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Metadata/:entity
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 one entity definition; X-Metadata-Version header; 404 for an unknown entity"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Metadata/:entity
+    auth: authenticated
+    permissions: administrator
+    request: "metadata patch (entity settings, fields, relations, layouts, indexes) validated against the metadata schema"
+    response: "200 patched entity definition; metadata version incremented"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [metadata_entries row, metadata version bump, audit row]
+    idempotency: none; each patch bumps the version
+  - method: DELETE
+    path: /api/v1/Metadata/:entity/Field/:field
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 entity definition with the field disabled"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [field disabled in metadata, audit row; stored record values are not deleted]
+    idempotency: disabling an already-disabled field is a no-op

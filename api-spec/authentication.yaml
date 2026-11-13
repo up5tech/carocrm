@@ -1,0 +1,246 @@
+# PLAN §58 — authentication, sessions, MFA, password reset and OIDC.
+# Source: apps/api/src/auth/auth.controller.ts, apps/api/src/auth/oidc/oidc.controller.ts
+# Format and required fields: api-spec/README.md §2.
+group: authentication
+basePath: /api/v1
+endpoints:
+  - method: POST
+    path: /api/v1/Authentication
+    auth: public
+    permissions: none
+    request: "LoginRequest { userName, password, rememberMe? }"
+    response: "200/201 LoginResult { accessToken, expiresIn, csrfToken, userId, portalId, role[], type }; 200 LoginChallengeResult { challengeId } when 2FA is required"
+    errors: [VALIDATION_FAILED, AUTHENTICATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [session row, refresh cookie, csrf cookie, security event on failure or lockout]
+    idempotency: none
+  - method: POST
+    path: /api/v1/Authentication/challenge
+    auth: public
+    permissions: none
+    request: "LoginChallengeSchema { challengeId, code }"
+    response: "200/201 LoginResult"
+    errors: [VALIDATION_FAILED, AUTHENTICATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [session row, refresh cookie, csrf cookie]
+    idempotency: single-use challenge; a repeated code is refused
+  - method: POST
+    path: /api/v1/Refresh
+    auth: cookie+csrf
+    permissions: none
+    request: "optional RefreshSchema { refreshToken }; the HttpOnly CRM-REFRESH cookie is the primary source"
+    response: "200 AuthTokens { accessToken, refreshToken, expiresIn }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [rotated refresh cookie, rotated csrf cookie, session family metadata]
+    idempotency: none; a reused refresh token revokes the family
+  - method: POST
+    path: /api/v1/PasswordReset
+    auth: public
+    permissions: none
+    request: "PasswordResetRequestSchema { identifier } (user name or email)"
+    response: "200 { status: true } regardless of whether the account exists"
+    errors: [VALIDATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [reset token row (hashed), outbound mail through the configured transport]
+    idempotency: rate-limited per identifier and per source
+  - method: POST
+    path: /api/v1/PasswordReset/confirm
+    auth: public
+    permissions: none
+    request: "PasswordResetConfirmSchema { token, newPassword }"
+    response: "200 { status: true }"
+    errors: [VALIDATION_FAILED, AUTHENTICATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [password hash, reset token consumed, every session of the account revoked]
+    idempotency: single-use token
+  - method: POST
+    path: /api/v1/Logout
+    auth: authenticated
+    permissions: none
+    request: "optional LogoutSchema { refreshToken }; cookies are the fallback"
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [session revoked, refresh and csrf cookies cleared]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AppUser/me
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 Principal { id, userName, roles[], type, locale, timezone, avatarId, capabilities, … }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/AppUser/me
+    auth: authenticated
+    permissions: authenticated
+    request: "ProfileSchema { locale?, timezone?, firstName?, lastName?, emailAddress?, phoneNumber?, title?, avatarId? }"
+    response: "200 Principal"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [user row, audit row]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/AppUser/me/password
+    auth: authenticated
+    permissions: authenticated
+    request: "ChangePasswordSchema { currentPassword, newPassword }"
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [password hash, every session revoked]
+    idempotency: none
+  - method: POST
+    path: /api/v1/AppUser/me/totp/setup
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { secret, otpauthUri }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [pending TOTP secret on the user row]
+    idempotency: a repeat replaces the unconfirmed secret
+  - method: POST
+    path: /api/v1/AppUser/me/totp/enable
+    auth: authenticated
+    permissions: authenticated
+    request: "TotpCodeSchema { code }"
+    response: "200 { recoveryCodes[] }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [totp_enabled flag, hashed recovery codes, session two_factor_verified flag]
+    idempotency: none; the same code cannot enable twice
+  - method: POST
+    path: /api/v1/AppUser/me/totp/disable
+    auth: authenticated
+    permissions: authenticated
+    request: "TotpCodeSchema { code }"
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [totp_enabled cleared, recovery codes cleared]
+    idempotency: none
+  - method: POST
+    path: /api/v1/AppUser/me/totp/recovery-codes
+    auth: authenticated
+    permissions: authenticated
+    request: "TotpCodeSchema { code }"
+    response: "200 { recoveryCodes[] }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [recovery codes rotated]
+    idempotency: none; rotation invalidates the previous set
+  - method: POST
+    path: /api/v1/User/:id/totp-reset
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [target user TOTP cleared, audit row]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AppUser/me/sessions
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { list: MySession[] } — the caller's own sessions only"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/AppUser/me/sessions/:sessionId
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [session revoked; a foreign session id answers 404, not 403]
+    idempotency: deleting an already-revoked own session answers 404
+  - method: GET
+    path: /api/v1/AppUser/current
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 Principal — legacy alias of /AppUser/me"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Oidc/providers
+    auth: public
+    permissions: none
+    request: none
+    response: "200 { list: OidcProvider[] } — display name only; empty when no profile is configured"
+    errors: []
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Oidc/start
+    auth: public
+    permissions: none
+    request: "query: provider, redirect?"
+    response: "302 to the provider authorization endpoint with state, nonce and PKCE challenge"
+    errors: [VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [single-use hashed state row]
+    idempotency: none; every start creates new state
+  - method: GET
+    path: /api/v1/Oidc/callback
+    auth: public
+    permissions: none
+    request: "query: code, state (provider-controlled)"
+    response: "302 to the SPA; sets the same session cookies as password sign-in"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [state consumed, user provisioned or linked per profile rule, session row, cookies, security event on rejection]
+    idempotency: none; a replayed state is refused
