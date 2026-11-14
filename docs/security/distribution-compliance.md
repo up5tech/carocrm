@@ -82,3 +82,57 @@ This blocker closes only when:
 
 Until then, the release review must carry **distribution compliance: Blocked** and must not publish a
 distribution artifact on the strength of this repository.
+
+## 6. Phase 24.2 — prepared records (no owner/legal decision made)
+
+Phase 24.2 §8 task 4 asks the coding agent to **prepare** the records, not to choose a licence, name a
+reviewer, or declare the clean-room review complete. This section is a blank decision record plus a
+reproducible inventory. No `LICENSE`, `NOTICE` or distribution artifact was created, and no box in §5
+was ticked.
+
+### 6.1 Owner/legal decision record
+
+| Field | Required by | Status on 2026-11-14 |
+|---|---|---|
+| Decision ID | release gate | `DIST-24.2-01` (proposed identifier only) |
+| Repository `LICENSE` or explicit proprietary notice | §3 item 1, §5 | **PENDING — owner/legal.** No `LICENSE` created; none may be chosen by an agent |
+| Named clean-room reviewer and recorded outcome | §3 item 2, §5 | **PENDING — owner/legal.** No reviewer named, no outcome recorded |
+| AGPL obligation determination (and any required removal/rewrite) | §3 item 3 | **PENDING — owner/legal** |
+| Third-party notice / source-offer artifact | §3 item 4, §5 | **PENDING — owner/legal.** The inventory in §6.2 is prepared; the legal review and artifact are not |
+| Distribution channels and trademark use | §3 item 5 | **PENDING — owner/legal** |
+| Contributor terms (DCO/CLA) | §3 item 6 | **PENDING — owner/legal** |
+| Owner signature and date | Phase 24.2 §8 task 5 | **UNSIGNED.** An agent may not accept or sign a High/Critical exception |
+| Outcome carried into the release record | §5 | **"Do not distribute"** until a decision is recorded (see `docs/quality/phase-24-test-evidence.md` §24.2) |
+
+### 6.2 Third-party inventory (prepared, not a legal conclusion)
+
+Command run on 2026-11-14, offline, from the repository root: `pnpm licenses list --json`.
+
+- **13 licence groups across 716 installed packages** with a declared `license` field; 759 package
+  directories exist under `node_modules/.pnpm`, so this is not a complete legal inventory.
+- 25 workspace `package.json` files declare **205** direct dependencies including dev dependencies.
+- `pnpm-lock.yaml` remains the authoritative inventory.
+
+| Declared licence group | Packages |
+|---|---|
+| MIT | 614 |
+| Apache-2.0 | 51 |
+| ISC | 24 |
+| BSD-3-Clause | 11 |
+| BSD-2-Clause | 7 |
+| MPL-2.0 | 2 |
+| Python-2.0, CC-BY-4.0, BlueOak-1.0.0, MIT-0, 0BSD, `(MIT AND Zlib)`, `(MIT OR CC0-1.0)` | 1 each |
+
+This count is a **mechanical scan**, not a notice artifact: it does not resolve dual-licence choices,
+source-offer obligations for MPL/Apache packages, vendored assets, packages without a declared licence,
+or compatibility between the chosen repository licence and the dependencies. The owner/legal review
+must produce the actual notice/source-offer artifact under the licence it selects.
+
+### 6.3 What this section does not do
+
+- It does not create a `LICENSE`, copy an upstream licence, or infer that the clean-room claim is
+  legally sufficient.
+- It does not conclude the AGPL review, accept an exception, or sign anything on the owner's behalf.
+- It does not change any dependency or distribution artifact. `pnpm-lock.yaml` and `package.json`
+  were read, not modified.
+- The release status remains **distribution compliance: Blocked / NO-GO**.

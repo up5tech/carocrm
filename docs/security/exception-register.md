@@ -79,3 +79,29 @@ These were listed as live exceptions in the Phase 22.17 register but are **Fixed
   Their review date is 2026-12-13, one month after registration, matching the existing cadence. The Phase 22.17
   register (`docs/quality/phase-22-security-privacy-regression-suite.md` §9) points here and records each of its
   own rows as closed or carried.
+
+## 5. Owner decisions and signatures pending (Phase 24.2, 2026-11-14)
+
+Phase 24.2 §8 tasks 5 and 6 require owner signatures on the High/Critical rows and a recorded G1/D3
+sign-off. An agent may not accept or sign any of them. This section **does not change** any §2 row's
+status, scope, owner, severity or review date; it records that the required signatures are absent, so
+the release gate stays NO-GO.
+
+| Item | Severity / class | Required signatory | Signature status | Decision record |
+|---|---|---|---|---|
+| G81 — no installed, encrypted, off-host backup | **High** | owner / platform-operations | **UNSIGNED** | §2 row; `docs/quality/known-gaps.md` G81 (24.2 read-only verification) |
+| — no `LICENSE` / clean-room distribution outcome | **High (release)** | owner / legal | **UNSIGNED** | §2 row; `docs/security/distribution-compliance.md` §6 |
+| — multi-tenancy absent by decision | **High (design)** | owner / architecture | **UNSIGNED** | §2 row; `docs/reference/product-charter.md`, `docs/security/tenancy-decision.md` (24.1) |
+| G1 — route-inventory deviation (D3) | Medium (contract) | owner | **D3 default applied at 24.0; sign-off pending** | `docs/quality/known-gaps.md` G1 §"Phase 24.2" |
+| G90 — `GET /OpenApi` served anonymously | Low | owner | **UNDECIDED** — D3 does not resolve it | §2 row |
+
+Notes:
+
+- **No exception was accepted, closed or signed by the coding agent.** G1 is *not* added to §2 as an
+  accepted exception: its D3 disposition is a recorded plan default awaiting signature, and G1 stays
+  `Partial` in the gap register until `pnpm ci:api-spec --strict` is green in 24.4.
+- The Phase 24.1 boundary decision reworded the High (design) row's mitigation to
+  "Not applicable by decision"; that is a product decision, **not** an acceptance of the exception.
+- `pnpm ci:gate` being green is not evidence that any exception was accepted. The §48 gate row still
+  reads **PASS with unsigned exceptions**.
+- No review date was extended and no severity was re-scored by 24.2.

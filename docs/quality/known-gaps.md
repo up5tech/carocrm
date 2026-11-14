@@ -11,7 +11,7 @@
 
 | ID | Title | Module | Severity | Status |
 |---|---|---|---|---|
-| G1 | Route-level OpenAPI exists; DTO schemas absent (security schemes added 23.5) | platform | Medium | Partial — deviation proposed (23.9) |
+| G1 | Route-level OpenAPI exists; DTO schemas absent (security schemes added 23.5) | platform | Medium | Partial — D3 deviation recorded (24.2), owner sign-off pending |
 | G2 | Event payloads carry no `schemaVersion`, `correlationId` or `dedupeKey` | platform | Medium | Deferred (22.7) |
 | G3 | `LeadConversionService` has no direct service-level test | lead-score | Low | Open |
 | G4 | `advanced-integrations-contracts.test.ts` leaves two contacts behind | advanced-integrations | Low | Open |
@@ -159,6 +159,24 @@ contract is machine-checkable, the payload shapes are documented in `docs/archit
 asserted at the route boundary, and generating 772 request/response schemas from Zod is a separate, larger change.
 Owner sign-off and a target phase (23.9 or later) are still required; this entry is not marked closed.
 Related: **G90** (the document is served without authentication; owner decision still pending).
+
+### G1 disposition (Phase 24.2, 2026-11-14 — D3 recorded, sign-off still pending)
+
+Owner decision **D3** from `plans/PLAN_Phase_24_Product_Completion.md` §0.3 was applied as the governing
+default by the Phase 24.0 audit (`docs/quality/phase-24-priority-decisions.md` §3): **accept the
+route-inventory deviation**. `GET /api/v1/OpenApi` stays a generated route inventory;
+`docs/architecture/contract-catalog.md` stays the prose convention reference; `api-spec/*.yaml` is the
+canonical reviewed contract and must reach `pnpm ci:api-spec --strict` in Phase 24.4. Full DTO-derived
+OpenAPI for ~772 routes is **not** required, but machine-readable payload schemas for the bounded
+generated-client surface in 24.4 are mandatory. Coverage is unchanged by 24.2: 4 registry files,
+63 documented and matched endpoints, 915 `/api` routes in source, 852 undocumented.
+
+**This is a recorded default, not an owner signature.** G1 remains `Partial`: the deviation is proposed
+and governed by D3, but the register does not mark it `Accepted`, and no exception was accepted by an
+agent. **G90** (the inventory is served without authentication) is a separate owner decision that D3
+does not resolve. Closure evidence is a signed D3 sign-off plus `pnpm ci:api-spec --strict` green in
+24.4; until then this entry stays open. The matching register note is
+`docs/security/exception-register.md` §5.
 
 ## G2 — Event payloads carry no version, correlation or dedupe key
 
@@ -813,6 +831,19 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Status:** **Blocked (Phase 23.9, 2026-11-12) — missing approvals named.** The two things that block the exercise are approvals, not code, and they have not been given: there is no approved isolated recovery environment and the owner has not approved an RPO/RTO (owner decision D4 in `docs/security/phase-23-security-baseline.md` §6). Phase 23.9 therefore did not run a drill and did not create a database. What was missing — a repeatable, measured, evidenced drill — is in the repository: `scripts/restore-drill.mjs` (`pnpm restore:drill`) verifies an archive (SHA-256 over every file, `pg_restore --list` structure, file-archive presence, age and permissions), and only then, and only with `--allow-restore`, restores into a target the operator names. It refuses to run if that target is unset, is the same URL as the primary, or is named after an application database, and it never creates a database (AGENTS.md §3.6). It measures time-to-queryable and writes JSON + markdown evidence with no connection string in it, and the evidence states that RPO/RTO are unapproved, so a measurement can never be read as a pass. `scripts/deploy/restore-drill.cron.example` shows the weekly line a deployment owner installs; it is shipped, not installed. Verified on 2026-11-04 against a real schema-only archive in container mode: checksums verified, 927 TOC entries listed, file archive correctly reported absent, no database contacted, evidence written mode 600. The 23.9 operational record is `docs/security/deployment-baseline.md` §6/§9 and `docs/runbooks/security-incident-response.md` §8. **Unblock by** approving an isolated target, a window and RPO/RTO, then running the drill with `--allow-restore` and reading the evidence. Owner: platform/operations. Review: when the environment is approved (no date until then).
 - **Remaining risk:** an untested backup is not a recovery plan; the release readiness (22.24) must not claim restore coverage. The tooling closes the "we could not run one" half of that; the "nobody has run one" half is exactly what remains.
 
+### G80 read-only verification (Phase 24.2, 2026-11-14)
+
+**D4 is still missing**: no approved isolated recovery target, permitted writes, RPO or RTO. No restore
+was attempted and no recovery database was contacted. With `RESTORE_DATABASE_URL` unset,
+`node scripts/restore-drill.mjs --target-env=RESTORE_DATABASE_URL` **refused with exit 1** before any
+database connection ("the recovery target is not provided") — the fail-closed behaviour the plan
+requires. `pnpm backup:freshness` examined the only archive under `.data/backups`
+(`phase22-2026-11-04T01-28-42-309Z`, a **schema-only** tooling artifact): checksums verified, 3 files,
+0 world-readable, no encryption marker, but **243.1 h old** against a 26 h limit → exit 1 `STALE`.
+This is archive integrity/freshness evidence only: it is not a restore, not a recovery point, and does
+not change the `Blocked` status. D4 remains the only unblock. Commands and exact output are in
+`docs/quality/phase-24-test-evidence.md` §24.2.
+
 ## G81 — No automated, encrypted, off-host backup; the existing demo artifact is partial and world-readable
 
 - **Module / contract:** platform — backup artifacts and retention.
@@ -820,6 +851,20 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Expected vs observed:** expected — scheduled full dumps plus matched file archives, checksums, encryption, restricted permissions, off-host retention and a freshness alert; observed — manual commands in a document and a partial, unencrypted demo snapshot.
 - **Status:** **Blocked (Phase 23.9, 2026-11-12) — deployment-owned; tooling shipped, nothing installed or evidenced.** `scripts/backup.mjs` (`pnpm backup`) implements pg_dump + files, SHA-256 checksums, gpg-encryption required by default, 700/600 permissions, `pg_restore --list` verification, opt-in prefix-only retention and a schema-only tooling mode; the existing demo artifact was chmodded to 700/600 (the `verify:backup` permission finding is gone, 8 problems remain). Added since: `pnpm backup:freshness` (`scripts/restore-drill.mjs --check-freshness`), which exits non-zero when the newest archive is outside `BACKUP_MAX_AGE_HOURS` (default 26 h), when its checksums do not verify, or when no archive exists — so a stalled or failing run becomes an alert instead of a surprise at restore time; and `scripts/deploy/backup.service.example` / `backup.timer.example`, which wire the job and the freshness check together. **Still missing and named:** an installed scheduler/timer, an off-host destination, a provisioned gpg recipient/key, and someone reading the alert — plus an evidence artifact showing all four on the deployment. The templates are shipped, not installed, so G81 stays High and **Blocked**, not Partial: Phase 23.9 cannot install a deployment from this repository, and the demo snapshot is still not a recovery point. Requirements are in `docs/security/deployment-baseline.md` §6/§9; see also `docs/quality/phase-22-25-release-blocker-remediation.md`.
 - **Remaining risk:** data loss up to the last unmonitored manual dump; a leaked backup because it is world-readable; inability to meet any approved RPO once one exists.
+
+### G81 read-only verification (Phase 24.2, 2026-11-14)
+
+The four deployment-owned items named above are still missing: no installed scheduler/timer, no off-host
+destination, no provisioned gpg recipient/key, and no alert recipient. In this checkout
+`BACKUP_GPG_RECIPIENT`, `BACKUP_ROOT`, `RESTORE_DATABASE_URL` and `BACKUP_MAX_AGE_HOURS` are **all
+unset**; only `.example` templates exist under `scripts/deploy/`, and the repository installs no
+`backup.service` or `backup.timer`. Read-only checks: `pnpm backup:freshness` → exit 1 (243.1 h stale
+schema-only archive, checksums verified, no encryption marker);
+`node scripts/verify-backup.mjs .data/demo/backup-2026-10-22T03-12-12-673Z` → exit 1 with **8
+problems** (7 missing core tables — `users`, `roles`, `teams`, `app_settings`, `audit_log`,
+`outbox_events`, `jobs` — plus a 553.4 h age; 40 tables / 31,379 rows, no encryption marker). Nothing
+was installed, chmodded, created or deleted. G81 stays **High / Blocked**; no owner acceptance was
+recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
 
 ## G82 — The movement history exposed a limit with no way to page deeper
 

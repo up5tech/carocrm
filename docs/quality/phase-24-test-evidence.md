@@ -1,11 +1,15 @@
 # Phase 24 — Test Evidence
 
-> **Entry:** Phase 24.1 — Single-Tenant Charter and Documentation Reconciliation (2026-11-14)
-> **Plan:** `plans/PLAN_Phase_24_Product_Completion.md` §7; deliverable registered in §4.1
+> **Entries:** 24.1 — Single-Tenant Charter and Documentation Reconciliation (2026-11-14);
+> 24.2 — NO-GO Blocker Closure, **partial / blocked** (2026-11-14). One evidence file, appended per
+> sub-phase.
+> **Plan:** `plans/PLAN_Phase_24_Product_Completion.md` §§7–8; deliverable registered in §4.1
 > **Predecessor:** `docs/quality/phase-24-priority-decisions.md` (24.0 audit, 2026-11-14)
-> **Database policy:** none of the commands below contacted a database, recovery target, provider,
-> live mailbox or sandbox. No migration was added, no business data was changed, and no extra database
-> was created. The gate is DB-free by `vitest.ci.config.ts` and `docs/quality/ci-gates.md`.
+> **Database policy:** 24.1 contacted no database. 24.2 contacted **no recovery database** and ran no
+> restore; its two focused Phase 23 regression suites boot the configured primary database under
+> `AGENTS.MD` §3 with no new database, schema, reset, truncate or broad delete. No migration was added
+> and no business data was changed by the 24.2 documentation work. The gate is DB-free by
+> `vitest.ci.config.ts` and `docs/quality/ci-gates.md`.
 
 ## 1. What 24.1 delivered
 
@@ -67,3 +71,92 @@ Modified: `AGENTS.MD`, `README.md`, `docs/quality/phase-22-observability-runbook
 `plans/PLAN_Phase_19_AI_Agents.md`, `plans/PLAN_Phase_23_Security_Hardening.md`,
 `scripts/check-ui-conventions.mjs`, and the project memory file `.workbuddy-ai/memory/MEMORY.md`
 (compaction required by the workspace; no product content removed).
+
+---
+
+## Phase 24.2 — NO-GO Blocker Closure (P0) — partial / blocked
+
+> **Result: NOT COMPLETE.** Four of the seven §8 tasks are gated by explicit owner/legal/deployment
+> decisions that an agent may not make. Every actionable task was completed; the production release
+> remains **NO-GO**. No exception was accepted, signed or re-scored, no `LICENSE` was created, no
+> backup was installed, no restore was run, and no recovery database was contacted.
+
+### 24.2.1 Task disposition (plan §8)
+
+| §8 task | Disposition | Evidence |
+|---|---|---|
+| 1 — obtain D4 (isolated target, permitted writes, RPO/RTO) | **Blocked — owner.** No approval exists. Only archive integrity/freshness checks were run, with no recovery-database contact | §24.2.2; `docs/quality/known-gaps.md` G80 |
+| 2 — install encrypted off-host backup | **Deployment-owned; not installed.** Templates re-read and verified as shipped-only; no gpg recipient, no off-host destination, no timer, no alert recipient | §24.2.2; `docs/quality/known-gaps.md` G81 |
+| 3 — run `pnpm restore:drill` after D4 | **Blocked — D4.** Not run. No `--allow-restore`, no target, no `--allow-clean`. The tool refused fail-closed before any connection | §24.2.2 |
+| 4 — record the distribution decision | **Prepared by the agent; decision pending owner/legal.** Blank decision record + third-party inventory added; no licence chosen, no review concluded | `docs/security/distribution-compliance.md` §6; `README.md` §Licensing |
+| 5 — owner signatures on High/Critical exceptions | **UNSIGNED.** An agent may not sign. Three High rows plus G1/G90 recorded as pending | `docs/security/exception-register.md` §5 |
+| 6 — resolve G1's D3 deviation | **Disposition recorded, sign-off pending.** G1 stays `Partial`; G90 is explicitly not resolved by D3 | `docs/quality/known-gaps.md` G1; exception register §5 |
+| 7 — re-run `pnpm ci:gate` + focused Phase 23 regression | **Run** | §24.2.3 |
+
+### 24.2.2 Read-only archive verification (no recovery database)
+
+These commands are **expected to exit non-zero** for a deployment with no installed backup. Reporting
+them as green would be false evidence. Nothing was installed, chmodded, created or deleted.
+
+| Command | Result |
+|---|---|
+| `pnpm backup:freshness` | **Exit 1.** Archive `phase22-2026-11-04T01-28-42-309Z` (schema-only tooling artifact), newest file **243.1 h** old vs a 26 h limit, checksums **verified**, 3 files, 0 world-readable, **no encryption marker** → `STALE` |
+| `node scripts/verify-backup.mjs .data/demo/backup-2026-10-22T03-12-12-673Z` | **Exit 1.** 40 tables / 31,379 rows, 553.4 h old, no encryption marker, **8 problems**: missing `users`, `roles`, `teams`, `app_settings`, `audit_log`, `outbox_events`, `jobs` + stale age |
+| `env -u RESTORE_DATABASE_URL node scripts/restore-drill.mjs --target-env=RESTORE_DATABASE_URL` | **Exit 1, refusal before any DB contact** — "the recovery target is not provided (set $RESTORE_DATABASE_URL)" and "there is no approved recovery environment yet — see G80". This is the fail-closed guard working, not a drill |
+| Environment presence check (names only, no values) | `BACKUP_GPG_RECIPIENT`, `BACKUP_ROOT`, `RESTORE_DATABASE_URL`, `BACKUP_MAX_AGE_HOURS` — **all unset** |
+| `scripts/deploy/` inventory | Only `backup.service.example`, `backup.timer.example`, `restore-drill.cron.example`; no installed `backup.service`/`backup.timer` anywhere in the repository |
+| `pnpm licenses list --json` (offline) | 13 licence groups across **716** installed packages with a declared `license`; 759 package directories under `node_modules/.pnpm`; 25 workspace `package.json` files declare 205 direct deps. Used for the distribution inventory, **not** a legal conclusion |
+
+### 24.2.3 Regression verification
+
+| Command | Result |
+|---|---|
+| `pnpm ci:gate` (24.2 re-run) | **Exit 0** — lint (5,178 keys + eslint), `lint:arch` (2 known exceptions), typecheck, build, 94 migrations, api-spec 63/915, `test:ci` **89 files / 1,424 tests**, worker **24 / 248**, web **15 / 86**, secret scan **2,502 tracked files**. The first attempt aborted on a transient ESLint `write EPIPE` from the workspace IPC broker (not a lint finding); the retry with output redirected to a file passed. As in 24.1, the stale generated `apps/web/dist` was moved to `/tmp` first so Vite's `emptyDir` did not trip the bulk-delete guard |
+| `MAIL_TRANSPORT=memory SMTP_FROM=agent-test@example.invalid pnpm exec vitest run apps/api/test/phase23-10-security-regression.test.ts` | **Exit 0** — 1 file, **18 tests** passed |
+| `MAIL_TRANSPORT=memory SMTP_FROM=agent-test@example.invalid pnpm exec vitest run apps/api/test/acl-matrix.test.ts` | **Exit 0** — 1 file, **12 tests** passed |
+
+The focused batch is **2 files / 30 tests**, each run as its own `pnpm vitest run` per repository
+convention. Both boot the configured primary database under `AGENTS.MD` §3; no extra database,
+schema, container, reset or truncate was created. `.env` is git-ignored; no connection string is
+recorded here. `pnpm ci:gate` itself is DB-free. No application code changed in 24.2, so these runs
+prove the tree stayed healthy rather than validating a new code path.
+
+### 24.2.4 Acceptance criteria (plan §8)
+
+| Criterion | Result |
+|---|---|
+| G80/G81 `Fixed` with restore evidence, **or** explicitly accepted by the owner in writing with a review date | **NOT MET.** Both remain `Blocked` (G80 Medium, G81 High). No restore evidence, no owner acceptance in writing |
+| The release record states the distribution outcome; "do not distribute" is stated explicitly if that is the outcome | **MET for the current outcome** — §24.2.5 states "do not distribute". The owner/legal outcome itself is still pending, so §5 of `distribution-compliance.md` remains unticked |
+| No High/Critical exception is unsigned, and no exception was accepted by the coding agent | **NOT MET on signatures.** Three High rows are explicitly **UNSIGNED**. **MET** on the second half — no agent acceptance or signature |
+| The primary database was never reset, recreated or broadly cleaned | **MET.** No DDL, no reset, no broad delete; only the two regression suites touched the configured primary |
+
+### 24.2.5 Distribution outcome for the release record
+
+**Do not distribute.** No root `LICENSE` or proprietary notice exists, no clean-room/AGPL reviewer or
+outcome is named, and no third-party notice artifact has been produced by a legal review. Until the
+owner/legal decision `DIST-24.2-01` is recorded and linked from `README.md` §Licensing and the final
+Phase 24 release review, this repository must not be published as a distribution artifact. This is
+the "do not distribute" statement required by `docs/security/distribution-compliance.md` §5; it is a
+status, **not** an owner decision.
+
+### 24.2.6 Reviewed work order (plan §5.1)
+
+All remaining 24.2 work is owner-controlled: **D4** (owner / platform-operations), the **distribution
+outcome** (owner / legal), **three High signatures** (owner), and the **D3 / G90 sign-off** (owner).
+No blocked task is marked complete because unrelated work advanced.
+
+Per §5.1, **24.3 (production installation/upgrade)** and **24.4 (canonical API contract and typed
+client)** may proceed independently after 24.1, and **24.5** may reconcile already-provable release
+facts. Recommended next actionable P0 work is 24.3, then 24.4, with 24.2 revisited as soon as D4 or
+the legal outcome arrives. This entry records that order; it does not auto-start an unrequested
+sub-phase.
+
+### 24.2.7 Files changed
+
+- Prepared records: `docs/security/distribution-compliance.md` §6, `README.md` §Licensing.
+- Registers: `docs/quality/known-gaps.md` (G1 summary + G1/G80/G81 subsections),
+  `docs/security/exception-register.md` §5.
+- Evidence: this entry; the project daily log `.workbuddy-ai/memory/2026-11-14.md`.
+- **Not created:** `LICENSE`, `NOTICE`, any backup artifact, any restore evidence, any distribution
+  artifact, any owner signature. `package.json`, `pnpm-lock.yaml` and all application code are
+  unchanged.

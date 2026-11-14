@@ -591,3 +591,8 @@ EspoCRM upstream is AGPL-3.0-or-later. This repository is a clean-room reimpleme
 assets or translations were copied. A formal compliance review is required before distribution;
 the repository has no `LICENSE` yet, so this is an explicit release blocker — see
 [docs/security/distribution-compliance.md](docs/security/distribution-compliance.md).
+
+Phase 24.2 prepared the blank owner/legal decision record and the third-party licence inventory in
+§6 of that document; it did **not** choose a licence or complete the review. Until an owner decision
+is recorded, the release status is **do not distribute** — see
+[docs/quality/phase-24-test-evidence.md](docs/quality/phase-24-test-evidence.md) (24.2 entry).
