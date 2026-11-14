@@ -3,7 +3,8 @@
  * UI convention gate (plans/PLAN_Phase_20_Settings_UX.md §20.22/§20.23/§20.20, gate formalised in §20.26;
  * rules 5 and 6 added by plans/PLAN_Phase_22_Integration_E2E_Hardening.md §14).
  *
- * Seven rules, each of which is a defect this repository shipped at least once:
+ * Eight rules, each of which is a defect this repository shipped at least once (rules 6–8 also
+ * check documentation truth, so this gate covers docs as well as the SPA):
  *
  * 1. **Every `t('…')` key exists in `i18n/en`.** A missing key is not a fallback — `t()` returns the
  *    key itself, so the operator reads `core.common.accessDenied` where a sentence belongs. Six of
@@ -24,8 +25,14 @@
  *    colour lives in `styles/tokens.css` (generated from `theme/tokens.ts`); a literal elsewhere is a
  *    drift that breaks the single-source-of-truth rule §20.20 established. The only legal literals are
  *    in `tokens.css` and `theme/tokens.ts`.
+ * 8. **No new document claims multi-tenancy support or tenant-readiness.** The owner ratified a
+ *    single-tenant product boundary on 2026-11-13 (`docs/reference/product-charter.md`, Phase 24.1).
+ *    A document that promises "tenant-ready" APIs, tenant-aware queries, an upcoming tenant-isolation
+ *    phase, multi-tenancy support or multi-tenant isolation tests fails the gate. Only the boundary
+ *    documents that must quote those phrases in order to prohibit or reconcile them are allowlisted;
+ *    a NEW document is checked regardless of whether it is already tracked by git.
  *
- * Run: `node scripts/check-ui-conventions.mjs` (also wired to `pnpm lint:ui`).
+ * Run: `node scripts/check-ui-conventions.mjs` (also wired to `pnpm lint:ui` and `pnpm lint`).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -230,7 +237,7 @@ for (const file of walk(srcDir)) {
   violations.push(...tokenViolations(tokens, used));
 }
 
-// Rule 6 (docs truth, §20.26): the authoritative "Still open" list must not name a feature the code
+// Docs truth rule (§20.26): the authoritative "Still open" list must not name a feature the code
 // ships. Evidence is a file that proves the feature exists; the check only fires when that file is
 // present, so it never flags a genuinely-absent item.
 const compatibilityDoc = join(root, 'docs/compatibility/settings-ux.md');
@@ -259,6 +266,74 @@ if (existsSync(compatibilityDoc)) {
   }
 }
 
+// Rule 8 (docs truth, Phase 24.1): CaroCRM is single-tenant by design. A new document that claims
+// multi-tenancy support, tenant-readiness or a scheduled tenant-isolation phase contradicts the
+// ratified product boundary. The allowlisted documents are the boundary/audit records that must
+// quote those phrases in order to prohibit or reconcile them; everything else — including a
+// brand-new, untracked file — is checked. `pnpm lint` runs this gate, so a stale promise fails the
+// same way a missing i18n key does.
+const DOC_DIRS = ['docs', 'plans', 'content'];
+const DOC_FILES = ['README.md', 'AGENTS.MD', 'CHANGELOG.md'];
+const TENANCY_BOUNDARY_DOCS = new Set([
+  'docs/reference/product-charter.md',
+  'docs/security/tenancy-decision.md',
+  'docs/quality/phase-24-priority-decisions.md',
+  'docs/quality/phase-24-test-evidence.md',
+  'plans/PLAN_Phase_24_Product_Completion.md',
+]);
+const TENANCY_CLAIMS = [
+  { re: /tenant[- ]ready/i, label: 'a "tenant-ready" API or architecture' },
+  { re: /tenant[- ]aware/i, label: 'tenant-aware queries or APIs' },
+  {
+    re: /(?:upcoming|planned|next|future|separate)\s+(?:tenant[- ]isolation|multi[- ]tenancy)\s+phase/i,
+    label: 'an upcoming tenant-isolation phase',
+  },
+  {
+    re: /\b(?:supports?|provides?|offers?)\s+(?:full\s+)?multi[- ]tenancy\b/i,
+    label: 'multi-tenancy support',
+  },
+  { re: /\bmulti[- ]tenant\s+(?:isolation\s+)?tests?\b/i, label: 'multi-tenant isolation tests' },
+];
+
+function collectDocs() {
+  const out = [];
+  const walkDocs = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) {
+        if (entry === 'node_modules' || entry === 'dist' || entry === 'test-results') continue;
+        walkDocs(path);
+      } else if (path.endsWith('.md')) {
+        out.push(path);
+      }
+    }
+  };
+  for (const dir of DOC_DIRS) {
+    const full = join(root, dir);
+    if (existsSync(full)) walkDocs(full);
+  }
+  for (const file of DOC_FILES) {
+    const full = join(root, file);
+    if (existsSync(full)) out.push(full);
+  }
+  return out;
+}
+
+for (const file of collectDocs()) {
+  const rel = relative(root, file).split('\\').join('/');
+  if (TENANCY_BOUNDARY_DOCS.has(rel)) continue;
+  const text = readFileSync(file, 'utf8');
+  for (const { re, label } of TENANCY_CLAIMS) {
+    if (!re.test(text)) continue;
+    const index = text.split('\n').findIndex((line) => re.test(line));
+    const line = index === -1 ? 1 : index + 1;
+    violations.push(
+      `${rel}:${line} claims ${label} — CaroCRM is single-tenant by decision ` +
+        '(docs/reference/product-charter.md §6); remove the claim or add an allowlisted boundary document',
+    );
+  }
+}
+
 if (violations.length === 0) {
   console.log(`ui conventions: clean (${Object.keys(catalog).length} keys checked)`);
   process.exit(0);
@@ -266,5 +341,8 @@ if (violations.length === 0) {
 
 console.error(`ui conventions: ${violations.length} violation(s)\n`);
 for (const violation of violations) console.error(`  ${violation}`);
-console.error('\nSee docs/ux/design-principles.md and plans/PLAN_Phase_20_Settings_UX.md §20.22–§20.26.');
+console.error(
+  '\nSee docs/ux/design-principles.md, plans/PLAN_Phase_20_Settings_UX.md §20.22–§20.26 ' +
+    'and docs/reference/product-charter.md (rule 8).',
+);
 process.exit(1);

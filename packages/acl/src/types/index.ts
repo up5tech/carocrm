@@ -17,7 +17,6 @@ export interface AclContext {
   userType: 'admin' | 'regular' | 'api' | 'portal' | 'system';
   roles: string[];
   teams: string[];
-  tenantId?: string;
 }
 
 export interface AclCheckOptions {

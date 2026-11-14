@@ -237,6 +237,7 @@ A task is complete when, as applicable:
 - No extra test database was created.
 - No unrelated changes, secrets, or destructive setup scripts were introduced.
 - Documentation and API contracts are updated where necessary.
+- No document, API contract, migration, DTO or test claims shared-tenancy support or a tenant-scoped API, and none introduces a tenant id or tenant predicate. CaroCRM is single-tenant by design; reject such a feature at review (`docs/reference/product-charter.md` §6). Rule 8 of `scripts/check-ui-conventions.mjs` enforces the documentation half through `pnpm lint`.
 - The final report states the implementation, verification performed, and known limitations honestly.
 
 ## 12. Final Reminder

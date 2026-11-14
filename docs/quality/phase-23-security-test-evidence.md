@@ -153,7 +153,8 @@ or requires a branch push; none is reported as a pass.
 3. **Tenancy decision (task 5).** New `docs/security/tenancy-decision.md`: one installation serves one
    customer; deployment separation is acceptable only under five stated conditions and is not enforced
    by this code; §48 tenant isolation is **Not applicable by decision**, not “verified”; the triggers and
-   minimum scope for a separate tenant-isolation phase are listed. No migration was started.
+   deployment-separation conditions are listed (Phase 24.1 later converted those triggers into a
+   change-control guard in `docs/reference/product-charter.md`). No migration was started.
 4. **Distribution compliance (task 6).** New `docs/security/distribution-compliance.md`: no root
    `LICENSE`; the clean-room/AGPL review has no named owner or outcome; release remains **Blocked** on an
    owner/legal decision. No licence was created and no legal conclusion was made.

@@ -8,9 +8,13 @@ hardening). Rows Phase 23 changed say so inline; the review that produced this d
 licence question remain open).
 
 **Not in this matrix because they are not built:** SAML, SCIM and enterprise directory sync (deferred with a
-rationale in `docs/runbooks/advanced-integrations.md` §15); multi-tenancy (single-tenant by decision,
-`docs/security/tenancy-decision.md`); a DTO-derived OpenAPI contract (route inventory only, G1); a production
-deployment artifact (deployment-owned, `docs/security/deployment-baseline.md`).
+rationale in `docs/runbooks/advanced-integrations.md` §15); a DTO-derived OpenAPI contract (route inventory
+only, G1); a production deployment artifact (deployment-owned, `docs/security/deployment-baseline.md`).
+
+**Not a capability by product decision, not a gap:** multi-tenancy / shared tenancy. One deployment serves
+one customer organisation; isolation between customers is deployment-owned. See
+`docs/reference/product-charter.md` and `docs/security/tenancy-decision.md`. No tenant-scoped API,
+session or cross-customer query exists or is planned.
 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|

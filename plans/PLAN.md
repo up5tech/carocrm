@@ -430,7 +430,6 @@ interface RequestContext {
   userId?: string;
   userType?: 'admin' | 'regular' | 'api' | 'portal' | 'system';
   roles?: string[];
-  tenantId?: string;
   locale?: string;
   timezone?: string;
   ip?: string;
@@ -595,7 +594,7 @@ Domain Modules
   ↓
 Installed Extensions
   ↓
-Tenant/Instance Customizations
+Instance Customizations
   ↓
 Runtime Overrides
 ```
@@ -1694,7 +1693,7 @@ activate
 
 ## 38.4 Security
 
-Do not allow extensions to upload arbitrary executable code from untrusted administrators in a hosted multi-tenant product without a strong isolation model.
+Do not allow extensions to upload arbitrary executable code from untrusted administrators in a hosted product without a strong isolation model. CaroCRM itself is not a hosted shared-runtime product (§43).
 
 For self-hosted installations, extension installation can support trusted packages, but signature verification and integrity checks are still recommended.
 
@@ -1901,7 +1900,7 @@ Separate configuration into:
 2. Secure secrets.
 3. Database-backed application settings.
 4. User preferences.
-5. Tenant settings.
+5. Installation settings (there is one installation per deployment — §43).
 
 Never store secrets in ordinary settings tables unencrypted.
 
@@ -1909,28 +1908,30 @@ Provide a central `ConfigService` with typed definitions.
 
 ---
 
-# 43. Multi-Tenancy Strategy
+# 43. Single-Tenant Product Boundary
 
-The initial architecture should be tenant-ready even if v1 is single-tenant.
+**Decision (owner, 2026-11-13; reconciled in Phase 24.1):** CaroCRM is single-tenant by design — one
+deployment serves one customer organisation. This section replaces the original "Multi-Tenancy Strategy"
+draft, which sketched a `tenant_id` column set and three isolation models. That draft was never
+implemented and is **not** a roadmap: no tenant id, tenant predicate, per-tenant schema,
+tenant-scoped session/API key or cross-customer query belongs in this architecture.
 
-Recommended model:
+Product statement: `docs/reference/product-charter.md`. Security decision, the five deployment-
+separation conditions and the change-control guard: `docs/security/tenancy-decision.md`.
 
-```text
-tenants
-users.tenant_id
-roles.tenant_id
-records.tenant_id
-metadata.tenant_id
-attachments.tenant_id
-```
+Consequences for §§9, 12, 15, 18, 42, 48, 49, 56 and 81:
 
-Support three future isolation models:
-
-- Shared database + tenant ID.
-- Database/schema per tenant.
-- Database per tenant.
-
-Do not implement all three initially. Make repository APIs tenant-aware from day one.
+- `RequestContext` carries request/trace/user identity and locale only. The query layer injects one
+  ACL predicate, never a tenant predicate.
+- Metadata, ACL, attachment, job, outbox, export, search, audit and webhook layers all belong to one
+  installation. No administrator or shared runtime spans installations.
+- Isolation between customers is deployment-owned and holds only under the five conditions in
+  `docs/security/tenancy-decision.md` §2; the repository does not enforce them.
+- Provider-account labels (`tenant_ref` / `tenantRef` in the Advanced Integrations connectors and
+  migration 056) name an account at an external provider. They are not customer identity and are
+  deliberately preserved.
+- A feature that assumes a tenant id is rejected at review (`docs/reference/product-charter.md` §6).
+  Reversing this boundary requires a new explicit owner decision and its own plan.
 
 ---
 
@@ -2076,7 +2077,9 @@ Do not expose stack traces in production responses.
 - Replay protection for webhooks where possible.
 - Audit logging.
 - Least-privilege service accounts.
-- Tenant isolation.
+- Tenant isolation — **Not applicable by decision** for the single-tenant product (§43;
+  `docs/reference/product-charter.md`, `docs/security/tenancy-decision.md` §2). Kept in the control
+  list as history, not as an unmet implementation task.
 - Permission tests for every CRUD endpoint.
 
 ## SSRF protection
@@ -2100,7 +2103,7 @@ Implement:
 - Structured JSON.
 - Correlation ID.
 - User ID.
-- Tenant ID.
+- Request context (request id / trace id) — there is no tenant id in a single-tenant installation (§43).
 - Route.
 - Status code.
 - Duration.
@@ -2337,7 +2340,8 @@ Include:
 - Token leakage tests.
 - Rate-limit tests.
 - Formula sandbox escape tests.
-- Multi-tenant isolation tests.
+- Deployment-separation evidence is operator-owned; there is no in-app tenant-isolation control to
+  test (`docs/security/tenancy-decision.md` §2).
 
 ---
 
@@ -2890,7 +2894,8 @@ exports), SSRF/injection/XSS and webhook-replay hardening, secrets and retention
 nightly CI gate, encrypted off-host backup with a proven restore, and an incident-response runbook.
 
 **Owner decisions recorded at 23.0 (2026-11-09):** generic OIDC is **in scope for 23.3** (SAML/SCIM deferred);
-multi-tenancy is **documented, not delivered**; CI **stays nightly-only** (G78 remains open); the recovery
+single-tenancy is the **product boundary**, not an unimplemented feature (reaffirmed by the owner in
+Phase 24); CI **stays nightly-only** (G78 remains open); the recovery
 environment and RPO/RTO are **not approved**, so **23.9 is Blocked**; the distribution-compliance review and the
 missing `LICENSE` stay release blockers; and no finding is accepted by default.
 
@@ -2919,8 +2924,8 @@ customer organisation.** Phase 24 contains no tenant-isolation work; the trigger
 
 Acceptance:
 
-The Phase 23 NO-GO blockers are closed or owner-accepted; no tracked document promises tenant-ready
-APIs; `pnpm ci:api-spec --strict` passes; a production installation can be installed, upgraded and
+The Phase 23 NO-GO blockers are closed or owner-accepted; no tracked document claims shared tenancy or
+a tenant-scoped API; `pnpm ci:api-spec --strict` passes; a production installation can be installed, upgraded and
 recovered from documented artifacts; and the final review records an honest go/no-go with residual risks.
 
 ---
@@ -3037,7 +3042,10 @@ Example:
 | Portals              | selected baseline | Planned            | P2       |
 | Extension SDK        | new design        | Planned            | P1       |
 
-This matrix must be kept current throughout the project.
+This matrix must be kept current throughout the project; the maintained version is
+`docs/reference/compatibility-matrix.md`. Multi-tenancy is not a capability of this product:
+single-tenancy is a ratified boundary (§43 and `docs/reference/product-charter.md`), not an
+unimplemented row.
 
 ---
 
@@ -3718,9 +3726,7 @@ Resolve metadata
         ↓
 Parse query
         ↓
-Inject tenant condition
-        ↓
-Inject ACL condition
+Inject ACL condition (one installation, no tenant predicate — §43)
         ↓
 Validate fields/operators
         ↓

@@ -8,7 +8,6 @@ export interface RequestContext {
   userId?: string | undefined;
   userType?: 'admin' | 'regular' | 'api' | 'portal' | 'system' | undefined;
   roles?: string[] | undefined;
-  tenantId?: string | undefined;
   locale?: string | undefined;
   timezone?: string | undefined;
   ip?: string | undefined;
@@ -31,10 +30,6 @@ export function getUserId(): string | undefined {
 
 export function getUserType(): RequestContext['userType'] | undefined {
   return storage.getStore()?.userType;
-}
-
-export function getTenantId(): string | undefined {
-  return storage.getStore()?.tenantId;
 }
 
 export function getLocale(): string | undefined {

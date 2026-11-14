@@ -305,7 +305,7 @@ Do not store API keys in these agent tables. Reuse the existing encrypted secret
 
 ### 4.5 Database rules
 
-- Use stable IDs consistent with the project, timestamps in UTC, explicit foreign keys/indexes where appropriate, and tenant/organization keys when the platform supports multi-tenancy.
+- Use stable IDs consistent with the project, timestamps in UTC and explicit foreign keys/indexes where appropriate. Do not add organisation/tenant keys: one deployment serves one organisation (`docs/reference/product-charter.md`).
 - Store counters and monetary usage values in appropriate exact numeric/integer types; do not use floating-point arithmetic for cost accounting when precise decimal arithmetic is available.
 - Run and append audit/run events within consistent transaction boundaries; never persist a “success” state before the corresponding operation has actually succeeded.
 - Use optimistic concurrency or row locking to prevent two workers from executing the same run step concurrently.

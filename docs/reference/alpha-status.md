@@ -69,7 +69,7 @@ pnpm --filter @carocrm/worker test  # 143 worker tests (jobs, scheduler, outbox,
 - Metadata overrides are stored in `metadata_entries` + `app_settings('entity')` rather than files.
 - Attachment parent-ACL check uses the record-level ACL predicate, including the portal
   policy for portal principals (PLAN §37); API-user policies are future work.
-- Multi-tenancy columns are absent: repositories are single-tenant for Alpha (PLAN §43 wanted tenant-aware APIs — deferred).
+- Multi-tenancy is **not a goal, not a deferred feature**: one deployment serves one customer organisation by owner decision (2026-11-13), reconciled in Phase 24.1 (`docs/reference/product-charter.md`, `docs/security/tenancy-decision.md`, `plans/PLAN.md` §43). There is no tenant id on records, sessions or queries, no cross-customer surface, and no tenant-isolation implementation is scheduled.
 
 ## Notable bug found and fixed during build
 

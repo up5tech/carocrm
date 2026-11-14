@@ -219,9 +219,15 @@ a lint that fails a release on a dead link or a missing page), served at `/docs`
 
 _Not built yet_ — real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
 provider until an IMAP/Graph adapter is installed); SAML, SCIM and enterprise directory sync
-(deferred with a written rationale — generic OIDC is built); multi-tenancy (one installation serves
-one customer by decision, see [docs/security/tenancy-decision.md](docs/security/tenancy-decision.md));
-a DTO-derived OpenAPI contract (the served document is a route inventory, G1).
+(deferred with a written rationale — generic OIDC is built); a DTO-derived OpenAPI contract (the served
+document is a route inventory, G1).
+
+**Product boundary, not a missing feature** — CaroCRM is **single-tenant by design**: one deployment
+serves one customer organisation. Shared tenancy, workspace isolation, per-tenant billing,
+cross-customer reporting and tenant-scoped APIs are permanent non-goals, not deferred work; isolation
+between customers is deployment-owned. See
+[docs/reference/product-charter.md](docs/reference/product-charter.md) and
+[docs/security/tenancy-decision.md](docs/security/tenancy-decision.md).
 Several provider integrations are delivered but flagged experimental until exercised against a real
 account (the Twilio and Asterisk voice adapters, for one); each module's compatibility note states
 which parts that applies to.
@@ -570,7 +576,8 @@ Every module route is authenticated and ACL-checked server-side; see
 | [docs/operations/backup-restore.md](docs/operations/backup-restore.md)           | what to back up and how to restore it                                                             |
 | [docs/runbooks/security-incident-response.md](docs/runbooks/security-incident-response.md) | security incidents: containment, revocation/rotation, webhook replay, data exposure, evidence |
 | [docs/security/deployment-baseline.md](docs/security/deployment-baseline.md)     | production TLS/proxy, secrets, least-privilege DB roles and configuration checklist               |
-| [docs/security/tenancy-decision.md](docs/security/tenancy-decision.md)           | single-tenant boundary, deployment separation conditions and tenant-phase triggers                |
+| [docs/reference/product-charter.md](docs/reference/product-charter.md)           | product charter: single-tenant boundary, target operator, non-goals and review rules              |
+| [docs/security/tenancy-decision.md](docs/security/tenancy-decision.md)           | security decision: deployment separation conditions, change-control guard and residual risks     |
 | [docs/security/distribution-compliance.md](docs/security/distribution-compliance.md) | clean-room/AGPL review and the missing `LICENSE` (blocked release item)                        |
 
 Read [AGENTS.MD](AGENTS.MD) first. It fixes the rules this repository is developed under:

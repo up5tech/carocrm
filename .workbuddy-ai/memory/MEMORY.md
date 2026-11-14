@@ -1,148 +1,69 @@
 # Project memory — carocrmv2
 
-Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
-`docs/modules/<module>/` and `docs/implementation/` — do not duplicate it here.
+Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs/modules/`,
+`docs/implementation/`, `plans/` — do not duplicate it here.
 
-## Product positioning (owner decision, 2026-11-13)
-
-- **CaroCRM is single-tenant by design**: one deployment = one customer organisation. No tenant id,
-  tenant-aware queries, per-tenant schema, workspace isolation, cross-tenant tests, SCIM for multiple
-  orgs, or hosted multi-tenant SaaS. Isolation between customers is deployment-owned — see the five
-  conditions in `docs/security/tenancy-decision.md` §2. Do not propose a "tenant isolation phase"
-  unless the owner explicitly reverses this.
-- `tenant_ref` (migration 056) / `tenantRef` in `advanced-integrations` are **provider-account labels**,
-  not tenant isolation fields. Dead tenant surface: `packages/core/src/context/index.ts`,
-  `packages/acl/src/types/index.ts`, `packages/core/src/logger/index.ts`.
-- Standing owner decisions: CI stays **nightly-only** (G78, decision D3 reaffirmed 2026-11-09);
-  SAML/SCIM deferred; generic OIDC shipped in Phase 23.3. Do not reopen these to make a plan look complete.
-- Differentiator vs Twenty CRM = breadth of built-in business modules, not platform DX. REST +
-  `api-spec/` is the single API paradigm; no GraphQL.
-
-## Naming
-
-- Phase-19 modules use **plain** ids (`sales`, `projects`, `customer-success`,
-  `voice-communications`), never `Ua*`; `Ua*` in `PLAN.md` is legacy. References *to other*
-  modules may keep their ids (`OPTIONAL_INTEGRATIONS`).
+## Owner decisions (standing, do not reopen)
+- **Single-tenant by design**: one deployment = one org. No tenant id/queries/per-tenant schema/
+  cross-tenant tests/SCIM-multi-org/hosted SaaS. Isolation is deployment-owned
+  (`docs/security/tenancy-decision.md` §2). `tenant_ref` (migration 056) / `tenantRef` are
+  provider-account labels (19 files, keep). Dead `tenantId`/`getTenantId` surface removed in 24.1.
+  Charter: `docs/reference/product-charter.md`; guarded by rule 8 of `scripts/check-ui-conventions.mjs`
+  (5 boundary docs allowlisted; a new doc claiming multi-tenancy fails `pnpm lint`).
+- CI nightly-only (G78/D3); SAML/SCIM deferred; generic OIDC shipped 23.3. Differentiator = module
+  breadth, not platform DX. REST + `api-spec/` only, no GraphQL.
+- Phase-19 module ids are plain (`sales`, `projects`, …), never `Ua*`.
 
 ## Repo conventions
+- Domain module = `apps/api/src/<domain>` + barrel exporting `<DOMAIN>_CONTROLLERS` / `_PROVIDERS`,
+  spread into `AppModule` **before** the generic `:entity` wildcard controller.
+- Records = metadata entities in `entity_records` (`database/seed-metadata.ts`); cross-record rules
+  on `beforeValidate`. Migrations `database/migrations/<NNN>_phase<NN>_<slug>.sql`, additive.
+  Money = canonical decimal string (`sales/money/decimal.ts`).
+- Web conversation screens share one CSS kit in `carocrm.css` (workspace/rail/convo prefixes);
+  module prefixes only for module-only pieces. Shell height `calc(100vh - 235px)` (70+48+46+14+56).
+- `pnpm lint:ui` enforces i18n keys, no `.slice(0,19)` timestamps, no raw `<Empty>`, no internal
+  `<a href="/…">`. `EmptyState` only (key `core.empty*`). Time via `formatDateTime`/`formatClock`/
+  `formatRelative`. `AppErrorBoundary` mounted twice (root + per-route); `OfflineBanner` uses React
+  Query `onlineManager`. Sanctioned lint: `npx eslint apps packages e2e database scripts modules`.
 
-- Domain module = kernel dir `apps/api/src/<domain>` + barrel exporting `<DOMAIN>_CONTROLLERS` /
-  `<DOMAIN>_PROVIDERS`, spread into `AppModule` **before** the generic `:entity` wildcard controller.
-- Records are metadata entities in `entity_records` (`database/seed-metadata.ts`); cross-record
-  rules go on `beforeValidate` so generic CRUD and domain commands validate alike.
-- Migrations `database/migrations/<NNN>_phase<NN>_<slug>.sql`, additive, filename order, tracked
-  in `schema_migrations`. Money is a canonical decimal string (`sales/money/decimal.ts`).
-- Web conversation screens (`/crm-chat`, `/voice-inbox`) share one CSS kit in `carocrm.css`:
-  `carocrm-workspace-*` (page head, rail, toolbar, body, dock) + `carocrm-rail-*` (list rows) +
-  `carocrm-convo-*` (message rows and bubbles). Add a module prefix only for module-only pieces
-  (`carocrm-chat-*`, `carocrm-inbox-*`); do not clone the frame.
-- The workspace shell's height is `calc(100vh - 235px)` — the chrome is 70 header + 48 content
-  padding + 46 page head + 14 gap + 56 footer. Change the page head's height and you must change
-  this, or the page starts scrolling.
-
-## Web UI conventions (enforced)
-
-- `pnpm lint:ui` (`scripts/check-ui-conventions.mjs`) fails on: a `t('…')` key missing from `i18n/en`
-  (plural-aware — `key_one`/`key_other` counts), `.slice(0, 19)` timestamps, raw `<Empty>`, and an
-  internal `<a href="/…">` (downloads under `/api/` are exempt). Each rule was a shipped defect first.
-- `EmptyState` is the only empty state: title above hint, `variant` = `no-records | no-results |
-  filtered | denied`, `action`/`children` for the fixing control, `size="compact"` for record panels.
-  The key is `core.empty*` — **not** `core.common.empty*` (that namespace never existed).
-- Time goes through `formatDateTime`/`formatClock`/`formatRelative`; never `new Date(x).toLocaleString()`
-  (host locale, wrong timezone).
-- `AppErrorBoundary` is mounted twice — root in `main.tsx`, per-route in `AppShell` keyed by pathname.
-  `OfflineBanner` reads React Query's `onlineManager`; do not add a second `navigator.onLine` listener.
-- Repo-wide `pnpm lint` is red on `.agents/**` (vendored). The sanctioned scope is
-  `npx eslint apps packages e2e database scripts modules`.
-
-## AI tool contributions (19-CHAT.21 → 19-CHAT.24)
-
-- The registry is `AIToolRegistry` (`apps/api/src/ai-agents/ai-agent-tools.ts`); the model picks a
-  **key** only. A tool added by a domain module is an `@Injectable()` `OnModuleInit` class in that
-  module's dir that calls `tools.register(...)` — **and** it must be listed in that module's
-  `*_PROVIDERS` barrel array; the kernel does not auto-discover providers.
-- **Never import the `ai-agents` barrel (`./index.js`) from a contribution inside `ai-agents`** — the
-  barrel imports the contribution, so the class is `undefined` at runtime
-  (`UndefinedDependencyException`, arg index [0]). Import `./ai-agent-tools.js` directly.
-- A raw-SQL tool must translate the record ACL itself: `AclApiService.recordPredicate()` returns a
-  predicate, not SQL; the translation is private in `entity/entity-record.store.ts`
-  (`aclSql` / `aclSqlForAlias`). No grant and no `*` wildcard → `roleLevel` = `'no'` → `denyAll`.
-- `stream_items` is keyed by `entity_type` / `entity_id` / `is_deleted` — **not**
-  `parent_type` / `parent_id` / `deleted_at`.
-- Catalogue after 19-CHAT.23: **20 keys**. `19-CHAT.24` owns the chip `requiresTool` data, the
-  per-tool evaluation cases, `docs/architecture/crm-chat-contract.md` and the release notes.
+## AI tool contributions (19-CHAT.21–24)
+- Registry `AIToolRegistry` (`apps/api/src/ai-agents/ai-agent-tools.ts`); model picks a key only.
+  Contribution = `@Injectable() OnModuleInit` class in the domain dir calling `tools.register(...)`
+  **and** listed in that module's `*_PROVIDERS` barrel. Never import the `ai-agents` barrel from
+  inside it (circular → `UndefinedDependencyException`); import `./ai-agent-tools.js`.
+- Raw-SQL tools must translate record ACL themselves (`recordPredicate()` returns a predicate; SQL
+  translation is private in `entity-record.store.ts`). No grant/`*` → denyAll.
+- `stream_items` uses `entity_type`/`entity_id`/`is_deleted`. Catalogue after 19-CHAT.23 = 20 keys;
+  19-CHAT.24 owns chip `requiresTool` data, eval cases, `docs/architecture/crm-chat-contract.md`.
 
 ## SQL / platform gotchas
+- `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial
+  index predicate repeated. Conditional-UPDATE claims are leases, not version bumps. Kysely
+  `RawBuilder`: `(await sql`…`.execute(db)).rows[0]`.
+- `ValidationError` → 422 `{error:{code,message,details}}`. `users`/`teams` are identity tables.
+  ACL `delete:'no'` blocks even admins. Synthetic permission entities need no seed. `/Related` is one
+  union predicate (`anyOf`), never page+stitch. Fastify hook `Error`s carry only `statusCode`;
+  `GlobalExceptionFilter` must not turn 429/413 into 500.
 
-- `entity_records` has `created_at` + `modified_at`, never `updated_at`.
-- `ON CONFLICT` cannot infer a partial unique index unless the target repeats the predicate.
-- Conditional-UPDATE "claims" must be **leases** (push the due time forward), not version bumps.
-- Kysely `RawBuilder` has no `executeTakeFirst(db)`: `(await sql`…`.execute(db)).rows[0]`.
-- `ValidationError` → HTTP 422; body `{ error: { code, message, details } }`.
-- `users`/`teams` are identity tables, not metadata entities — validate against them directly.
-- Entity ACL `delete: 'no'` blocks DELETE even for admins; tests must remove such rows by id.
-- Synthetic permission entities need no metadata seed — `roleLevel` falls back to `*`; admins `all`.
-- `/Related` is one **union** predicate (`StoreFindQuery.anyOf`: attr match *or* `entity_links` ids).
-  Never page the attribute query and stitch link rows afterwards — `offset` then applies twice.
-- Fastify hooks/plugins (`@fastify/rate-limit`, body parser, multipart) throw plain `Error`s that
-  carry only `statusCode`, and Nest routes them into `GlobalExceptionFilter`. Anything there that
-  only handles `AppError`/`HttpException` silently turns a 429/413 into a 500.
+## Tests / environment
+- Mail/queue suites: `MAIL_TRANSPORT=memory` + `SMTP_FROM` before `bootApi()`, restore in `afterAll`;
+  stub BullMQ. `pnpm install && pnpm build` before typecheck/tests (packages resolve via `dist/`).
+  One file per `pnpm vitest run`. A test repointing the default AIAgents provider must restore the
+  `aiAgents` `app_settings` row.
+- Dev: API :3030, web :8080. Stale vite/tsx watchers → start a second vite on another `VITE_PORT`;
+  restart tsx after adding a route. Web build: `vite build --outDir /tmp/...` (`emptyDir(dist)` fails).
+- Playwright: always `no_proxy='*' NO_PROXY='*'`; move `test-results` aside before re-running
+  (>50-file delete guard). `pnpm add` may hit `ERR_PNPM_CODEBUDDY_BROKER_DENY` → `npm pack` to /tmp
+  + untar into `.pnpm/...` + recreate symlinks (grapesjs@0.23.8 installed this way).
+- antd e2e: click `.ant-segmented-item` label (not the radio input); drawer stays mounted — assert
+  `.ant-drawer-mask` count 0.
 
-## Test seams
-
-- Mail/queue suites: `MAIL_TRANSPORT=memory` **and** `SMTP_FROM` before `bootApi()`, restored in
-  `afterAll` (`singleFork: true` leaks `process.env`). Stub the BullMQ hop, assert side effects.
-- Workspace packages resolve through `dist/`: `pnpm install && pnpm build` before typecheck/tests.
-- Run one file per `pnpm vitest run` — the one-fork full suite aborts at random boundaries.
-- A test that points the default AIAgents provider at its own fake provider must restore the
-  `aiAgents` `app_settings` row (capture before, restore in `afterAll`; `""` = unset). A dangling
-  `provider.defaultKey` makes `GET /api/v1/AIAgents/action/health` answer `ok: false` for every
-  later run — it broke `ai-agents.test.ts`.
-
-## Shipped modules (pointers)
-
-- Marketing Automation (19-MA): queue-driven, migrations 037–043, `docs/marketing-automation/`.
-- Customer Success (19-CS): `CustomerSuccessProfile` is a **fixed name** (Sales' integration marker).
-- Voice & Communications (19-VC): no metadata entity, dedicated tables, migrations 051–054; adapters
-  are classes; `fake` never returns `delivered`; `assertSafeMediaUrl` is **async** (must be awaited).
-- BPM (16): definitions admin-only; participants use `/Process/action/available`, `/ProcessInstance`,
-  `/ProcessTask`; visibility = initiator **or** task holder — both clauses must agree.
-- Document kernel: `packages/document` + `apps/api/src/document`; a document cannot have zero lines;
-  unresolved placeholders stay in place and are reported in `warnings`.
-
-## Environment
-
-- Dev: API `:3030` (`pnpm dev`), web `:8080` (`pnpm --filter @carocrm/web dev`).
-- A long-running vite dev server can stop picking up file edits (stale transform cache, `touch` does
-  not help) — start a second one on another `VITE_PORT` instead of trusting the old one.
-- A stale `tsx watch` on :3030 logs "listening" then fails to bind; restart it after adding a route.
-- `pnpm --filter @carocrm/web build` dies at `emptyDir(dist)`; use `vite build --outDir /tmp/...`.
-- **Playwright e2e**: the shell exports `HTTP_PROXY=127.0.0.1:62112`; playwright's webServer
-  availability check and the browser honour it, so localhost servers answer 404 through the proxy
-  and the run dies with "Timed out waiting 120000ms". Always run with `no_proxy='*' NO_PROXY='*'`.
-- Playwright's output-dir cleanup trips the WorkBuddy safe-delete bulk guard (>50 files):
-  `mv test-results test-results-old-$(date +%s)` before re-running a spec.
-- `pnpm add` can fail mid-way with `ERR_PNPM_CODEBUDDY_BROKER_DENY` on the `.pnpm` symlink farm
-  (node_modules writes are brokered). Workaround that worked: `npm pack` each package to /tmp,
-  `tar -xzf --strip-components=1` into `.pnpm/<pkg>@<ver>/node_modules/<name>/`, then recreate the
-  dep symlinks + `apps/web/node_modules/<pkg>` link by hand. `grapesjs@0.23.8` is installed this way.
-
-## GrapesJS (email designer, `apps/web/src/components/email/`)
-
-- 0.23.8 **always** moves component `style` into generated CSS rules (`#id{…}`) — no inline styles,
-  and `forceClass:false`/`attributes.style` do not change that. Export must merge the sheet back
-  into `style` attributes (`inlineEmailCss.ts`), or Outlook renders nothing.
-- Blocks are drag-only unless each one carries `onClick` (append `block.getContent()` — it may be
-  a function or undefined). Click-to-append is the expected email-builder UX.
-- `editor.runCommand('open-blocks')` after init, or the palette opens behind the style-manager tab.
-- Do NOT pass `richTextEditor: { actions: [...] }` — it crashes `init` with an appendChild error.
-- Style sectors/devices can be passed via config (`styleManager.sectors`, `deviceManager.devices`);
-  `getSelected()` returns `undefined` (not null) with nothing selected; text components serialise
-  only their children once they have any, so insert tokens with `set('content', …)`.
-
-## antd interaction patterns (e2e)
-
-- Segmented: click the `.ant-segmented-item` label, never the radio `input` — the thumb covers it
-  and Playwright's hit-target check hangs until the test timeout.
-- Drawer keeps its node mounted after close; assert `.ant-drawer-mask` has count 0, not
-  `toBeHidden()` on `.ant-drawer`.
+## Module pointers
+- 19-MA queue-driven (037–043); 19-CS `CustomerSuccessProfile` is a fixed name; 19-VC has no
+  metadata entity (051–054, class adapters, `fake` never `delivered`, `assertSafeMediaUrl` is async);
+  BPM 16 definitions admin-only, visibility = initiator OR task holder; document kernel =
+  `packages/document` + `apps/api/src/document`.
+- GrapesJS 0.23.8 (email designer): CSS always emitted as rules → merge back inline on export
+  (`inlineEmailCss.ts`); blocks need `onClick` for click-to-append; `runCommand('open-blocks')` after
+  init; never pass `richTextEditor.actions`; `getSelected()` returns `undefined`.

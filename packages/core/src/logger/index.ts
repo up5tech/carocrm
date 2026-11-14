@@ -64,7 +64,6 @@ const options: pino.LoggerOptions = {
         if (typeof obj === 'object' && obj !== null) {
           obj.requestId = context.requestId;
           if (context.userId) obj.userId = context.userId;
-          if (context.tenantId) obj.tenantId = context.tenantId;
           if (context.traceId) obj.traceId = context.traceId;
         }
       }

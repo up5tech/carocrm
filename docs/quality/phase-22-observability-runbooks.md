@@ -18,7 +18,7 @@ Make integration failures diagnosable while keeping logs and traces safe for CRM
 | # | Task | Status |
 |---|---|---|
 | 1 | Verify request/correlation ids across HTTP, events, jobs, providers, webhooks, agent runs | **Done for HTTP → outbox → worker and HTTP → job → worker**; provider/webhook/agent modules already persist `correlation_id` (inventory §3). Module-to-module gaps are listed in G77. |
-| 2 | Define structured log fields (module, operation, entity, actor, job/run, provider, retry, duration, outcome, code) | **Partly done by convention**; the logger adds `requestId`/`userId`/`tenantId`/`traceId`, and the worker/outbox/poller lines carry job/event/correlation/attempt/outcome. A field-by-field schema is documented in §3.2; enforcing it across ~150 call sites is a lint exercise, not done here. |
+| 2 | Define structured log fields (module, operation, entity, actor, job/run, provider, retry, duration, outcome, code) | **Partly done by convention**; the logger adds `requestId`/`userId`/`traceId`, and the worker/outbox/poller lines carry job/event/correlation/attempt/outcome. Phase 24.1 removed the unused `tenantId` log field (single-tenant boundary). A field-by-field schema is documented in §3.2; enforcing it across ~150 call sites is a lint exercise, not done here. |
 | 3 | Redact secrets/passwords/tokens/OAuth codes/database URLs/signatures/bodies/prompts by default | **Done and tested** (§4.1). |
 | 4 | Metrics for request latency/errors, queue age/failure/retry, webhook failures/duplicates, provider health, sync outcomes, AI usage, high-risk actions | **Reuse + snapshot**: module-derived metrics (`IntegrationMetricsService`, CRM Chat observability, AI usage, ESignature operations, Voice/Omnichannel health) plus a new administrator operations snapshot (§4.2). Continuous time series is G77. |
 | 5 | Use OpenTelemetry only if compatible instrumentation exists | **Decision: not added.** No exporter/backend exists, and adding one would be a second stack; correlation ids are the trace spine (§6). |
@@ -45,8 +45,8 @@ edge; the API still uses its own id when the header is absent or malformed.
 
 ### 3.2 Structured log fields
 
-The logger's child module name is `module`; `requestId`/`userId`/`tenantId`/`traceId` are injected by
-the logger hook. The fields the platform's own code uses, by convention:
+The logger's child module name is `module`; `requestId`/`userId`/`traceId` are injected by
+the logger hook (no tenant field — one installation serves one organisation). The fields the platform's own code uses, by convention:
 
 - `module` — `createLogger('<module>')`.
 - `requestId` — request/correlation id (automatic).
