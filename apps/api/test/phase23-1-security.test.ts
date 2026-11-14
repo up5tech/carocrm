@@ -55,6 +55,8 @@ describe('phase 23.1 fail-closed configuration', () => {
         databaseUrl: 'postgres://carocrm_app:strong-password@db.internal:5432/carocrm',
         // Phase 23.6: production also requires enforced extension-package trust.
         extensionTrustMode: 'enforce',
+        // Phase 24.3: production API processes never run DDL at startup.
+        autoMigrate: false,
       }),
     ).not.toThrow();
   });

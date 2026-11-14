@@ -8,6 +8,7 @@ const PRODUCTION_BASE = {
   databaseUrl: 'postgres://carocrm_app:strong-password@db.internal:5432/carocrm',
   // Phase 23.6: production also requires enforced extension-package trust.
   extensionTrustMode: 'enforce',
+  autoMigrate: false,
 };
 
 /**
@@ -56,6 +57,20 @@ describe('config JWT secret production guard', () => {
     process.env.NODE_ENV = 'production';
     expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, extensionTrustMode: 'warn' })).toThrow(/EXTENSION_TRUST_MODE/);
     expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, extensionTrustMode: 'off' })).toThrow(/EXTENSION_TRUST_MODE/);
+  });
+
+  it('requires a 32-byte encryption key and rejects wildcard CORS in production', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, encryptionKey: '' })).toThrow(/ENCRYPTION_KEY/);
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, encryptionKey: 'x'.repeat(64) })).toThrow(/ENCRYPTION_KEY/);
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, corsOrigins: 'https://app.example.com,*' })).toThrow(/CORS_ORIGINS/);
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, corsOrigins: 'https://app.example.com' })).not.toThrow();
+  });
+
+  it('requires migrations to be disabled in production API processes', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => ConfigSchemaRefined.parse({ ...PRODUCTION_BASE, autoMigrate: true })).toThrow(/AUTO_MIGRATE/);
+    expect(() => ConfigSchemaRefined.parse(PRODUCTION_BASE)).not.toThrow();
   });
 
   it('allows the development default secret outside production (dev/test)', () => {

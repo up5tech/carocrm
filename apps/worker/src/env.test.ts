@@ -57,6 +57,11 @@ describe('buildWorkerConfig', () => {
     expect(() => buildWorkerConfig({ WORKER_JOB_ATTEMPTS: '-1' })).toThrow();
     expect(() => buildWorkerConfig({ REDIS_URL: '' })).toThrow();
   });
+
+  it('refuses the development database fallback in production', () => {
+    expect(() => buildWorkerConfig({ NODE_ENV: 'production' })).toThrow(/DATABASE_URL/);
+    expect(() => buildWorkerConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgres://worker@db/crm' })).not.toThrow();
+  });
 });
 
 describe('loadEnv', () => {

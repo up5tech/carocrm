@@ -23,6 +23,10 @@ const ConfigSchema = z.object({
   port: z.coerce.number().int().default(3030),
   host: z.string().default('127.0.0.1'),
   databaseUrl: z.string().default(DEFAULT_DATABASE_URL),
+  /** Optional DDL-capable URL used only while applying kernel migrations. */
+  migrationsDatabaseUrl: z.string().default(''),
+  /** Whether API startup applies migrations with DATABASE_URL (dev default). Production uses a separate migration job. */
+  autoMigrate: z.union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')]).default(true),
   databaseAdminUrl: z.string().default('postgres://postgres:postgres@127.0.0.1:5432/postgres'),
   /**
    * Server-side ceiling on a single statement (G74). A query that waits on a lock, or a plan that
@@ -216,11 +220,28 @@ export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
   // Phase 23.1: an unset encryption key must not silently disable secrets-at-rest in production.
   // Features that store secrets (mail accounts, connector credentials) already fail at use; this
   // makes the misconfiguration surface at boot instead of at first write.
-  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.encryptionKey.trim() === '') {
+  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && !/^[a-fA-F0-9]{64}$/.test(value.encryptionKey)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['encryptionKey'],
-      message: 'ENCRYPTION_KEY must be set in production (openssl rand -hex 32); an empty key disables secrets-at-rest encryption.',
+      message: 'ENCRYPTION_KEY must be exactly 64 hexadecimal characters (32 bytes) in production.',
+    });
+  }
+  if (
+    (process.env.NODE_ENV ?? '').toLowerCase() === 'production' &&
+    value.corsOrigins.split(',').some((origin) => origin.trim() === '*')
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['corsOrigins'],
+      message: 'CORS_ORIGINS must list explicit origins in production; wildcard origins are not allowed.',
+    });
+  }
+  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.autoMigrate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['autoMigrate'],
+      message: 'AUTO_MIGRATE must be false in production; apply migrations with the separate migration role before starting the API.',
     });
   }
   // Phase 23.6: production must verify extension packages; a deployment may still have no keys,
@@ -296,6 +317,8 @@ export function buildConfig(): AppConfig {
     port: process.env.APP_PORT,
     host: process.env.APP_HOST,
     databaseUrl: process.env.DATABASE_URL,
+    migrationsDatabaseUrl: process.env.MIGRATIONS_DATABASE_URL,
+    autoMigrate: process.env.AUTO_MIGRATE,
     databaseAdminUrl: process.env.DATABASE_ADMIN_URL,
     databaseStatementTimeoutMs: process.env.DATABASE_STATEMENT_TIMEOUT_MS,
     databaseLockTimeoutMs: process.env.DATABASE_LOCK_TIMEOUT_MS,

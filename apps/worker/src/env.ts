@@ -120,7 +120,7 @@ function applyDotEnv(content: string): void {
 
 export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
   const production = (env.NODE_ENV ?? '').toLowerCase() === 'production';
-  return WorkerConfigSchema.parse({
+  const config = WorkerConfigSchema.parse({
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
     queueName: env.WORKER_QUEUE_NAME,
@@ -156,6 +156,10 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     extensionTrustedKeys: env.EXTENSION_TRUSTED_KEYS,
     platformVersion: env.PLATFORM_VERSION,
   });
+  if (production && config.databaseUrl === 'postgres://postgres:postgres@127.0.0.1:5432/carocrm_dev') {
+    throw new Error('DATABASE_URL must be explicitly configured for the worker in production.');
+  }
+  return config;
 }
 
 /** Loads `.env` (walking up) and then builds the config — the entrypoint helper. */

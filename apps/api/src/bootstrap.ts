@@ -170,8 +170,8 @@ export async function createApp(
   config: AppConfig = buildConfig(),
   options: CreateAppOptions = {},
 ): Promise<NestFastifyApplication> {
-  if (!options.skipMigrations) {
-    await migrateDb(config.databaseUrl);
+  if (!options.skipMigrations && config.autoMigrate) {
+    await migrateDb(config.migrationsDatabaseUrl || config.databaseUrl);
   }
 
   // Extensions are assembled before Nest exists: providers, controllers and metadata precedence

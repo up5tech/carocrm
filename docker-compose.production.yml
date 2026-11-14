@@ -1,0 +1,141 @@
+# Production single-installation topology. Bind only the TLS edge; use an external secret manager
+# or a root-owned mode-0600 env file. No image contains credentials or seeds sample users.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_BOOTSTRAP_USER:?set POSTGRES_BOOTSTRAP_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD:?set POSTGRES_BOOTSTRAP_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [sh, -ec, 'exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD:?set REDIS_PASSWORD}"']
+    volumes:
+      - redis-data:/data
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/production.Dockerfile
+      target: migration-runtime
+    image: ${CAROCRM_MIGRATION_IMAGE:-carocrm-migrate:local}
+    restart: 'no'
+    environment:
+      NODE_ENV: production
+      MIGRATIONS_DATABASE_URL: ${MIGRATIONS_DATABASE_URL:?set MIGRATIONS_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [private]
+    profiles: [upgrade]
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/production.Dockerfile
+      target: api-runtime
+    image: ${CAROCRM_API_IMAGE:-carocrm-api:local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: 3030
+      AUTO_MIGRATE: 'false'
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL for the least-privilege runtime role}
+      REDIS_URL: ${REDIS_URL:?set authenticated private REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:?set explicit HTTPS SPA origins}
+      TRUST_PROXY: 172.30.0.10/32
+      EXTENSION_TRUST_MODE: enforce
+      EXTENSION_TRUSTED_KEYS: ${EXTENSION_TRUSTED_KEYS:-'{}'}
+      STORAGE_ROOT: /var/lib/carocrm/files
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-none}
+    volumes:
+      - app-files:/var/lib/carocrm/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [private]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3030/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/production.Dockerfile
+      target: worker-runtime
+    image: ${CAROCRM_WORKER_IMAGE:-carocrm-worker:local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL for the least-privilege runtime role}
+      REDIS_URL: ${REDIS_URL:?set authenticated private REDIS_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      EXTENSION_TRUST_MODE: enforce
+      EXTENSION_TRUSTED_KEYS: ${EXTENSION_TRUSTED_KEYS:-'{}'}
+      STORAGE_ROOT: /var/lib/carocrm/files
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-none}
+      REPORT_WORKER_SECRET: ${REPORT_WORKER_SECRET:-}
+    volumes:
+      - app-files:/var/lib/carocrm/files
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [private]
+
+  # Bind only to loopback; an external TLS terminator owns public ingress, HSTS and certificates.
+  web:
+    build:
+      context: .
+      dockerfile: docker/production.Dockerfile
+      target: web-runtime
+    image: ${CAROCRM_WEB_IMAGE:-carocrm-web:local}
+    restart: unless-stopped
+    ports:
+      - '${EDGE_BIND_ADDRESS:-127.0.0.1}:${EDGE_HTTP_PORT:-8080}:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      private:
+        ipv4_address: 172.30.0.10
+
+networks:
+  private:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  postgres-data:
+  redis-data:
+  app-files:

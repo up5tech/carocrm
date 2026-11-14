@@ -2,9 +2,10 @@
 
 > **Owner:** platform / operations
 > **Introduced:** Phase 23.9 (2026-11-12), `plans/PLAN_Phase_23_Security_Hardening.md` §15 task 4.
-> **Status:** the baseline and the configuration review are written; **no production topology is
-> deployed by this repository**. The dev-oriented `docker-compose.yml` is not a production artifact.
-> Deployment-owned items that could not be evidenced are listed in §9.
+> **Status:** the baseline and configuration review are written. Phase 24.3 adds a production
+> Compose topology and images, but no deployment is running and no recovery drill has been exercised.
+> The dev-oriented `docker-compose.yml` remains non-production. Deployment-owned items not evidenced
+> are listed in §9; G80/G81 still block production GO.
 
 This document is the minimum a deployment must satisfy before it serves real users. It is a review
 checklist, not a hosting platform and not a substitute for the owner's infrastructure decisions.
@@ -35,7 +36,7 @@ Internet ──TLS──► reverse proxy / load balancer ──private network�
 | Setting | Requirement | Why |
 |---|---|---|
 | TLS | Terminated at the proxy; TLS 1.2+; redirect HTTP→HTTPS; HSTS at the proxy. | Session cookies are marked `Secure` from `request.protocol`; over plain HTTP the browser will not send them. |
-| `TRUST_PROXY` | An exact proxy IP/CIDR list or an exact hop count. `false` when the API is directly reachable. `true` only when **every** peer is a trusted proxy. | With `TRUST_PROXY=true` and a reachable API, a client can forge `X-Forwarded-For`/`X-Forwarded-Proto`, poisoning the rate-limit bucket and the cookie `Secure` decision. |
+| `TRUST_PROXY` | An exact proxy IP/CIDR list. `false` when the API is directly reachable. `true` only when **every** peer is a trusted proxy. Hop counts are rejected by the current Fastify adapter. | With `TRUST_PROXY=true` and a reachable API, a client can forge `X-Forwarded-For`/`X-Forwarded-Proto`, poisoning the rate-limit bucket and the cookie `Secure` decision. |
 | Forwarded headers | The proxy sets `X-Forwarded-For` and `X-Forwarded-Proto`; it overwrites, not appends, client-supplied values. | The API believes the header only from a trusted peer. |
 | CORS | `CORS_ORIGINS` is an explicit comma-separated list of the real HTTPS origins. | Since Phase 23.1 an unset list fails closed rather than reflecting any origin. |
 | Cookie scope | The SPA and API share the deployment's site as intended; do not widen `SameSite`/domain to unrelated hosts. | The session cookie and the CSRF double-submit cookie are a pair. |
@@ -100,10 +101,10 @@ Phase 23.9 reviewed the defaults rather than assuming them:
 | `malwareScanMode: 'signature'` | Safe by default | The built-in scanner runs; turning it off is a deliberate deployment decision. |
 | `docker-compose.yml` | **Development only** | It publishes Postgres/Redis, uses `postgres:postgres`, mounts the source tree, seeds the database and runs the dev server with `JWT_SECRET: change-me-in-production`. It is not a production topology and must not be deployed as one. |
 
-The compose placeholder is now refused by the production boot guard, so a compose file copied into a
-production environment fails fast rather than starting with a known signing key. The compose file
-itself is unchanged: it remains a development convenience, and a production compose/Helm/Terraform
-artifact is deployment-owned (not created in Phase 23.9).
+The compose placeholder is refused by the production boot guard, so a development compose file copied
+into a production environment fails fast rather than starting with a known signing key. The dev file
+remains unchanged; `docker-compose.production.yml` is the Phase 24.3 topology artifact, not evidence
+that an installation is deployed or recoverable.
 
 ## 5. Least-privilege database roles
 
@@ -171,7 +172,7 @@ Use two roles, not one:
 
 | Item | Why it is not in the repository | Owner |
 |---|---|---|
-| Production compose/Helm/Terraform, TLS certificates, DNS | The project ships no hosting platform; `docker-compose.yml` is dev-only. | deployment owner |
+| TLS certificates, DNS, host firewall and deployment operation | Production Compose artifacts exist; hosting, DNS, TLS, firewall policy, backup installation and operation remain deployment-owned. | deployment owner |
 | Secret manager, key custody, backup recipient key | Platform-specific; must not be committed. | deployment owner / security |
 | Backup timer, off-host destination, alert recipient | Templates exist (`scripts/deploy/backup.*.example`); installation is an operations action. **G81 Blocked.** | platform / operations |
 | Approved isolated recovery environment, RPO/RTO | Owner approval outstanding; no database may be created as a workaround. **G80 Blocked.** | owner / platform |

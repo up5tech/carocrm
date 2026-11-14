@@ -160,3 +160,52 @@ sub-phase.
 - **Not created:** `LICENSE`, `NOTICE`, any backup artifact, any restore evidence, any distribution
   artifact, any owner signature. `package.json`, `pnpm-lock.yaml` and all application code are
   unchanged.
+
+## Phase 24.3 — Production Installation and Upgrade (P0) — artifacts implemented / exercise blocked
+
+### 24.3.1 Delivered artifacts
+
+- `docker/production.Dockerfile`: API, migration, worker and SPA targets. API and worker run as
+  non-root service users; runtime images include the built artifacts and production dependencies.
+- `docker-compose.production.yml`: private PostgreSQL/Redis/API/worker/SPA topology; database and
+  Redis ports are not published, and the web edge binds to loopback by default. The one-shot
+  migration image has its own command and image tag.
+- `docker/nginx.conf` and `.dockerignore`: SPA routing, CSP and response headers; build context excludes
+  local secrets and artifacts. HSTS remains the TLS terminator's responsibility.
+- `apps/api/src/migrate.ts` and `AUTO_MIGRATE=false`: separate migration process, required
+  `MIGRATIONS_DATABASE_URL`, and production refusal to run DDL at API startup.
+- `scripts/deploy/provision-postgres-roles.sql`: interactively prompts for separate application and
+  migration role passwords; the runtime role receives DML privileges and no schema CREATE.
+- `scripts/production-install-smoke.sh`: HTTPS readiness, auth/Secure-cookie, metadata, identifiable
+  Account CRUD and worker job smoke; test-created records are cleaned up by exact IDs.
+- `docs/runbooks/installation-and-upgrade.md`: installation, upgrade ordering, worker pause,
+  rollback limits and operator checks. `docs/security/deployment-baseline.md` now distinguishes the
+  available deployment artifacts from an installed, recovered deployment.
+- Production configuration now rejects non-32-byte encryption keys and wildcard CORS; worker rejects
+  the development DB fallback. A stale production-config test fixture was updated to disable
+  auto-migration.
+
+### 24.3.2 Verification run
+
+| Command | Result |
+|---|---|
+| `pnpm --filter @carocrm/api build` | **Exit 0** |
+| `pnpm --filter @carocrm/worker typecheck` | **Exit 0** |
+| API/worker/migration/SPA Docker builds (`docker build --target ...`) | **Exit 0** for all four image targets; Vite emitted existing large-chunk and dependency annotation warnings |
+| `docker run --rm --add-host api:127.0.0.1 carocrm-phase243-web:check nginx -t` | **Exit 0** — Nginx syntax and config validated |
+| `pnpm --filter @carocrm/worker exec vitest run src/env.test.ts` | **Exit 0** — 1 file, 6 tests |
+| `docker compose -f docker-compose.production.yml config --quiet` with placeholder-only environment values | **Exit 0**; no credentials or database URL were logged |
+| `pnpm lint:changed`, `bash -n scripts/production-install-smoke.sh`, `git diff --check` | **Exit 0** |
+| `pnpm exec vitest run apps/api/test/phase23-1-security.test.ts apps/api/test/config-jwt-secret.test.ts` | **Exit 0** — 2 files, 21 tests |
+| `pnpm verify` | **Exit 1** — lint, typecheck and web suite succeeded; API suite had 2 failures / 3,691 tests (one production fixture failure was fixed and both related focused suites now pass; one timing-sensitive journey cancellation assertion expected `canceled`, received `succeeded`). Remaining failure is not waived or weakened. |
+
+### 24.3.3 Acceptance and outstanding work
+
+- **Artifacts:** implemented and statically/build validated; not yet an exercised production installation.
+- **Fresh-install and upgrade/rollback rehearsal:** not performed. The policy forbids provisioning a
+  database or recovery target for this task. A real deployment/recovery rehearsal needs an already
+  approved, recoverable non-production environment and operator sign-off.
+- **G80/G81 remain blocked:** backup/restore target and operational evidence are missing, so Phase
+  24.3 does not authorize production GO. Run the external TLS/proxy check and production smoke only
+  after an operator has installed the stack and provisioned a dedicated smoke user.
+- No migrations, seeds, live deployment, DB writes or production smoke requests were run.
