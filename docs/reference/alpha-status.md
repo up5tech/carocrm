@@ -62,9 +62,10 @@ pnpm --filter @carocrm/worker test  # 143 worker tests (jobs, scheduler, outbox,
 
 ## Deviations from PLAN (deliberate, for Alpha)
 
-- `docker-compose.yml` is dev-oriented (source mount, no built images); PLAN §65 production topology not built.
-  Phase 23.9 records the secure deployment baseline and refuses its placeholder signing key in
-  production; a production deployment artifact is deployment-owned.
+- `docker-compose.yml` is dev-oriented (source mount, no built images). Phase 24.3 added the production
+  artifacts — `docker-compose.production.yml`, `docker/production.Dockerfile` and
+  `docs/runbooks/installation-and-upgrade.md` — which are build-validated but have never been exercised
+  on a deployment; backup/restore evidence stays blocked under G80/G81 and the release remains NO-GO.
 - Query grammar is EspoCRM-like JSON criteria translated to Kysely; raw SQL is never accepted (PLAN §15.2).
 - Metadata overrides are stored in `metadata_entries` + `app_settings('entity')` rather than files.
 - Attachment parent-ACL check uses the record-level ACL predicate, including the portal
@@ -1076,3 +1077,24 @@ Implemented: error boundary + one state contract (20.22); one formatter (20.23);
 settings search in the rail and the command palette (20.25); frontend quality gate + axe audit with zero
 WCAG 2.0 A/AA violations on home/list/record/settings (20.26); bounded first load (route-level lazy +
 prefetch) and optimistic writes (20.27). Phase 20 is complete.
+
+## Phase 22–24 status pointer (added 2026-11-15)
+
+This report's dated sections end at Phase 21; later work is tracked in its own evidence documents.
+Current states as of Phase 24.5:
+
+- **Phase 22** integration/E2E hardening: complete as a workstream; release review NO-GO
+  (`docs/quality/phase-22-release-readiness.md`).
+- **Phase 23** security hardening: complete; release review **NO-GO for production**
+  (`docs/quality/phase-23-security-release-review.md`). Generic OIDC sign-in is **built** as
+  configuration (`OIDC_PROFILES`, Phase 23.3); SAML and SCIM stay **deferred**
+  (`docs/runbooks/advanced-integrations.md` §15). MFA is enforceable; self-service password reset,
+  session revocation and API-key lifecycle are built (Phase 23.2).
+- **Phase 24** single-tenant product completion: in progress. 24.0–24.3 and 24.5 delivered; 24.4
+  (`api-spec/` to `--strict` + typed client) in flight; the rest not started. The served OpenAPI
+  document is a **route inventory, not a DTO-derived contract** (G1; the D3 disposition makes
+  `api-spec/` canonical and awaits owner sign-off). Production install artifacts exist but are
+  unexercised; release stays NO-GO (`docs/releases/2026-11-15-phase-24.md`).
+- **Single-tenant by decision** (owner, 2026-11-13): one deployment serves one customer organisation;
+  no tenant id, tenant predicate or tenant-scoped API exists or is planned
+  (`docs/reference/product-charter.md`).

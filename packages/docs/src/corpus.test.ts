@@ -75,7 +75,7 @@ describe('the shipped documentation corpus', () => {
     expect(withLink.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('translates the 20 P0 pages into `vi` and falls back to English for the rest', () => {
+  it('translates the 20 P0 pages plus the release-notes page into `vi` and falls back to English for the rest', () => {
     const vietnamese = buildIndex(files, { locale: 'vi' });
     // `en` still defines the tree, so a `vi` reader sees all four sections and all 54 pages.
     expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([5, 18, 26, 5]);
@@ -106,9 +106,9 @@ describe('the shipped documentation corpus', () => {
     for (const key of p0) {
       expect(vietnamese.pages.get(key)).toMatchObject({ fallback: false, locale: 'vi' });
     }
-    // Nothing beyond the P0 set is translated yet, and each of those pages carries the flag that makes the
-    // reader see it is reading English (§4.7).
-    expect([...vietnamese.pages.values()].filter((page) => !page.fallback)).toHaveLength(20);
+    // The 20 P0 pages plus `reference/release-notes` (Phase 24.5 requires both locales of the release
+    // notes); every other page carries the flag that makes the reader see it is reading English (§4.7).
+    expect([...vietnamese.pages.values()].filter((page) => !page.fallback)).toHaveLength(21);
     expect(vietnamese.pages.get('reference/glossary')).toMatchObject({ fallback: true, locale: 'en' });
   });
 

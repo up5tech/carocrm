@@ -1,15 +1,19 @@
 # Compatibility matrix (PLAN §60)
 
 Baseline: EspoCRM 9.3.x behavior, observed through public documentation — clean-room,
-no upstream source used (PLAN §2). Status is as of **2026-11-13** (CRM Kernel Alpha + PLAN tasks 17–22,
-search/import/export/dashboards, the extension SDK, the workflow engine, the BPM engine, and Phase 23 security
-hardening). Rows Phase 23 changed say so inline; the review that produced this date is
-`docs/quality/phase-23-security-release-review.md` (decision **NO-GO** for production — backup/restore and the
-licence question remain open).
+no upstream source used (PLAN §2). Status is as of **2026-11-15** (CRM Kernel Alpha + PLAN tasks 17–22,
+search/import/export/dashboards, the extension SDK, the workflow engine, the BPM engine, Phase 23 security
+hardening, and Phase 24.0–24.3/24.5 product completion). Rows Phase 23/24 changed say so inline; the
+reviews that produced this date are `docs/quality/phase-23-security-release-review.md` and
+`docs/releases/2026-11-15-phase-24.md` (decision **NO-GO** for production — backup/restore, the
+licence question and unsigned exceptions remain open).
 
 **Not in this matrix because they are not built:** SAML, SCIM and enterprise directory sync (deferred with a
-rationale in `docs/runbooks/advanced-integrations.md` §15); a DTO-derived OpenAPI contract (route inventory
-only, G1); a production deployment artifact (deployment-owned, `docs/security/deployment-baseline.md`).
+rationale in `docs/runbooks/advanced-integrations.md` §15); a DTO-derived OpenAPI contract and the
+`api-spec/` registry completion to `--strict` (route inventory only, G1 — Phase 24.4 in flight); a
+*practiced* production deployment (the Phase 24.3 artifacts — `docker-compose.production.yml`,
+`docker/production.Dockerfile`, `docs/runbooks/installation-and-upgrade.md` — are build-validated
+but never exercised on a deployment; backup/restore evidence stays blocked under G80/G81).
 
 **Not a capability by product decision, not a gap:** multi-tenancy / shared tenancy. One deployment serves
 one customer organisation; isolation between customers is deployment-owned. See

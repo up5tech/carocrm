@@ -1,6 +1,6 @@
 # PLAN — Phase 23: Security Hardening
 
-> **Status:** Planned
+> **Status:** Executed — release review **NO-GO for production** (2026-11-13); sub-phases 23.0–23.10 delivered or explicitly blocked, 23.11 review recorded in `docs/quality/phase-23-security-release-review.md`. This file is kept as the historical record of the workstream; its decisions are not rewritten.
 > **Date:** 2026-11-09
 > **Workstream type:** Cross-cutting security hardening and release-gate initiative — not a new business module and not a rewrite of the Entity Engine
 > **Predecessor:** Phase 22 (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md`), whose review records **"NO-GO for a production release"** (`docs/quality/phase-22-release-readiness.md`)
@@ -709,26 +709,26 @@ Phase 23 may be declared complete only when each item has evidence, an accepted 
 
 ### Controls
 
-- [ ] Every PLAN §48 control is implemented and verified, or has a signed exception.
-- [ ] CORS, CSRF, API-key comparison, JWT secret, and encryption-key defaults fail closed.
-- [ ] Login throttling, lockout, password reset, MFA policy, session revocation, and API-key rotation are tested.
-- [ ] F1/F2/F3 are closed; async work re-checks ACL; denials are audited.
-- [ ] IDoA, field ACL, injection, SSRF, XSS, webhook replay, and untrusted-package risks have regression tests.
-- [ ] Secrets never appear in logs, errors, traces, artifacts, or browser state.
+- [x] Every PLAN §48 control is implemented and verified, or has a signed exception. — §48 matrix re-scored in `docs/security/security-controls-matrix.md`; PASS with unsigned exceptions (23.11 review).
+- [x] CORS, CSRF, API-key comparison, JWT secret, and encryption-key defaults fail closed. — 23.1/23.9; production boot guards tested (`apps/api/test/config-jwt-secret.test.ts`, `phase23-1-security.test.ts`).
+- [x] Login throttling, lockout, password reset, MFA policy, session revocation, and API-key rotation are tested. — 23.2; focused suites in `docs/quality/phase-23-security-test-evidence.md`.
+- [x] F1/F2/F3 are closed; async work re-checks ACL; denials are audited. — 23.4; `apps/api/src/common/async-principal.ts`, denial audit rows.
+- [x] IDoA, field ACL, injection, SSRF, XSS, webhook replay, and untrusted-package risks have regression tests. — 23.4–23.6, 23.10; `apps/api/test/phase23-*.test.ts`.
+- [x] Secrets never appear in logs, errors, traces, artifacts, or browser state. — 23.7/23.8; secret scan clean in `pnpm ci:gate`.
 
 ### Operations
 
-- [ ] Encrypted off-host backup and restore drill have evidence, or G80/G81 are explicitly accepted/blocked.
-- [ ] Security incident runbook, deployment baseline, tenancy decision, and compliance status are recorded.
-- [ ] The nightly DB-free gate runs the DB-free security suites and detects a demonstrated regression. (Owner decision D3: the gate is **not** PR-gated; G78 stays an open exception.)
-- [ ] No extra database, destructive setup, live provider action, or real customer communication occurred.
+- [ ] Encrypted off-host backup and restore drill have evidence, or G80/G81 are explicitly accepted/blocked. — **Blocked**: G80/G81 stay Blocked pending owner decision D4; tooling shipped, nothing installed or drilled (exception register §2).
+- [x] Security incident runbook, deployment baseline, tenancy decision, and compliance status are recorded. — 23.9; `docs/runbooks/security-incident-response.md`, `docs/security/deployment-baseline.md`, `docs/security/tenancy-decision.md`, `docs/security/distribution-compliance.md`.
+- [x] The nightly DB-free gate runs the DB-free security suites and detects a demonstrated regression. (Owner decision D3: the gate is **not** PR-gated; G78 stays an open exception.) — 23.8/23.10; `vitest.ci.config.ts` in `pnpm ci:gate`.
+- [x] No extra database, destructive setup, live provider action, or real customer communication occurred. — verified in the 23.11 evidence report.
 
 ### Evidence
 
-- [ ] `docs/quality/known-gaps.md`, the authorization matrix, the compatibility matrix, and CI gate docs reflect reality.
-- [ ] The §2.3 contradictions are resolved in writing.
-- [ ] The evidence report distinguishes tests run, skipped, blocked, and unverified capabilities.
-- [ ] The final review records go/no-go, residual risks, owners, and deadlines without claiming full EspoCRM parity.
+- [x] `docs/quality/known-gaps.md`, the authorization matrix, the compatibility matrix, and CI gate docs reflect reality. — reconciled through 23.10 and again in Phase 24.1/24.5.
+- [x] The §2.3 contradictions are resolved in writing. — resolved in the 23.0 baseline (`docs/security/phase-23-security-baseline.md`).
+- [x] The evidence report distinguishes tests run, skipped, blocked, and unverified capabilities. — `docs/quality/phase-23-security-test-evidence.md`.
+- [x] The final review records go/no-go, residual risks, owners, and deadlines without claiming full EspoCRM parity. — `docs/quality/phase-23-security-release-review.md`: **NO-GO**, conditional alpha/pilot under §8.
 
 ---
 

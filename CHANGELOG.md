@@ -1,0 +1,73 @@
+# Changelog
+
+All notable changes to CaroCRM are recorded here. Format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project does not promise SemVer
+compatibility for its internal APIs while it is in alpha.
+
+## Versioning and tagging convention
+
+- `package.json` `version` is the product version for the whole pnpm workspace. It is currently
+  **1.0.0**, the in-development version — there is no tagged release yet.
+- A release is a git tag `vX.Y.Z` plus a dated note in `docs/releases/` and a row in the table
+  below. Pre-releases use `-alpha.N` / `-rc.N` suffixes.
+- Database migrations are forward-only and numbered (`database/migrations/`); a release note names
+  the migrations an operator must apply.
+- **Release status:** 1.0.0 is an **alpha**. The Phase 23 security review
+  (`docs/quality/phase-23-security-release-review.md`) and the Phase 24 product-completion plan
+  (`plans/PLAN_Phase_24_Product_Completion.md`) record **NO-GO for production** until the open
+  blockers in `docs/quality/known-gaps.md` and `docs/security/exception-register.md` close or are
+  owner-accepted.
+
+## [Unreleased] — Phase 24 in progress
+
+Single-tenant product completion (`plans/PLAN_Phase_24_Product_Completion.md`). Delivered so far:
+
+- **24.0** Baseline audit and owner decisions D1–D7:
+  `docs/quality/phase-24-priority-decisions.md`.
+- **24.1** Single-tenant charter ratified (`docs/reference/product-charter.md`); PLAN.md, README,
+  alpha-status, compatibility matrix, tenancy decision and exception register reconciled; the unused
+  `tenantId`/`getTenantId` surface removed.
+- **24.2** NO-GO blocker records prepared: G1/D3 disposition recorded, G80/G81 read-only
+  verification, owner signature table — all signatures still pending, release stays NO-GO.
+- **24.3** Production installation artifacts: multi-stage `docker/production.Dockerfile`
+  (API / migrate / worker / SPA), `docker-compose.production.yml`, least-privilege Postgres role
+  provisioning, production install smoke script, and
+  `docs/runbooks/installation-and-upgrade.md`. Artifact builds validated; no deployment has been
+  exercised.
+- **24.5 (this change)** Release truthfulness: this changelog, the Phase 24 release note, corrected
+  README migration count and quick-start pointer, known-gaps summary reconciliation, Phase 23 plan
+  status correction.
+
+Still open: `api-spec/` registry completion to `--strict` and the typed client (24.4, in flight),
+inbound mail (24.6), email/calendar sync scope (24.7), outbound events/webhooks (24.8), provider
+sandbox certification (24.9), UX completion (24.10), quality debt (24.11), final go/no-go (24.12).
+
+## [1.0.0-alpha] — 2026-11-13 — Phase 23 security hardening
+
+Full note: [`docs/releases/2026-11-13-phase-23.md`](docs/releases/2026-11-13-phase-23.md).
+Release decision: **NO-GO for production** (`docs/quality/phase-23-security-release-review.md`).
+
+- Authentication: login throttling + per-account lockout, self-service password reset, enforceable
+  MFA policy, session listing/revocation with refresh-family reuse detection, API-key rotation with
+  scopes and IP/CIDR restrictions, generic OIDC sign-in as configuration (`OIDC_PROFILES`).
+- Authorization: async work re-derives its principal (`runAsUser`), every explicit 403 writes a
+  redacted audit row, attachment reads require parent ACL, CSV export blanks read-denied columns and
+  neutralises formula-leading values.
+- Untrusted input: one shared SSRF classifier, marketing webhook HMAC-SHA256 over
+  `timestamp.rawBody`, Ed25519 extension package signatures (`EXTENSION_TRUST_MODE=enforce` in
+  production), real PDF/ZIP/Office magic-byte validation.
+- Operations: retention schedules for receipts/jobs/stream orphans (migration 094), deep-redacted
+  job views, bounded process-local security counters, production boot guards that refuse placeholder
+  secrets and the dev database fallback.
+- Migrations `089`–`094`, all additive. **Release remains NO-GO**: G80/G81 backup/restore blocked,
+  no `LICENSE`/distribution decision, High/Critical exceptions unsigned.
+
+## [1.0.0-alpha] — 2026-10-29 — Phase 22 integration & E2E hardening
+
+Full note: [`docs/releases/2026-10-29-phase-22.md`](docs/releases/2026-10-29-phase-22.md).
+Release decision at the time: **NO-GO for production** (superseded by the Phase 23 review above,
+which keeps the same blockers open).
+
+Earlier history: Phases 1–21 are documented per module in `docs/implementation/`,
+`docs/compatibility/` and `docs/reference/alpha-status.md`; module-level release notes live beside
+their modules (e.g. `docs/modules/crm-chat/RELEASE_NOTES.md`).

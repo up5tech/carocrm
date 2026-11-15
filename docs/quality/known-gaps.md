@@ -95,6 +95,9 @@
 | G82 | The movement history exposed a limit with no way to page deeper | sales (inventory read) | Medium | Fixed (22.27) |
 | G83 | Three worker doors cannot be called by the worker — they lack `@Public()` | sales / marketing-automation | Medium | Fixed (23.4) |
 | G84 | The OAuth callback never compares a redirect URI | advanced-integrations | Medium | Fixed (23.3) |
+| G85 | Withdrawn during the 23.0 audit — a duplicate of G33 (the marketing webhook signature/timestamp finding); the ID is not renumbered, so the sequence has one deliberate gap | marketing-automation | — | Withdrawn (23.0) — see the ID-sequence note below |
+| G86 | Four independent SSRF validators, and one outbound fetch that follows redirects | platform / voice | Medium | Fixed (23.5) — shared classifier, redirects pinned, empty allowlist fails closed |
+| G87 | Half-configured S3 credentials are silently dropped and the SDK falls back to its default credential chain | platform / files | Low | Fixed (23.1) |
 | G88 | Every module system principal carries `sysAdmin`, so record ACL is bypassed for worker and public-intake writes | platform | Medium | Mitigated (23.4) |
 | G89 | The worker's BPM/workflow handlers write CRM records through the worker's own DB access | worker | Medium | Open — exception G89 |
 | G90 | `GET /api/v1/OpenApi` is served without authentication | platform | Low | Open — exception G90 |
@@ -114,6 +117,14 @@ environment or RPO/RTO), both **Blocked** by owner decision D4, plus the release
 blocker that this register tracks by decision, not by G-ID. Every other open row above is a live exception with a
 named owner and a review date in `docs/security/exception-register.md`; the exception register, not this table, is
 the authoritative list of what is accepted. No new finding was raised by 23.11.
+
+**Phase 24 status note (2026-11-15).** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) is in progress:
+24.0 audit, 24.1 charter, 24.2 blocker records and 24.3 production artifacts are delivered; 24.4 (`api-spec/`
+to `--strict` + typed client) is in flight; 24.5 reconciled this summary. New findings continue from **G99**;
+history is not renumbered. Rows labelled "exception" above mirror live rows in
+`docs/security/exception-register.md` §2 — where this table and the register disagree, the register wins, and
+review dates there (2026-12-09 / 2026-12-13) govern reopening. The release decision is unchanged: **NO-GO for
+production** (`docs/releases/2026-11-15-phase-24.md` §5).
 
 ---
 

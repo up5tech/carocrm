@@ -209,3 +209,44 @@ sub-phase.
   24.3 does not authorize production GO. Run the external TLS/proxy check and production smoke only
   after an operator has installed the stack and provisioned a dedicated smoke user.
 - No migrations, seeds, live deployment, DB writes or production smoke requests were run.
+
+## Phase 24.5 — Release Truthfulness (P0) — documentation reconciliation
+
+### 24.5.1 Delivered changes
+
+- `CHANGELOG.md`: new; records the 1.0.0 in-development version, the tagging convention, and the
+  honest alpha/NO-GO status. `docs/releases/2026-11-15-phase-24.md`: interim Phase 24 release note
+  (24.0–24.3 + 24.5 delivered, 24.4 in flight, 24.6+ not started).
+- `content/docs/en/reference/release-notes.md`: release-note table now lists the Phase 24 and
+  Phase 23 notes; "most recent release" corrected (was still naming Phase 22); the reader-visible
+  table now describes Phase 23 auth/session/API-key changes; `updated:` bumped to 2026-11-15.
+- `content/docs/vi/reference/_index.md` + `release-notes.md`: new Vietnamese translations (the
+  `vi` corpus gains its first `reference` section page). `packages/docs/src/corpus.test.ts` updated:
+  non-fallback `vi` pages 20 → 21.
+- `README.md`: migration ceiling corrected `070_...` → `094_phase23_retention_schedules.sql`;
+  Quick start now points at the Phase 24.3 production path and states the NO-GO status.
+- `docs/quality/known-gaps.md`: G85 (withdrawn duplicate of G33), G86 and G87 added to the summary
+  table — they existed only in the 23.0 audit table; Phase 24 status note added; the note records
+  that `docs/security/exception-register.md` is authoritative for exception rows.
+- `plans/PLAN_Phase_23_Security_Hardening.md`: header `Status: Planned` → `Executed — NO-GO
+  (2026-11-13)`; §22 final checklist annotated with evidence (G80/G81 item stays unchecked/Blocked).
+- `plans/PLAN.md` §57: Phase 24 status `Planned` → `In progress` with per-sub-phase states.
+- `docs/reference/compatibility-matrix.md`: status date → 2026-11-15; "not built" list corrected —
+  production artifacts now exist (build-validated, unexercised); `api-spec/` strict completion named
+  as Phase 24.4 in flight.
+- `docs/reference/alpha-status.md`: dev-compose deviation updated for the 24.3 artifacts; Phase
+  22–24 status pointer appended (OIDC built / SAML-SCIM deferred, G1 disposition, single-tenant,
+  NO-GO).
+
+### 24.5.2 Verification run
+
+| Command | Result |
+|---|---|
+| `npx vitest run packages/docs` | **Exit 0** — 8 files / 178 tests (corpus lint clean with the new `vi/reference` pages) |
+| `node scripts/check-ui-conventions.mjs` | **Exit 0** — 5,178 keys; rule 8 (single-tenant doc truth) clean |
+| `pnpm lint:changed` | **Exit 0** — 0 errors/warnings |
+| `pnpm ci:gate` | **Exit 0** — lint + arch + typecheck + build + `ci:migrations` (94 files) + `ci:api-spec` + DB-free Vitest **89 files / 1,426 tests**, worker **24 files / 249 tests**, web **15 files / 86 tests**, secret scan clean (**2,510 tracked files**) |
+
+Documentation-only change: no application code, migrations, database access, provider contact or
+external effect. Claims about 24.3/24.4 states are labelled delivered/in-flight/blocked, matching
+their evidence sections above; no production-ready or parity claim was added.

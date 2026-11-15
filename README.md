@@ -266,8 +266,16 @@ pnpm dev:all                  # API on http://127.0.0.1:3030, SPA on http://127.
 pnpm --filter @carocrm/worker dev   # outbox poller, BullMQ worker, cron scheduler
 ```
 
+The commands above are the **development** path. For a real installation — one deployment serving
+one customer organisation — use the production artifacts added in Phase 24.3
+(`docker-compose.production.yml`, `docker/production.Dockerfile`) and follow
+[docs/runbooks/installation-and-upgrade.md](docs/runbooks/installation-and-upgrade.md). The product
+is single-tenant and still **NO-GO for production** until the Phase 23/24 release blockers close;
+see [CHANGELOG.md](CHANGELOG.md) and
+[docs/releases/2026-11-15-phase-24.md](docs/releases/2026-11-15-phase-24.md).
+
 `pnpm db:seed` never creates or drops a database — it runs every pending SQL migration in
-`database/migrations/` (currently up to `070_phase19_esignature_api_key_credential.sql`) and inserts
+`database/migrations/` (currently up to `094_phase23_retention_schedules.sql`) and inserts
 idempotent configuration (admin user, roles,
 teams, entity metadata, default project board, scheduled jobs) into the database you already point
 at. Sign in with `admin` / `admin` (override with `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`; an

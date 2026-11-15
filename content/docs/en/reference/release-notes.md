@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-11-06
+updated: 2026-11-15
 ---
 
 Nothing inside the application opens a list of what changed. There is no **What's new** screen, no version
@@ -20,6 +20,8 @@ whoever maintains your instance.
 
 | Document | What it is | Latest dated entry |
 | --- | --- | --- |
+| `docs/releases/2026-11-15-phase-24.md` | The interim product-completion note: single-tenant charter, production install artifacts, and what is still open. | 2026-11-15. |
+| `docs/releases/2026-11-13-phase-23.md` | The security-hardening release note: verified controls, migrations 089–094, operational actions and the NO-GO decision. | 2026-11-13. |
 | `docs/releases/2026-10-29-phase-22.md` | The hardening release note for the whole product: verified scope, migrations, operational actions and the remaining release blockers. | 2026-10-29. |
 | `docs/modules/crm-chat/RELEASE_NOTES.md` | The release notes for one module, by version. | v1.1, released 2026-10-21. |
 | `docs/implementation/service-desk-release.md` | A release checklist for one module: every sub-phase, its state, and the commands that prove it. | Release reference date 2026-10-17. |
@@ -41,22 +43,35 @@ A note in this repository is written as evidence, not as marketing. Four parts a
 
 ## The most recent release
 
-The newest dated note is the **Phase 22 hardening release**, 2026-10-29. It adds no new module screen. It
-changes how the product fails, and what an operator must do before carrying real customer data. What a
-reader can notice:
+The newest dated note is the **Phase 24 interim product-completion note**, 2026-11-15, with the
+**Phase 23 security-hardening release**, 2026-11-13, behind it. Phase 24 is still in progress: it
+ratifies single-tenancy as the product boundary, ships production install artifacts and corrects
+release documentation, while the release decision stays **NO-GO for production** — the same backup,
+licence and unsigned-exception blockers as Phase 23. What a reader can notice:
 
 | What you see | What it means |
 | --- | --- |
-| An unexpected error shows a plain 5xx message | The driver or connector text no longer reaches the browser. |
-| Dates and numbers look the same on every screen | Both render through the shared helpers instead of per-screen formatting. |
-| Loading, empty, error and permission-denied states behave alike | The screens share one set of states, with a retry where retrying is meaningful. |
-| A production instance refuses to start with the development JWT secret | The fallback secret is development-only; a deployment must set its own. |
-| A backup writes a checksummed, encrypted artifact | `pnpm backup` is safe to schedule; `pnpm verify:backup` checks an artifact. |
+| Documentation now says one deployment serves one organisation | Single-tenant is a decided product boundary, not a missing feature. |
+| A production Compose topology and Dockerfile exist in the repository | Install/upgrade artifacts are provided; no deployment has been exercised yet. |
+| The handbook and README state migration and capability facts correctly | Release notes, status pages and the README describe the build that actually ships. |
+
+The Phase 23 note remains the most recent *completed* release note. It hardened sign-in, sessions,
+API keys and untrusted input, and it changed what an operator must do before carrying real customer
+data. What a reader can notice:
+
+| What you see | What it means |
+| --- | --- |
+| A lockout after repeated failed sign-ins, and a self-service password reset | Failed logins are throttled per source and per account; reset tokens are single-use and expiring. |
+| An MFA challenge where the instance policy requires it | `security.mfa.required` can enforce TOTP for admins or everyone. |
+| API keys that rotate, expire by scope and can be limited by IP | Keys carry `read`/`write` scopes, `last_used_at` and optional CIDR restrictions; the secret is shown once. |
+| A production instance refuses to start with placeholder secrets | Boot guards reject the development JWT secret, an empty `ENCRYPTION_KEY` and a non-`enforce` extension trust mode. |
+| Attachments and exports respect the same permissions as the record | Attachment reads require the parent's ACL and CSV export blanks read-denied columns. |
 
 > [!WARNING]
-> The Phase 22 note records the release as **blocked for production**: there is no restore rehearsal and no
-> approved RPO/RTO yet. A backup exists; a tested restore does not. The release note names the other open
-> gaps with an owner and a review date.
+> Both the Phase 23 and Phase 24 notes record the release as **blocked for production** (NO-GO):
+> there is still no restore rehearsal and no approved RPO/RTO, no `LICENSE`/distribution decision,
+> and the High/Critical exceptions await owner signatures. A backup artifact can be written; a
+> tested restore does not exist yet. Each note names the open gaps with an owner and a review date.
 
 ### The last module release
 
