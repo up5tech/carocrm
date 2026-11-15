@@ -10,7 +10,7 @@
  * with SES/SendGrid/Graph later without touching this module.
  */
 import type { InboundMailProvider, MailTransport } from '@carocrm/mail';
-import { createMailTransport,NullInboundProvider } from '@carocrm/mail';
+import { createInboundProvider,createMailTransport,NullInboundProvider } from '@carocrm/mail';
 import type { Provider, Type } from '@nestjs/common';
 
 import type { AppConfig } from '../config.js';
@@ -20,6 +20,7 @@ import { EmailController } from './email.controller.js';
 import { EmailService } from './email.service.js';
 import { EmailAccountController } from './email-account.controller.js';
 import { EmailAccountsService } from './email-accounts.service.js';
+import { InboundConnectionsService } from './inbound-connections.service.js';
 import { EmailTemplateController } from './email-template.controller.js';
 import { EmailTemplatePreviewService } from './email-template-preview.service.js';
 
@@ -36,8 +37,9 @@ export {
 export { EmailController } from './email.controller.js';
 export type { EmailDeliveryView, QueuedEmail } from './email.service.js';
 export { EmailService } from './email.service.js';
+export { InboundConnectionsService } from './inbound-connections.service.js';
 export { EmailAccountController } from './email-account.controller.js';
-export { EmailAccountsService, type EmailAccountView } from './email-accounts.service.js';
+export { EmailAccountsService } from './email-accounts.service.js';
 export { EmailTemplateController } from './email-template.controller.js';
 export {
   type EmailTemplatePreview,
@@ -55,18 +57,30 @@ export function createMailTransportFromConfig(config: AppConfig, env: NodeJS.Pro
   return createMailTransport(config.mailTransport, env);
 }
 
+/**
+ * Build the inbound provider selected by `MAIL_INBOUND_PROVIDER` (Phase 24.6). The `none`
+ * default binds `NullInboundProvider`, whose `poll()` fails clearly instead of pretending to
+ * collect mail. Settings are parsed eagerly, so a bad `imap`/`graph` config fails at boot.
+ */
+export function createInboundProviderFromConfig(config: AppConfig, env: NodeJS.ProcessEnv = process.env): InboundMailProvider {
+  if (config.mailInboundProvider === 'none') return new NullInboundProvider();
+  return createInboundProvider(config.mailInboundProvider, env as Record<string, string | undefined>);
+}
+
 export const EMAIL_PROVIDERS: Provider[] = [
   {
     provide: MAIL_TRANSPORT_TOKEN,
     inject: [CONFIG_TOKEN],
     useFactory: (config: AppConfig) => createMailTransportFromConfig(config),
   },
-  // §28.2: a null provider until an IMAP/Graph adapter is installed — polling stays a safe no-op.
+  // Phase 24.6: the provider is bound by MAIL_INBOUND_PROVIDER (default: none, fails clearly).
   {
     provide: INBOUND_MAIL_PROVIDER_TOKEN,
-    useFactory: (): InboundMailProvider => new NullInboundProvider(),
+    inject: [CONFIG_TOKEN],
+    useFactory: (config: AppConfig) => createInboundProviderFromConfig(config),
   },
   EmailAccountsService,
+  InboundConnectionsService,
   EmailService,
   EmailTemplatePreviewService,
 ];

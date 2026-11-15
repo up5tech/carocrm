@@ -41,6 +41,9 @@ async function call(url: string): Promise<{ status: number; body: Body }> {
 }
 
 beforeAll(async () => {
+  // Pin this suite's own provider (default is none) — an env set by another test file must not
+  // change this suite's boot binding.
+  process.env.MAIL_INBOUND_PROVIDER = 'none';
   ctx = await bootApi();
 }, 180_000);
 

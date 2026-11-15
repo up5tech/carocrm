@@ -9,12 +9,13 @@
  */
 import { AuthorizationDeniedError, FeatureDisabledError, RecordNotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { generateId } from '@carocrm/core/utils/id.js';
-import type { InboundMailProvider, MailMessage, MailTransport, MailTransportInfo } from '@carocrm/mail';
+import type { InboundMailMessage, InboundMailProvider, MailMessage, MailTransport, MailTransportInfo } from '@carocrm/mail';
 import { createAccountSmtpTransport, emailRecordToMessageInput, inboundToEmailRecord, renderTemplateParts } from '@carocrm/mail';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { type Selectable,sql } from 'kysely';
 
 import { AclApiService } from '../acl/acl-api.service.js';
+import { AttachmentService } from '../attachment/attachment.service.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService, type EmailDeliveriesTable } from '../database/database.service.js';
@@ -29,6 +30,12 @@ import {
   SENDABLE_STATUSES,
 } from './email.constants.js';
 import { EmailAccountsService } from './email-accounts.service.js';
+import { InboundConnectionsService } from './inbound-connections.service.js';
+
+/** Per-connection poll bound (Phase 24.6): one run can never load a whole mailbox into memory. */
+const INBOUND_POLL_MAX_MESSAGES = 50;
+/** Global fetched cap per pollInbound call, across every connection. */
+const INBOUND_POLL_GLOBAL_MAX = 500;
 
 export interface EmailDeliveryView {
   id: string;
@@ -107,6 +114,8 @@ export class EmailService {
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(EmailAccountsService) private readonly accounts: EmailAccountsService,
+    @Inject(InboundConnectionsService) private readonly inboundConnections: InboundConnectionsService,
+    @Optional() @Inject(AttachmentService) private readonly attachments: AttachmentService | undefined,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -204,32 +213,176 @@ export class EmailService {
   }
 
   /**
-   * Inbound collection (PLAN §28.2): polls the configured provider (a no-op `NullInboundProvider`
-   * until an IMAP/Graph adapter is installed) and stores each new message as an Email record with
-   * status/direction `Inbound`. Messages already stored (same provider id) are skipped, so polling
-   * is idempotent.
+   * Inbound collection (Phase 24.6): polls every configured provider — the env-selected one
+   * plus every active Mail Inbound Connection — and stores each new message as an Email record
+   * with status/direction `Inbound`.
+   *
+   * Guarantees (Phase 24.6 task 3):
+   * - dedupe is scoped by connection: `(inboundConnectionId, providerMessageId)`, so the same
+   *   provider-local id (IMAP UID 1) in two mailboxes is not a collision;
+   * - bounded polls: `INBOUND_POLL_MAX_MESSAGES` per connection, `INBOUND_POLL_GLOBAL_MAX` overall;
+   * - a mailbox-specific cursor is persisted only after a connection's whole batch is ingested,
+   *   so a failed poll re-runs from the old cursor and dedupe makes the overlap safe (idempotent
+   *   across restarts);
+   * - attachments go through the attachment ACL/malware path; a rejected attachment never fails
+   *   the message or the batch (partial-batch safety);
+   * - bounce/auto-reply messages are stored with `messageKind` so downstream flows suppress
+   *   automatic outbound effects (see `EmailToCaseService`).
+   *
+   * When no provider is configured the call fails clearly (`FEATURE_DISABLED`) instead of
+   * returning a fake success.
    */
   async pollInbound(): Promise<{ fetched: number; stored: number; skipped: number }> {
     this.scope.requirePrincipal();
-    const messages = await this.inbound.poll({ maxMessages: 50 });
+    const providers = await this.resolveInboundProviders();
+    if (providers.length === 0) {
+      throw new FeatureDisabledError('inbound mail provider');
+    }
+    let fetched = 0;
     let stored = 0;
     let skipped = 0;
-    for (const message of messages) {
-      const existing = await this.database.db
-        .selectFrom('entity_records')
-        .select('id')
-        .where('entity_type', '=', EMAIL_ENTITY)
-        .where('deleted_at', 'is', null)
-        .where(sql`attrs ->> 'messageId'`, '=', message.providerMessageId)
-        .executeTakeFirst();
-      if (existing) {
-        skipped += 1;
-        continue;
+    for (const entry of providers) {
+      if (fetched > INBOUND_POLL_GLOBAL_MAX) break;
+      const cursor = await this.loadCursor(entry.connectionId);
+      let messages: readonly InboundMailMessage[];
+      try {
+        messages = await entry.provider.poll({ maxMessages: INBOUND_POLL_MAX_MESSAGES, cursor });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (entry.dbConnectionId !== undefined) await this.inboundConnections.recordPollError(entry.dbConnectionId, message);
+        throw new ValidationError(`Inbound poll failed for connection "${entry.connectionId}": ${message}`, { connectionId: entry.connectionId });
       }
-      await this.records.create(EMAIL_ENTITY, inboundToEmailRecord(message));
-      stored += 1;
+      const bounded = messages.slice(0, INBOUND_POLL_MAX_MESSAGES);
+      fetched += bounded.length;
+      for (const message of bounded) {
+        const existing = await this.findInboundRecord(entry.connectionId, message.providerMessageId);
+        if (existing !== null) {
+          skipped += 1;
+          continue;
+        }
+        const record = inboundToEmailRecord(message, {
+          connectionId: entry.connectionId,
+          ...(entry.emailAccountId === undefined ? {} : { emailAccountId: entry.emailAccountId }),
+        });
+        record['threadId'] = (await this.resolveThreadId(message)) ?? record['threadId'];
+        if (entry.ownerUserId !== undefined) record['assignedUserId'] = entry.ownerUserId;
+        const created = await this.records.create(EMAIL_ENTITY, record);
+        await this.storeInboundAttachments(String(created['id']), message);
+        stored += 1;
+      }
+      const nextCursor = await entry.provider.nextCursor?.();
+      await this.saveCursor(entry.connectionId, nextCursor ?? cursor);
+      if (entry.dbConnectionId !== undefined) await this.inboundConnections.lastPolled(entry.dbConnectionId);
     }
-    return { fetched: messages.length, stored, skipped };
+    return { fetched, stored, skipped };
+  }
+
+  /** Env-selected provider (if configured) plus active database connections, each with its cursor identity. */
+  private async resolveInboundProviders(): Promise<
+    Array<{
+      provider: InboundMailProvider;
+      connectionId: string;
+      dbConnectionId?: string | undefined;
+      emailAccountId?: string | undefined;
+      ownerUserId?: string | undefined;
+    }>
+  > {
+    const providers: Array<{
+      provider: InboundMailProvider;
+      connectionId: string;
+      dbConnectionId?: string | undefined;
+      emailAccountId?: string | undefined;
+      ownerUserId?: string | undefined;
+    }> = [];
+    if (this.inbound.configured !== false) {
+      providers.push({
+        provider: this.inbound,
+        connectionId: this.inbound.connectionId ?? this.inbound.name,
+      });
+    }
+    if (this.scope.isAdmin) {
+      const connections = await this.inboundConnections.activeForPoll();
+      for (const connection of connections) {
+        providers.push({
+          provider: this.inboundConnections.buildProvider(connection.view, connection.credential),
+          connectionId: connection.view.id,
+          dbConnectionId: connection.view.id,
+          emailAccountId: connection.view.id,
+          ...(connection.view.ownerUserId === null ? {} : { ownerUserId: connection.view.ownerUserId }),
+        });
+      }
+    }
+    return providers;
+  }
+
+  /** Scoped dedupe lookup: same provider id in a different connection is a different message. */
+  private async findInboundRecord(connectionId: string, providerMessageId: string): Promise<{ id: string } | null> {
+    const row = await this.database.db
+      .selectFrom('entity_records')
+      .select('id')
+      .where('entity_type', '=', EMAIL_ENTITY)
+      .where('deleted_at', 'is', null)
+      .where(sql`attrs ->> 'inboundConnectionId'`, '=', connectionId)
+      .where(sql`attrs ->> 'messageId'`, '=', providerMessageId)
+      .executeTakeFirst();
+    return row === undefined ? null : { id: row.id };
+  }
+
+  /** A reply joins the thread of the message it answers, even across connections (thread linking). */
+  private async resolveThreadId(message: InboundMailMessage): Promise<string | null> {
+    if (message.inReplyTo === null) return null;
+    // The RFC Message-Id lives in the stored headers JSON (`messageId` attr is the provider id,
+    // needed for scoped dedupe), so match against the headers text as well as the title attribute.
+    const parent = await this.database.db
+      .selectFrom('entity_records')
+      .select('attrs')
+      .where('entity_type', '=', EMAIL_ENTITY)
+      .where('deleted_at', 'is', null)
+      .where((builder) =>
+        builder.or([
+          builder(sql`attrs ->> 'messageId'`, '=', message.inReplyTo ?? ''),
+          builder(sql`attrs ->> 'headers'`, 'like', `%${message.inReplyTo}%`),
+        ]),
+      )
+      .executeTakeFirst();
+    const attrs = parent?.attrs as Record<string, unknown> | undefined;
+    if (attrs === undefined) return null;
+    return typeof attrs['threadId'] === 'string' ? attrs['threadId'] : null;
+  }
+
+  /** Stores decoded attachments through the attachment ACL/malware path; failures skip one attachment, never the batch. */
+  private async storeInboundAttachments(emailId: string, message: InboundMailMessage): Promise<void> {
+    if (this.attachments === undefined || message.attachments === undefined) return;
+    for (const attachment of message.attachments) {
+      try {
+        await this.attachments.upload({
+          filename: attachment.filename,
+          mimeType: attachment.contentType,
+          body: attachment.data,
+          parentType: EMAIL_ENTITY,
+          parentId: emailId,
+        });
+      } catch {
+        // Malware/ACL/size rejection of one attachment must not lose the message or the batch.
+      }
+    }
+  }
+
+  private async loadCursor(connectionId: string): Promise<string | null> {
+    const row = await this.database.db
+      .selectFrom('inbound_mail_cursors')
+      .select('cursor')
+      .where('connection_id', '=', connectionId)
+      .executeTakeFirst();
+    return row?.cursor ?? null;
+  }
+
+  private async saveCursor(connectionId: string, cursor: string | null): Promise<void> {
+    await this.database.db
+      .insertInto('inbound_mail_cursors')
+      .values({ connection_id: connectionId, cursor, last_uid: null, updated_at: new Date() })
+      .onConflict((builder) => builder.column('connection_id').doUpdateSet({ cursor, updated_at: new Date() }))
+      .execute();
   }
 
   /** Email account of a record: its own `emailAccountId`, else the default account, else none. */

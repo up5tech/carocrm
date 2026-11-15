@@ -9,11 +9,15 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post } f
 import { ApiTags } from '@nestjs/swagger';
 
 import { EmailAccountsService, type EmailAccountView } from './email-accounts.service.js';
+import { InboundConnectionsService, type InboundConnectionView } from './inbound-connections.service.js';
 
 @ApiTags('email-accounts')
 @Controller('api/v1/EmailAccount')
 export class EmailAccountController {
-  constructor(@Inject(EmailAccountsService) private readonly accounts: EmailAccountsService) {}
+  constructor(
+    @Inject(EmailAccountsService) private readonly accounts: EmailAccountsService,
+    @Inject(InboundConnectionsService) private readonly inboundConnections: InboundConnectionsService,
+  ) {}
 
   @Get()
   list(): Promise<EmailAccountView[]> {
@@ -45,5 +49,33 @@ export class EmailAccountController {
   @Post(':id/action/verify')
   verify(@Param('id') id: string): Promise<{ verified: boolean; error: string | null }> {
     return this.accounts.verify(id);
+  }
+
+  // ── Inbound mail connections (Phase 24.6) ──────────────────────────────────
+  // Under the same static prefix so they never collide with the generic `:entity` routes.
+
+  @Get('action/inbound-connections')
+  listInboundConnections(): Promise<InboundConnectionView[]> {
+    return this.inboundConnections.list();
+  }
+
+  @Get('action/inbound-connections/:id')
+  getInboundConnection(@Param('id') id: string): Promise<InboundConnectionView> {
+    return this.inboundConnections.get(id);
+  }
+
+  @Post('action/inbound-connections')
+  createInboundConnection(@Body() body: unknown): Promise<InboundConnectionView> {
+    return this.inboundConnections.create(body);
+  }
+
+  @Patch('action/inbound-connections/:id')
+  updateInboundConnection(@Param('id') id: string, @Body() body: unknown): Promise<InboundConnectionView> {
+    return this.inboundConnections.update(id, body);
+  }
+
+  @Delete('action/inbound-connections/:id')
+  removeInboundConnection(@Param('id') id: string): Promise<{ id: string; deleted: boolean }> {
+    return this.inboundConnections.remove(id);
   }
 }

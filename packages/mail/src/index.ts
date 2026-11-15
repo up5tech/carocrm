@@ -20,12 +20,23 @@ export {
   createAccountSmtpTransport,
 } from './account/index.js';
 export {
+  createInboundProvider,
+  inboundDedupeKey,
+  type InboundMailAttachment,
   type InboundMailMessage,
   type InboundMailProvider,
+  type InboundMessageKind,
   type InboundPollOptions,
   inboundToEmailRecord,
+  InboundMailError,
+  MAIL_INBOUND_PROVIDER_MODES,
+  type MailInboundProviderMode,
   NullInboundProvider,
 } from './inbound/index.js';
+export { FixtureInboundProvider, parseFixtureSettings, type FixtureSettings } from './inbound/fixture.js';
+export { GraphInboundProvider, parseGraphSettings, type GraphFetch, type GraphSettings } from './inbound/graph.js';
+export { ImapInboundProvider, parseImapSettings, type ImapConnectionFactory, type ImapSettings, type SocketLike } from './inbound/imap.js';
+export { classifyMessage, decodeHeaderValue, parseAddressList, parseMimeMessage, type ParsedMimeMessage } from './inbound/mime.js';
 export type {
   MailAddress,
   MailAttachment,

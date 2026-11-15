@@ -250,3 +250,57 @@ sub-phase.
 Documentation-only change: no application code, migrations, database access, provider contact or
 external effect. Claims about 24.3/24.4 states are labelled delivered/in-flight/blocked, matching
 their evidence sections above; no production-ready or parity claim was added.
+
+## Phase 24.6 — Real Inbound Mail (P1)
+
+### 24.6.1 Delivered changes
+
+- `packages/mail/src/inbound/`: `mime.ts` (RFC 5322 parser — folded headers, encoded-words,
+  multipart nesting, base64/quoted-printable, RFC 5987 filenames, bounce/auto-reply
+  classification), `imap.ts` (TLS `node:net`/`node:tls` client: LOGIN, SELECT with UIDVALIDITY,
+  UID SEARCH/FETCH `BODY.PEEK[]`, `UIDVALIDITY:UID` identity, `maxMessageBytes` skip, plaintext
+  refused for non-loopback hosts at boot), `graph.ts` (client-credentials or delegated token,
+  delta-query cursor, per-message attachments, single 401-refresh retry), `fixture.ts` (`.eml`
+  files, content-hash id). `NullInboundProvider` now throws `InboundMailError('not_configured')`.
+- `createInboundProvider(mode, env)` + `MAIL_INBOUND_PROVIDER_MODES` boot-validate the provider
+  settings (`MAIL_INBOUND_PROVIDER` default `none`), so bad config fails at boot.
+- `apps/api/src/email/email.service.ts`: hardened `pollInbound()` — connection-scoped dedupe,
+  bounded polls (50/connection, 500/call), per-connection cursors persisted only after a whole
+  batch, thread linking by RFC In-Reply-To, attachments through the attachment ACL/malware path,
+  provider failure surfaced as a clear validation error per connection.
+- `apps/api/src/email/inbound-connections.service.ts` + routes under
+  `EmailAccount/action/inbound-connections`: admin CRUD with credentials encrypted at rest
+  (`ENCRYPTION_KEY`), `hasCredential` only in responses, per-connection `lastError`/`lastPolledAt`.
+- `database/migrations/095_inbound_mail_connections.sql`: connections + cursor tables and an
+  expression index on `(entity_type, inboundConnectionId, messageId)` for scoped dedupe;
+  `database/seed-metadata.ts`: new Email fields `inboundConnectionId`, `messageKind`
+  (Standard/Bounce/AutoReply), `inboundParsed`, `inboundError`.
+- `apps/api/src/service-desk/email-to-case.service.ts`: bounce/auto-reply never auto-creates a
+  Case; `replyByEmail` checks live `MarketingSuppression` rows before any outbound effect;
+  `processInbound` tolerates an unconfigured provider (features off the poll, still converts
+  already-stored records).
+- Docs: `README.md` "Not built yet" updated, `docs/reference/compatibility-matrix.md` email row
+  and note updated, `docs/module-guide.md` rewritten inbound section,
+  `docs/runbooks/inbound-mail.md` new operator runbook.
+
+### 24.6.2 Tests added
+
+- `packages/mail/src/inbound/mime.test.ts` (9): headers/folding/encoded-words, multipart text+html,
+  attachment decoding, quoted-printable, classification, garbage fallback.
+- `packages/mail/src/inbound/providers.test.ts` (10): Null fails clearly, scoped dedupe key,
+  boot-fail config, fixture ordering/bounds, Graph normalization + delta cursor + rejected token,
+  IMAP over a fake socket (UIDVALIDITY:UID ids, cursor).
+- `apps/api/test/email-inbound.test.ts` (3, `MAIL_INBOUND_PROVIDER=fixture`, `MAIL_TRANSPORT=memory`):
+  six-file fixture ingestion exactly once (repeat poll fully skipped), bounce/auto-reply/malformed
+  classification, thread linking, attachment through the ACL/malware path, the same provider id in
+  another connection not blocking ingestion, DB connection CRUD (encrypted credential, no secret in
+  responses), failing connection surfaced clearly with `lastError`, unauthenticated refusals.
+
+### 24.6.3 Test evidence
+
+- `npx vitest run packages/mail/src/inbound/` → 2 files / 19 tests passed.
+- `npx vitest run apps/api/test/email-inbound.test.ts` → 3/3 passed (fixture + memory transport on
+  bootstrapped API against the shared primary dev database; fixtures in `os.tmpdir()`, records
+  identified by run id and cleaned by their own primary keys).
+- `apps/api` and `packages/mail` typecheck clean (`npx tsc --noEmit`). No real mailbox was ever
+  contacted; no customer email was sent.

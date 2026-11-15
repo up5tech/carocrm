@@ -38,7 +38,7 @@ session or cross-customer query exists or is planned.
 | OpenAPI | upstream has none for v1 API | generated `GET /api/v1/OpenApi` — additive. **Corrected (Phase 23.0, 2026-11-09):** the document is real and route-level, but it carries **no** DTO-derived schemas, **no** request/response bodies and **no** security scheme (measured: 772 paths, 0 schemas). It is a route inventory, not a contract; and it is served **without authentication** | P1 | implemented (route level) — contract generation tracked as G1 |
 | Stream / followers | v9.3.x | `GET /Stream`, `GET /:type/:id/stream`, `POST /Note`, `PUT\|DELETE /:type/:id/subscription`, mentions→notifications, generated Update items | P1 | implemented |
 | Activities / Calendar | v9.3.x | Task/Call/Meeting/Reminder entities, `GET /Calendar` occurrences, recurrence expansion, reminder job, month-grid UI with drag reschedule | P1 | implemented |
-| Email | v9.3.x | metadata `Email` entity + templates, per-account SMTP, queued delivery with a ledger, `InboundMailProvider` port | P1 | implemented (see note) |
+| Email | v9.3.x | metadata `Email` entity + templates, per-account SMTP, queued delivery with a ledger, inbound collection (IMAP + Microsoft Graph adapters since Phase 24.6: scoped dedupe per connection, per-mailbox cursors, multipart attachments via the attachment ACL/malware path, bounce/auto-reply suppression; unconfigured installs fail clearly) | P1 | implemented (see note) |
 | Global search | v9.3.x | `/Search` over the query engine (ACL-aware) + trigram indexes; no OpenSearch stage 2 | P1 | implemented |
 | Import / Export | v9.3.x | CSV import with field mapping and a validation report, paged CSV export with formula neutralisation | P1 | implemented |
 | Dashboards / dashlets | v9.3.x | dashboards with list/chart/KPI dashlets driven by the query engine | P1 | implemented |
@@ -289,9 +289,15 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
   *when* a failure surfaces differs deliberately (PLAN §7.4 observability, §5.5 external effects).
 - Transports implemented: SMTP submission and a generic credential-free SMTP relay over nodemailer,
   plus `memory` and `none`, which deliver nothing — `none` is the default and the API answers
-  `FEATURE_DISABLED` while it is selected. **AWS SES, SendGrid and Microsoft Graph are PLAN §28
-  "later" and are absent**, and so is **inbound collection (IMAP / POP3 / Graph / Gmail)**: upstream's
-  fetched-mail behaviour is therefore **not comparable yet**.
+  `FEATURE_DISABLED` while it is selected. **AWS SES, SendGrid and Microsoft Graph *send* are PLAN §28
+  "later" and are absent**. Inbound collection **was built in Phase 24.6**: an IMAP adapter
+  (login, folder select with UIDVALIDITY, UID SEARCH/FETCH `BODY.PEEK[]`, UIDVALIDITY:UID identity)
+  and a Microsoft Graph adapter (client-credentials or delegated token, delta queries, per-message
+  attachment fetch), bound either by `MAIL_INBOUND_PROVIDER` (`imap|graph|fixture`, `none` default)
+  or by admin-configured Mail Inbound Connections (`/api/v1/EmailAccount/action/inbound-connections`,
+  credentials encrypted at rest with `ENCRYPTION_KEY`). POP3/Gmail inbound remain absent. Upstream's
+  fetched-mail behaviour is therefore comparable for the IMAP/Graph sources only. See
+  `docs/runbooks/inbound-mail.md`.
 - **No mail credential is stored in the database.** `SMTP_*` settings come from the environment, so
   PLAN §28.3's "secrets and credentials must be stored encrypted at rest" currently has no stored
   secret to satisfy. This is a deliberate deviation, not an implementation: if mail accounts become

@@ -77,6 +77,13 @@ const ConfigSchema = z.object({
    */
   mailTransport: z.enum(['none', 'memory', 'smtp', 'relay']).default('none'),
   /**
+   * Inbound mail collection (Phase 24.6). `none` is the default: without a configured provider,
+   * `POST /api/v1/Email/action/pollInbound` fails clearly (`FEATURE_DISABLED`) instead of
+   * returning a fake success. The `IMAP_*` / `GRAPH_*` / `MAIL_INBOUND_FIXTURE_DIR` settings
+   * themselves are parsed by `@carocrm/mail` from the environment.
+   */
+  mailInboundProvider: z.enum(['none', 'imap', 'graph', 'fixture']).default('none'),
+  /**
    * Global API rate limit per minute **per client**. The SPA spends many small calls per screen
    * (metadata, layout, preferences, the list itself), and a user clicking through pages can reach a
    * few hundred a minute without doing anything abusive — 300 turned ordinary paging into a 429
@@ -349,6 +356,7 @@ export function buildConfig(): AppConfig {
     signedUrlTtlSeconds: process.env.SIGNED_URL_TTL_SECONDS,
     malwareScanMode: process.env.MALWARE_SCAN_MODE,
     mailTransport: process.env.MAIL_TRANSPORT,
+    mailInboundProvider: process.env.MAIL_INBOUND_PROVIDER,
     jobQueueName: process.env.JOB_QUEUE_NAME,
     jobAttempts: process.env.JOB_ATTEMPTS,
     jobBackoffBaseMs: process.env.JOB_BACKOFF_BASE_MS,

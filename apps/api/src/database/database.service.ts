@@ -440,6 +440,38 @@ export interface EmailAccountsTable {
   modified_at: Date;
 }
 
+/** One configured inbound mailbox/connection (Phase 24.6): provider 'imap' | 'graph', mailbox address, encrypted credential, owner and independent cursor. */
+export interface InboundMailConnectionsTable {
+  id: string;
+  name: string;
+  provider: string;
+  mailbox: string;
+  host: string | null;
+  port: number | null;
+  secure: boolean;
+  folder: string | null;
+  tenant_id: string | null;
+  client_id: string | null;
+  /** AES-256-GCM payload from @carocrm/core encryptSecret; never the plaintext credential. */
+  credential_encrypted: string | null;
+  owner_user_id: string | null;
+  is_active: boolean;
+  is_deleted: boolean;
+  last_polled_at: Date | null;
+  last_error: string | null;
+  created_by_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Per-connection poll cursor (Phase 24.6): opaque provider cursor, e.g. IMAP UIDINVALIDITY+UID or Graph deltaLink. */
+export interface InboundMailCursorsTable {
+  connection_id: string;
+  cursor: string | null;
+  last_uid: string | null;
+  updated_at: Date;
+}
+
 /**
  * Phase 18 portals (PLAN §37): the external site, its own role space, navigation and
  * dashboards. Portal record visibility itself is not stored here — it is derived from the
@@ -1715,6 +1747,8 @@ export interface Database {
   file_uploads: FileUploadsTable;
   email_deliveries: EmailDeliveriesTable;
   email_accounts: EmailAccountsTable;
+  inbound_mail_connections: InboundMailConnectionsTable;
+  inbound_mail_cursors: InboundMailCursorsTable;
   audit_log: AuditLogTable;
   stream_items: StreamItemsTable;
   stream_mentions: StreamMentionsTable;

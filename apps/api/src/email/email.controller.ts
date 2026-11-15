@@ -40,8 +40,10 @@ export class EmailController {
   }
 
   /**
-   * Inbound poll (PLAN §28.2): runs the normalized inbound pipeline once. With the default
-   * `NullInboundProvider` this is a safe no-op; an installed IMAP/Graph adapter makes it collect.
+   * Inbound poll (PLAN §28.2, Phase 24.6): runs the configured inbound pipeline once — the
+   * provider selected by `MAIL_INBOUND_PROVIDER` plus every active Mail Inbound Connection.
+   * With no provider configured this fails clearly (`FEATURE_DISABLED`) instead of returning
+   * a fake empty success.
    */
   @HttpCode(200)
   @Post('action/pollInbound')

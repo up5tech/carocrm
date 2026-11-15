@@ -217,10 +217,16 @@ a lint that fails a release on a dead link or a missing page), served at `/docs`
 [plans/PLAN_Phase_21_Documentation.md](plans/PLAN_Phase_21_Documentation.md) and
 [docs/reference/docs-authoring.md](docs/reference/docs-authoring.md).
 
-_Not built yet_ — real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
-provider until an IMAP/Graph adapter is installed); SAML, SCIM and enterprise directory sync
+_Not built yet_ — SAML, SCIM and enterprise directory sync
 (deferred with a written rationale — generic OIDC is built); a DTO-derived OpenAPI contract (the served
 document is a route inventory, G1).
+
+**Built (Phase 24.6)** — per-mailbox inbound collection (IMAP and Microsoft Graph) behind
+`POST /api/v1/Email/action/pollInbound`: scoped dedupe per connection, independent cursors,
+multmultipart attachments through the attachment ACL/malware path, bounce/auto-reply suppression.
+The env default remains unconfigured (`MAIL_INBOUND_PROVIDER=none`), so an install without a
+configured mailbox fails clearly (`FEATURE_DISABLED`) instead of pretending to collect mail.
+See `docs/runbooks/inbound-mail.md`.
 
 **Product boundary, not a missing feature** — CaroCRM is **single-tenant by design**: one deployment
 serves one customer organisation. Shared tenancy, workspace isolation, per-tenant billing,

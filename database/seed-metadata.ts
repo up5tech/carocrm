@@ -575,6 +575,13 @@ export const coreMetadata: MetadataSeedEntry[] = [
         inReplyTo: { type: 'varchar', maxLength: 512, inDetail: true },
         dateSent: { type: 'datetime', inList: true, inDetail: true, sortable: true },
         deliveryError: { type: 'text', label: 'Delivery error', inDetail: true },
+        /** Mailbox/connection the inbound poll that produced this record came from (Phase 24.6); dedupe is scoped to it. */
+        inboundConnectionId: { type: 'varchar', maxLength: 255, inDetail: true },
+        /** Standard | Bounce | AutoReply (Phase 24.6 classification): bounce/auto-reply never auto-creates cases. */
+        messageKind: { type: 'enum', values: ['Standard', 'Bounce', 'AutoReply'], defaultValue: 'Standard', inDetail: true },
+        /** False when the raw message could not be parsed and this is a flagged fallback record. */
+        inboundParsed: { type: 'bool', defaultValue: true, inDetail: true },
+        inboundError: { type: 'text', label: 'Inbound parse note', inDetail: true },
         parentType: { type: 'varchar', maxLength: 64, inDetail: true },
         parentId: { type: 'varchar', maxLength: 64, inDetail: true },
       },

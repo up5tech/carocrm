@@ -283,13 +283,27 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   `body`, `bodyHtml` with `{{variable}}` placeholders); at queue time the service renders it with the
   draft's own fields and persists the rendered subject/body on the record, so the worker sends
   exactly what was validated. The sending account's `signature` is appended once (`--` footer block).
-- **Inbound is a normalized pipeline plus a provider port (PLAN §28.2).** `InboundMailProvider`
-  (`poll()` → `InboundMailMessage[]`) defaults to `NullInboundProvider` (safe no-op); a future
-  IMAP/Graph adapter implements the port. `POST /api/v1/Email/action/pollInbound` stores new
-  messages as `Inbound` Email records, deduped on `messageId`.
+- **Inbound is a normalized pipeline plus a provider port (PLAN §28.2; adapters in Phase 24.6).**
+  `InboundMailProvider` (`poll()` → `InboundMailMessage[]`) has three implementations in
+  `packages/mail/src/inbound/`: IMAP (login, UIDVALIDITY select, UID SEARCH/FETCH `BODY.PEEK[]`,
+  `UIDVALIDITY:UID` identity, `maxMessageBytes` skip), Microsoft Graph (client-credentials or
+  static delegated token, delta query cursor, per-message attachments), and a `.eml` fixture
+  provider for tests. `NullInboundProvider` is the explicit unconfigured default and its `poll()`
+  throws `InboundMailError('not_configured')`. `POST /api/v1/Email/action/pollInbound` stores new
+  messages as `Inbound` Email records, deduped on the scoped pair
+  `(inboundConnectionId, messageId)` — the same provider-local id (IMAP UID) in two mailboxes is
+  not a collision. Polls are bounded (50 messages per connection, 500 total), and a per-connection
+  cursor is persisted only after a whole batch is ingested, so a failed poll re-runs safely.
+  Attachments are stored through the attachment ACL/malware path, classified bounces/auto-replies
+  (`messageKind`) never auto-create cases, and an unconfigured install fails with
+  `FEATURE_DISABLED` instead of a fake empty success.
 - Tests: `packages/mail/src/{index,message,smtp,offline,record,template}/*.test.ts` (unit, incl. template
   rendering), `apps/api/test/email.test.ts` (validation, ledger, queueing, ACL, cleanup),
-  `apps/api/test/email-accounts.test.ts` (encrypted accounts, templates, signature, inbound poll).
+  `apps/api/test/email-accounts.test.ts` (encrypted accounts, templates, signature, inbound poll),
+  `apps/api/test/email-inbound.test.ts` (fixture ingestion, idempotency, scoped dedupe, bounce/
+  auto-reply/malformed handling, attachment path, failing provider, connections CRUD,
+  `packages/mail/src/inbound/*.test.ts` (MIME parser, IMAP fake-socket, Graph injected fetch,
+  fixture, scoped dedupe, boot-fail config).
   `apps/worker/src/handlers/mail-handlers.test.ts` (20 job tests), the email block in
   `scripts/e2e-smoke.sh`, section 6 of `scripts/worker-smoke.sh` and the `e2e/email.spec.ts` browser spec.
 

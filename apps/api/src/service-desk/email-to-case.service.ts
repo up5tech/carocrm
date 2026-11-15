@@ -1,12 +1,15 @@
 import { FeatureDisabledError, NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { sql } from "kysely";
 
+import type { AppConfig } from "../config.js";
+import { CONFIG_TOKEN } from "../config.js";
 import { DatabaseService } from "../database/database.service.js";
 import { EMAIL_ENTITY } from "../email/email.constants.js";
 import { EmailService } from "../email/email.service.js";
 import { EntityCrudService } from "../entity/entity.service.js";
 import { runInTransaction } from "../entity/tx-context.js";
+import { emailIdentity } from "../marketing-automation/marketing-identity.js";
 import { StreamService } from "../stream/stream.service.js";
 import { CASE_ENTITY } from "./service-desk-domain.js";
 import { runAsServiceDeskInternal } from "./service-desk-internal.js";
@@ -42,6 +45,7 @@ export class EmailToCaseService {
     @Inject(StreamService) private readonly stream: StreamService,
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(ServiceDeskRecords) private readonly records: ServiceDeskRecords,
+    @Optional() @Inject(CONFIG_TOKEN) private readonly config: AppConfig | undefined,
   ) {}
 
   async processEmail(emailId: string): Promise<ProcessEmailResult> {
@@ -129,7 +133,15 @@ export class EmailToCaseService {
   async processInbound(): Promise<{ fetched: number; stored: number; skipped: number; processed: number; failed: number }> {
     const settings = await this.settings.settings();
     if (!settings.features.emailToCase) throw new FeatureDisabledError("emailToCase");
-    const poll = await this.email.pollInbound();
+    let poll: { fetched: number; stored: number; skipped: number };
+    try {
+      poll = await this.email.pollInbound();
+    } catch (error: unknown) {
+      // No inbound provider configured: the feature can still convert already-stored inbound
+      // records; the poll itself fails clearly at the Email endpoint. (Phase 24.6.)
+      if (error instanceof FeatureDisabledError) poll = { fetched: 0, stored: 0, skipped: 0 };
+      else throw error;
+    }
     let processed = 0;
     let failed = 0;
     const rows = await this.database.db
@@ -167,6 +179,12 @@ export class EmailToCaseService {
 
     const textBody = input.text.trim();
     if (textBody === "") throw new ValidationError("An email reply needs text.", { caseId });
+
+    // Consent/suppression (Phase 24.6 task 4): a case reply is an outbound effect, so a live
+    // suppression on the requester address blocks it before any draft is even persisted.
+    if (requesterEmail !== undefined && (await this.isSuppressed(requesterEmail))) {
+      throw new ValidationError("This address is suppressed and cannot receive outbound email.", { caseId, address: requesterEmail });
+    }
 
     // Thread the outbound message with the case's last inbound mail, so the customer's mail client
     // groups it and a reply from them matches the same case (§5.5). The sending address is left to
@@ -283,7 +301,27 @@ export class EmailToCaseService {
     return row === undefined ? undefined : ((row.attrs ?? {}) as Record<string, unknown>);
   }
 
+  private async isSuppressed(address: string): Promise<boolean> {
+    const identity = emailIdentity(address, this.config?.encryptionKey ?? "");
+    if (identity === null) return false;
+    const row = await this.database.db
+      .selectFrom("entity_records")
+      .select("attrs")
+      .where("entity_type", "=", "MarketingSuppression")
+      .where("deleted_at", "is", null)
+      .where(sql`attrs ->> 'emailHash'`, "=", identity.hash)
+      .where(sql`coalesce(attrs ->> 'revokedAt', '')`, '=', '')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   private loopReason(record: Record<string, unknown>): string | undefined {
+    // Structured classification from the inbound provider (Phase 24.6): a bounce or auto-reply
+    // never becomes a case, so a mailbox cannot generate an unbounded case flood (or an
+    // outbound loop) from delivery noise.
+    const kind = text(record["messageKind"]);
+    if (kind === "Bounce") return "dsn";
+    if (kind === "AutoReply") return "auto-reply";
     const subject = (text(record["name"]) ?? "").toLowerCase();
     const headers = text(record["headers"]) ?? "";
     if (subject.startsWith("auto:") || subject.includes("out of office") || subject.includes("automatic reply")) {

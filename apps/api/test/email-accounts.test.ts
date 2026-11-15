@@ -5,6 +5,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 // The API must never reach a real mail server from a test (AGENTS.md §5.5).
 process.env.MAIL_TRANSPORT = 'memory';
+process.env.MAIL_INBOUND_PROVIDER = 'none';
 // Accounts store credentials encrypted at rest (PLAN §28.3); the key must exist before bootApi()
 // builds the config. Any 32-byte hex value works; this one is obviously a test key.
 process.env.ENCRYPTION_KEY = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
@@ -323,11 +324,12 @@ describe('signature (Phase 11)', () => {
   });
 });
 
-describe('inbound pipeline (Phase 11, §28.2)', () => {
-  it('polls the provider and stores nothing when none is configured', async () => {
+describe('inbound pipeline (Phase 11, §28.2; hardened 24.6)', () => {
+  it('fails clearly when no inbound provider is configured', async () => {
     const res = await call('POST', '/api/v1/Email/action/pollInbound', adminToken);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ fetched: 0, stored: 0, skipped: 0 });
+    // Phase 24.6: an unconfigured install fails clearly (FEATURE_DISABLED) instead of a fake empty success.
+    expect(res.status).toBe(403);
+    expect(codeOf(res)).toBe('FEATURE_DISABLED');
   });
 
   it('requires authentication', async () => {
