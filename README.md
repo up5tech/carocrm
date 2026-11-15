@@ -223,7 +223,7 @@ document is a route inventory, G1).
 
 **Built (Phase 24.6)** — per-mailbox inbound collection (IMAP and Microsoft Graph) behind
 `POST /api/v1/Email/action/pollInbound`: scoped dedupe per connection, independent cursors,
-multmultipart attachments through the attachment ACL/malware path, bounce/auto-reply suppression.
+multipart attachments through the attachment ACL/malware path, bounce/auto-reply suppression.
 The env default remains unconfigured (`MAIL_INBOUND_PROVIDER=none`), so an install without a
 configured mailbox fails clearly (`FEATURE_DISABLED`) instead of pretending to collect mail.
 See `docs/runbooks/inbound-mail.md`.
@@ -391,10 +391,13 @@ Email:
 
 - drafts are ordinary `POST|GET|PUT|PATCH|DELETE /api/v1/Email` records; delivery is queued
   `GET /api/v1/Email/action/transport`, `POST /api/v1/Email/action/verify`,
-  `POST /api/v1/Email/action/pollInbound` (null provider today), `POST /api/v1/Email/:id/action/send`,
+  `POST /api/v1/Email/action/pollInbound` (IMAP / Microsoft Graph / fixture provider, configured per
+  installation), `POST /api/v1/Email/:id/action/send`,
   `GET /api/v1/Email/:id/deliveries`
 - `GET|POST /api/v1/EmailAccount`, `GET|PATCH|DELETE /api/v1/EmailAccount/:id`,
   `POST /api/v1/EmailAccount/:id/action/verify`
+- `GET|POST /api/v1/EmailAccount/action/inbound-connections`,
+  `GET|PATCH|DELETE /api/v1/EmailAccount/action/inbound-connections/:id` (administrator only)
 
 Documents (kernel module):
 

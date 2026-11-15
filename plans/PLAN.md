@@ -2912,7 +2912,8 @@ demonstrated security regression; and the final review records an honest go/no-g
 Status: **In progress** (started 2026-11-14). 24.0 baseline audit, 24.1 single-tenant charter,
 24.2 NO-GO blocker records and 24.3 production install/upgrade artifacts are delivered; 24.4
 (`api-spec/` to `--strict` + typed client) and 24.5 (release truthfulness) are in flight;
-24.6–24.12 have not started. The release decision remains **NO-GO for production** — see
+24.6 (real inbound mail) is delivered. 24.7–24.12 have not started. The release decision remains
+**NO-GO for production** — see
 `docs/releases/2026-11-15-phase-24.md`. Scope, priority definitions, owner decisions and
 acceptance criteria
 live in `plans/PLAN_Phase_24_Product_Completion.md`. This phase sequences the P0/P1/P2 recommendations

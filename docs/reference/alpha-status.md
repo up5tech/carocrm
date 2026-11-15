@@ -29,7 +29,8 @@ see the portals status section below and PLAN §72 for the remaining priority ma
 | Generic React CRUD UI working | done | `apps/web`: nav, list (filter/sort/paging/mass delete), detail with relationship panels, create/edit forms — all rendered from `GET /Metadata` |
 | Entity Manager admin UI working | done | `/admin/entity-manager` (`EntityManagerPage.tsx`) lists entity definitions; `/admin/entity-manager/:entity` (`EntityAdminPage.tsx`) edits one per tab — fields, relations, logic, layout, access, indexes, settings |
 | Attachments working | done | `POST /api/v1/Attachment/upload`, MIME/size/extension checks, local FS storage |
-| Outbound email working | done | `MailTransport` port (SMTP + generic relay + disabled/memory), `POST /api/v1/Email/:id/action/send` queues `system.sendEmail`, `email_deliveries` ledger; inbound (§28.2) not implemented |
+| Outbound email working | done | `MailTransport` port (SMTP + generic relay + disabled/memory), `POST /api/v1/Email/:id/action/send` queues `system.sendEmail`, `email_deliveries` ledger |
+| Inbound email collection working | done (Phase 24.6) | `MAIL_INBOUND_PROVIDER=imap\|graph\|fixture` (default `none` fails clearly), `POST /api/v1/Email/action/pollInbound`, per-connection cursors and scoped dedupe, admin CRUD under `EmailAccount/action/inbound-connections` |
 | Audit working | done | field-level rows in `audit_log`, `GET /api/v1/AuditLog`, secrets redacted |
 | Global and entity search working | done | `GET /api/v1/Search[/:entity]?q=`, ACL-filtered, trigram-indexed (see Phase 12 section) |
 | Saved filters working | done | `/api/v1/SavedFilter` CRUD + `action/run`, private/shared ownership columns |
@@ -223,11 +224,17 @@ outbound side only:
   ceiling and the queue. Attachments link through the §25 attachment table (`parentType: 'Email'`).
 - Credentials live in the environment, never in a table, so PLAN §28.3's "encrypted at rest" requirement
   has nothing to encrypt — recorded as a deliberate deviation rather than half-implementing a secret
-  store.
-- Not built: inbound collection (PLAN §28.2 IMAP/POP3/Graph/Gmail — PLAN itself defers it) and the later
-  providers above. There is no email-specific UI (no compose screen, mailbox list or thread view), but
-  `Email` is a metadata entity, so the generated list/detail/edit views already work for drafts and the
-  send is an API action.
+  store. (Inbound connection credentials are the exception: they are stored encrypted with
+  `ENCRYPTION_KEY`, write-only, and never returned by a read path.)
+- Inbound collection is built (Phase 24.6): an IMAP and a Microsoft Graph adapter behind the
+  `InboundMailProvider` port, a filesystem fixture provider for tests, and `NullInboundProvider` as
+  the explicit unconfigured default that fails clearly. Dedupe is scoped per connection, each
+  connection keeps its own cursor, attachments go through the §25 ACL/malware path, and
+  bounce/auto-reply messages are classified instead of triggering outbound effects.
+- Not built: the later outbound providers above (SES/SendGrid/Graph send), POP3 and Gmail inbound, and
+  the installation-wide email/calendar sync scope (Phase 24.7). There is no email-specific UI (no
+  compose screen, mailbox list or thread view), but `Email` is a metadata entity, so the generated
+  list/detail/edit views already work for drafts and the send is an API action.
 - Verification: 63 package unit tests with a fake sender (no socket is ever opened), 12 API tests
   (`apps/api/test/email.test.ts`), 20 worker job tests, 1 browser spec (`e2e/email.spec.ts`: draft in the
   generated form → queue → ledger → cancel), 24 new `scripts/e2e-smoke.sh` checks and 8 new

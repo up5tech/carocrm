@@ -1,6 +1,8 @@
-import { createHash } from 'node:crypto';import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -28,6 +30,8 @@ let ctx: ApiContext;
 let adminToken = '';
 const emailIds: string[] = [];
 const connectionIds: string[] = [];
+/** Provider ids of the fixture messages this run created — the only records the cleanup removes. */
+const fixtureMessageIds: string[] = [];
 
 async function call(method: Method, url: string, token?: string | undefined, payload?: unknown): Promise<CallResult> {
   const res = await ctx.app.inject({
@@ -54,6 +58,28 @@ const eml = (lines: string[]) => lines.join('\r\n');
 function fixtureId(fileName: string): string {
   const bytes = readFileSync(join(fixtureDir, fileName));
   return `fixture:${fileName}:${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}`;
+}
+
+/** The persisted cursor of one connection (`null` when the connection was never polled). */
+async function readCursor(connectionId: string): Promise<string | null> {
+  const row = await ctx.database.db
+    .selectFrom('inbound_mail_cursors')
+    .select('cursor')
+    .where('connection_id', '=', connectionId)
+    .executeTakeFirst();
+  return row?.cursor ?? null;
+}
+
+/** How many Email records the fixture connection has stored so far. */
+async function countFixtureRecords(): Promise<number> {
+  const rows: Array<{ count: string }> = await ctx.database.db
+    .selectFrom('entity_records')
+    .select((eb) => eb.fn.countAll<string>().as('count'))
+    .where('entity_type', '=', 'Email')
+    .where('deleted_at', 'is', null)
+    .where(sql`attrs ->> 'inboundConnectionId'`, '=', `fixture:${fixtureDir}`)
+    .execute();
+  return Number(rows[0]?.count ?? '0');
 }
 
 beforeAll(async () => {
@@ -153,6 +179,10 @@ beforeAll(async () => {
   ctx = await bootApi();
   adminToken = ctx.adminToken;
 
+  for (const name of ['01-normal.eml', '02-reply.eml', '03-bounce.eml', '04-autoreply.eml', '05-malformed.eml', '06-attachment.eml']) {
+    fixtureMessageIds.push(fixtureId(name));
+  }
+
   // A pre-existing record with the normal fixture's provider id, but under a DIFFERENT connection,
   // must not block the fixture connection's copy (Phase 24.6: dedupe is scoped, not global).
   const foreign = await call('POST', '/api/v1/Email', adminToken, {
@@ -172,8 +202,7 @@ afterAll(async () => {
     await ctx.database.db.deleteFrom('inbound_mail_connections').where('id', 'in', connectionIds).execute();
   }
   // Only rows this run created: fixture records are found by the run-keyed foreign connection
-  // plus the six fixture message ids.
-  const fixtureMessageIds = ['01-normal.eml', '02-reply.eml', '03-bounce.eml', '04-autoreply.eml', '05-malformed.eml', '06-attachment.eml'].map(fixtureId);
+  // plus the fixture message ids captured when the files were written.
   for (const messageId of fixtureMessageIds) {
     const rows: Array<{ id: string }> = await ctx.database.db
       .selectFrom('entity_records')
@@ -210,12 +239,12 @@ describe('inbound fixture ingestion (Phase 24.6)', () => {
     const first = await call('POST', '/api/v1/Email/action/pollInbound', adminToken);
     expect(first.status, JSON.stringify(first.body)).toBe(200);
     // Six fixture files: normal, reply, bounce, auto-reply, malformed, attachment.
-    expect(first.body).toEqual({ fetched: 6, stored: 6, skipped: 0 });
+    expect(first.body).toEqual({ fetched: 6, stored: 6, skipped: 0, failed: 0 });
 
     // A second poll of the same connection is a no-op: every message is already stored.
     const again = await call('POST', '/api/v1/Email/action/pollInbound', adminToken);
     expect(again.status, JSON.stringify(again.body)).toBe(200);
-    expect(again.body).toEqual({ fetched: 6, stored: 0, skipped: 6 });
+    expect(again.body).toEqual({ fetched: 6, stored: 0, skipped: 6, failed: 0 });
 
     const rows: Array<{ id: string; attrs: unknown }> = await ctx.database.db
       .selectFrom('entity_records')
@@ -267,6 +296,38 @@ describe('inbound fixture ingestion (Phase 24.6)', () => {
     expect(attachmentRows[0]?.name).toBe('report.pdf');
   });
 
+  it('keeps the batch alive when one message cannot be stored, and retries it on the next poll', async () => {
+    const connectionId = `fixture:${fixtureDir}`;
+    const cursorBefore = await readCursor(connectionId);
+    expect(cursorBefore).not.toBeNull();
+
+    // A subject longer than the Email `name` limit (998 characters) cannot be stored: the record
+    // fails validation. Only that message is affected — the other six are already stored.
+    const unstoreableSubject = `AGENT_TEST ${runId} ${'x'.repeat(1_200)}`;
+    writeFileSync(
+      join(fixtureDir, '07-unstorable.eml'),
+      eml([
+        `From: Customer Three <customer-three@example.com>`,
+        `To: support@crm.example`,
+        `Subject: ${unstoreableSubject}`,
+        `Message-ID: <${runId}-unstorable@fixture.example>`,
+        `Date: Mon, 10 Nov 2026 10:00:00 +0000`,
+        `Content-Type: text/plain; charset=utf-8`,
+        ``,
+        `This message cannot be stored.`,
+      ]),
+    );
+
+    const res = await call('POST', '/api/v1/Email/action/pollInbound', adminToken);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ fetched: 7, stored: 0, skipped: 6, failed: 1 });
+
+    // The failed message is retried on the next poll, so the cursor must not have moved.
+    expect(await readCursor(connectionId)).toBe(cursorBefore);
+
+    rmSync(join(fixtureDir, '07-unstorable.eml'));
+  });
+
   it('fails clearly when a database connection provider fails', async () => {
     const created = await call('POST', '/api/v1/EmailAccount/action/inbound-connections', adminToken, {
       name: `AGENT_TEST Imap ${runId}`,
@@ -294,6 +355,62 @@ describe('inbound fixture ingestion (Phase 24.6)', () => {
     const after = await call('GET', `/api/v1/EmailAccount/action/inbound-connections/${String(view['id'])}`, adminToken);
     expect(after.status).toBe(200);
     expect(after.body['lastError']).toBeTruthy();
+  });
+
+  it('collects the other mailboxes even when one connection fails', async () => {
+    // The broken IMAP connection from the previous test is still active, so this poll fails as a
+    // whole — but the fixture mailbox must still be collected (one broken mailbox never blocks
+    // the others).
+    writeFileSync(
+      join(fixtureDir, '08-isolation.eml'),
+      eml([
+        `From: Customer Four <customer-four@example.com>`,
+        `To: support@crm.example`,
+        `Subject: AGENT_TEST ${runId} isolation`,
+        `Message-ID: <${runId}-isolation@fixture.example>`,
+        `Date: Mon, 10 Nov 2026 11:00:00 +0000`,
+        `Content-Type: text/plain; charset=utf-8`,
+        ``,
+        `Collected while another mailbox is broken.`,
+      ]),
+    );
+    const messageId = fixtureId('08-isolation.eml');
+    fixtureMessageIds.push(messageId);
+
+    const res = await call('POST', '/api/v1/Email/action/pollInbound', adminToken);
+    expect(res.status, JSON.stringify(res.body)).toBeGreaterThanOrEqual(400);
+    expect(codeOf(res)).toBe('VALIDATION_FAILED');
+
+    const rows: Array<{ id: string }> = await ctx.database.db
+      .selectFrom('entity_records')
+      .select('id')
+      .where('entity_type', '=', 'Email')
+      .where('deleted_at', 'is', null)
+      .where(sql`attrs ->> 'messageId'`, '=', messageId)
+      .execute();
+    expect(rows).toHaveLength(1);
+
+    rmSync(join(fixtureDir, '08-isolation.eml'));
+  });
+
+  it('stays idempotent across a restart', async () => {
+    // The deliberately broken connection would fail every poll; remove it so the poll can run.
+    for (const id of connectionIds) {
+      const removed = await call('DELETE', `/api/v1/EmailAccount/action/inbound-connections/${id}`, adminToken);
+      expect(removed.status, JSON.stringify(removed.body)).toBeLessThan(300);
+    }
+
+    // A restart: a new application, a new provider instance, the same database and the same
+    // persisted cursor. Nothing may be stored twice.
+    const countBefore = await countFixtureRecords();
+    await shutdownApi();
+    ctx = await bootApi();
+    adminToken = ctx.adminToken;
+
+    const res = await call('POST', '/api/v1/Email/action/pollInbound', adminToken);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ fetched: 6, stored: 0, skipped: 6, failed: 0 });
+    expect(await countFixtureRecords()).toBe(countBefore);
   });
 
   it('refuses unauthenticated polling and connection reads', async () => {

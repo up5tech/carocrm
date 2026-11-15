@@ -2,7 +2,7 @@
 
 > **Started:** 2026-11-13
 > **Plan:** `plans/PLAN.md` §58 — “Create a machine-readable endpoint registry.”
-> **Status:** in progress. Four groups are documented (`authentication`, `metadata`, `users`, `entities`); the remaining
+> **Status:** in progress. Five groups are documented (`authentication`, `metadata`, `users`, `entities`, `email`); the remaining
 > groups are listed in §4 and are added one file at a time. `pnpm ci:api-spec` already fails on a
 > phantom or malformed entry, so every documented endpoint is guaranteed to exist in the source.
 

@@ -268,6 +268,16 @@ their evidence sections above; no production-ready or parity claim was added.
   bounded polls (50/connection, 500/call), per-connection cursors persisted only after a whole
   batch, thread linking by RFC In-Reply-To, attachments through the attachment ACL/malware path,
   provider failure surfaced as a clear validation error per connection.
+- **Failure isolation (24.6 closure, 2026-11-16).** A message that cannot be stored now fails
+  only itself: it is counted in the new `failed` field, the rest of the batch is still ingested and
+  the connection's cursor is **not** advanced, so the message is retried on the next poll while the
+  stored ones dedupe away. A provider that fails no longer aborts the whole call: the other
+  mailboxes are still collected and the call reports every failing connection at the end
+  (`VALIDATION_FAILED`). The response is `{ fetched, stored, skipped, failed }`.
+- **Fixed: `emailAccountId` was written with the connection id.** An ingested Email pointed at an
+  email account that does not exist. The connection now binds to the sending mailbox with the same
+  address (`EmailAccountsService.idByEmailAddress`), and the field is left unset when no account
+  matches, so a reply falls back to the default mailbox.
 - `apps/api/src/email/inbound-connections.service.ts` + routes under
   `EmailAccount/action/inbound-connections`: admin CRUD with credentials encrypted at rest
   (`ENCRYPTION_KEY`), `hasCredential` only in responses, per-connection `lastError`/`lastPolledAt`.
@@ -279,9 +289,15 @@ their evidence sections above; no production-ready or parity claim was added.
   Case; `replyByEmail` checks live `MarketingSuppression` rows before any outbound effect;
   `processInbound` tolerates an unconfigured provider (features off the poll, still converts
   already-stored records).
+- `api-spec/email.yaml` (new): the email module's public contract — transport probes, the inbound
+  poll, the delivery ledger, the sending-mailbox administration and the inbound-connection
+  administration (17 routes). The registry now covers 80 routes of 920; `--strict` is still
+  24.4's open work.
 - Docs: `README.md` "Not built yet" updated, `docs/reference/compatibility-matrix.md` email row
-  and note updated, `docs/module-guide.md` rewritten inbound section,
-  `docs/runbooks/inbound-mail.md` new operator runbook.
+  and note updated, `docs/reference/alpha-status.md` email rows updated (inbound is no longer
+  "not implemented"), `docs/module-guide.md` rewritten inbound section,
+  `docs/runbooks/inbound-mail.md` new operator runbook (with the failure-isolation rules),
+  `CHANGELOG.md`, `plans/PLAN.md` §57 and `docs/releases/2026-11-15-phase-24.md` status.
 
 ### 24.6.2 Tests added
 
@@ -290,17 +306,27 @@ their evidence sections above; no production-ready or parity claim was added.
 - `packages/mail/src/inbound/providers.test.ts` (10): Null fails clearly, scoped dedupe key,
   boot-fail config, fixture ordering/bounds, Graph normalization + delta cursor + rejected token,
   IMAP over a fake socket (UIDVALIDITY:UID ids, cursor).
-- `apps/api/test/email-inbound.test.ts` (3, `MAIL_INBOUND_PROVIDER=fixture`, `MAIL_TRANSPORT=memory`):
+- `apps/api/test/email-inbound.test.ts` (6, `MAIL_INBOUND_PROVIDER=fixture`, `MAIL_TRANSPORT=memory`):
   six-file fixture ingestion exactly once (repeat poll fully skipped), bounce/auto-reply/malformed
   classification, thread linking, attachment through the ACL/malware path, the same provider id in
   another connection not blocking ingestion, DB connection CRUD (encrypted credential, no secret in
-  responses), failing connection surfaced clearly with `lastError`, unauthenticated refusals.
+  responses), failing connection surfaced clearly with `lastError`, unauthenticated refusals —
+  plus the closure cases: a **partially processed batch** (one unstoreable message → `failed: 1`,
+  the other six untouched, the cursor not advanced), a **broken mailbox not blocking the others**
+  (the healthy fixture mailbox is still collected while the IMAP connection fails) and **restart
+  safety** (a new application instance over the same database and cursor stores nothing twice).
 
 ### 24.6.3 Test evidence
 
 - `npx vitest run packages/mail/src/inbound/` → 2 files / 19 tests passed.
-- `npx vitest run apps/api/test/email-inbound.test.ts` → 3/3 passed (fixture + memory transport on
+- `npx vitest run apps/api/test/email-inbound.test.ts` → 6/6 passed (fixture + memory transport on
   bootstrapped API against the shared primary dev database; fixtures in `os.tmpdir()`, records
   identified by run id and cleaned by their own primary keys).
+- `pnpm verify` → **Exit 0** — lint (UI conventions clean, 5,178 keys), typecheck, 286 test files /
+  3,716 tests, web 15 files / 86 tests. The 24.6 commit itself did not pass lint (import sorting
+  and one useless escape in `packages/mail/src/inbound/mime.ts`); that is fixed here.
+- `pnpm ci:migrations` → clean (95 files, highest `095_inbound_mail_connections.sql`);
+  `pnpm ci:api-spec` → 5 files / 80 documented endpoints, 80 matched, 0 problems.
 - `apps/api` and `packages/mail` typecheck clean (`npx tsc --noEmit`). No real mailbox was ever
   contacted; no customer email was sent.
+

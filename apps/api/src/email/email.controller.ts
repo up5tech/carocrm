@@ -47,7 +47,7 @@ export class EmailController {
    */
   @HttpCode(200)
   @Post('action/pollInbound')
-  pollInbound(): Promise<{ fetched: number; stored: number; skipped: number }> {
+  pollInbound(): Promise<{ fetched: number; stored: number; skipped: number; failed: number }> {
     return this.emails.pollInbound();
   }
 

@@ -296,12 +296,16 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   cursor is persisted only after a whole batch is ingested, so a failed poll re-runs safely.
   Attachments are stored through the attachment ACL/malware path, classified bounces/auto-replies
   (`messageKind`) never auto-create cases, and an unconfigured install fails with
-  `FEATURE_DISABLED` instead of a fake empty success.
+  `FEATURE_DISABLED` instead of a fake empty success. Failures are isolated on both levels: a
+  message that cannot be stored fails only itself (counted in `failed`, retried because the cursor
+  did not move) and a provider that fails does not stop the other mailboxes — the call reports
+  every failing connection at the end.
 - Tests: `packages/mail/src/{index,message,smtp,offline,record,template}/*.test.ts` (unit, incl. template
   rendering), `apps/api/test/email.test.ts` (validation, ledger, queueing, ACL, cleanup),
   `apps/api/test/email-accounts.test.ts` (encrypted accounts, templates, signature, inbound poll),
   `apps/api/test/email-inbound.test.ts` (fixture ingestion, idempotency, scoped dedupe, bounce/
-  auto-reply/malformed handling, attachment path, failing provider, connections CRUD,
+  auto-reply/malformed handling, attachment path, partial batch with an unstoreable message,
+  a failing provider, a broken mailbox not blocking the others, restart safety, connections CRUD,
   `packages/mail/src/inbound/*.test.ts` (MIME parser, IMAP fake-socket, Graph injected fetch,
   fixture, scoped dedupe, boot-fail config).
   `apps/worker/src/handlers/mail-handlers.test.ts` (20 job tests), the email block in

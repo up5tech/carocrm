@@ -11,7 +11,7 @@ import { AuthorizationDeniedError, FeatureDisabledError, RecordNotFoundError, Va
 import { generateId } from '@carocrm/core/utils/id.js';
 import type { InboundMailMessage, InboundMailProvider, MailMessage, MailTransport, MailTransportInfo } from '@carocrm/mail';
 import { createAccountSmtpTransport, emailRecordToMessageInput, inboundToEmailRecord, renderTemplateParts } from '@carocrm/mail';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type Selectable,sql } from 'kysely';
 
 import { AclApiService } from '../acl/acl-api.service.js';
@@ -106,6 +106,8 @@ function templateVariables(record: Record<string, unknown>): Record<string, stri
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+
   constructor(
     @Inject(MAIL_TRANSPORT_TOKEN) private readonly transport: MailTransport,
     @Inject(INBOUND_MAIL_PROVIDER_TOKEN) private readonly inbound: InboundMailProvider,
@@ -226,13 +228,18 @@ export class EmailService {
    *   across restarts);
    * - attachments go through the attachment ACL/malware path; a rejected attachment never fails
    *   the message or the batch (partial-batch safety);
+   * - a message that cannot be stored fails only itself: the rest of the batch is ingested and the
+   *   connection's cursor is **not** advanced, so the failed message is retried on the next poll
+   *   while the already-stored ones dedupe away;
+   * - one broken mailbox never blocks the others: a provider failure is recorded on that
+   *   connection and the call reports every failure at the end;
    * - bounce/auto-reply messages are stored with `messageKind` so downstream flows suppress
    *   automatic outbound effects (see `EmailToCaseService`).
    *
    * When no provider is configured the call fails clearly (`FEATURE_DISABLED`) instead of
    * returning a fake success.
    */
-  async pollInbound(): Promise<{ fetched: number; stored: number; skipped: number }> {
+  async pollInbound(): Promise<{ fetched: number; stored: number; skipped: number; failed: number }> {
     this.scope.requirePrincipal();
     const providers = await this.resolveInboundProviders();
     if (providers.length === 0) {
@@ -241,8 +248,10 @@ export class EmailService {
     let fetched = 0;
     let stored = 0;
     let skipped = 0;
+    let failed = 0;
+    const failures: string[] = [];
     for (const entry of providers) {
-      if (fetched > INBOUND_POLL_GLOBAL_MAX) break;
+      if (fetched >= INBOUND_POLL_GLOBAL_MAX) break;
       const cursor = await this.loadCursor(entry.connectionId);
       let messages: readonly InboundMailMessage[];
       try {
@@ -250,31 +259,55 @@ export class EmailService {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         if (entry.dbConnectionId !== undefined) await this.inboundConnections.recordPollError(entry.dbConnectionId, message);
-        throw new ValidationError(`Inbound poll failed for connection "${entry.connectionId}": ${message}`, { connectionId: entry.connectionId });
+        failures.push(`connection "${entry.connectionId}": ${message}`);
+        continue;
       }
       const bounded = messages.slice(0, INBOUND_POLL_MAX_MESSAGES);
       fetched += bounded.length;
+      let batchFailed = 0;
       for (const message of bounded) {
         const existing = await this.findInboundRecord(entry.connectionId, message.providerMessageId);
         if (existing !== null) {
           skipped += 1;
           continue;
         }
-        const record = inboundToEmailRecord(message, {
-          connectionId: entry.connectionId,
-          ...(entry.emailAccountId === undefined ? {} : { emailAccountId: entry.emailAccountId }),
-        });
-        record['threadId'] = (await this.resolveThreadId(message)) ?? record['threadId'];
-        if (entry.ownerUserId !== undefined) record['assignedUserId'] = entry.ownerUserId;
-        const created = await this.records.create(EMAIL_ENTITY, record);
-        await this.storeInboundAttachments(String(created['id']), message);
-        stored += 1;
+        try {
+          const record = inboundToEmailRecord(message, {
+            connectionId: entry.connectionId,
+            ...(entry.emailAccountId === undefined ? {} : { emailAccountId: entry.emailAccountId }),
+          });
+          record['threadId'] = (await this.resolveThreadId(message)) ?? record['threadId'];
+          if (entry.ownerUserId !== undefined) record['assignedUserId'] = entry.ownerUserId;
+          const created = await this.records.create(EMAIL_ENTITY, record);
+          await this.storeInboundAttachments(String(created['id']), message);
+          stored += 1;
+        } catch (error: unknown) {
+          // One unstoreable message must not lose the rest of the batch (partial-batch rule).
+          batchFailed += 1;
+          failed += 1;
+          const reason = error instanceof Error ? error.message : String(error);
+          this.logger.warn(
+            `Inbound message "${message.providerMessageId}" of connection "${entry.connectionId}" could not be stored: ${reason}`,
+          );
+        }
       }
-      const nextCursor = await entry.provider.nextCursor?.();
-      await this.saveCursor(entry.connectionId, nextCursor ?? cursor);
-      if (entry.dbConnectionId !== undefined) await this.inboundConnections.lastPolled(entry.dbConnectionId);
+      if (batchFailed === 0) {
+        const nextCursor = await entry.provider.nextCursor?.();
+        await this.saveCursor(entry.connectionId, nextCursor ?? cursor);
+        if (entry.dbConnectionId !== undefined) await this.inboundConnections.lastPolled(entry.dbConnectionId);
+      } else if (entry.dbConnectionId !== undefined) {
+        // The cursor is deliberately not advanced: the failed message is retried on the next poll
+        // and the messages that were stored dedupe away, so the batch stays idempotent.
+        await this.inboundConnections.recordPollError(
+          entry.dbConnectionId,
+          `${batchFailed} message(s) could not be stored; the batch cursor was not advanced.`,
+        );
+      }
     }
-    return { fetched, stored, skipped };
+    if (failures.length > 0) {
+      throw new ValidationError(`Inbound poll failed for ${failures.join('; ')}`, { failures });
+    }
+    return { fetched, stored, skipped, failed };
   }
 
   /** Env-selected provider (if configured) plus active database connections, each with its cursor identity. */
@@ -303,11 +336,14 @@ export class EmailService {
     if (this.scope.isAdmin) {
       const connections = await this.inboundConnections.activeForPoll();
       for (const connection of connections) {
+        // The account is the sending mailbox with the same address — a connection id would be a
+        // dangling `emailAccountId` on every ingested record.
+        const emailAccountId = await this.accounts.idByEmailAddress(connection.view.mailbox);
         providers.push({
           provider: this.inboundConnections.buildProvider(connection.view, connection.credential),
           connectionId: connection.view.id,
           dbConnectionId: connection.view.id,
-          emailAccountId: connection.view.id,
+          ...(emailAccountId === null ? {} : { emailAccountId }),
           ...(connection.view.ownerUserId === null ? {} : { ownerUserId: connection.view.ownerUserId }),
         });
       }

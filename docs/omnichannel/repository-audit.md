@@ -515,6 +515,13 @@ create only indexes; the 12 ServiceDesk entities live in `entity_records`:
 
 ### 5.2 Email — the channel seam exists; the provider does not
 
+> **Update — Phase 24.6 (2026-11-16).** The paragraph below is the Phase 19 snapshot and is kept as
+> written. The provider now exists: `MAIL_INBOUND_PROVIDER` binds an IMAP, a Microsoft Graph or a
+> fixture adapter (`none` still fails clearly), and `pollInbound()` ingests a mailbox into `Email`
+> records with per-connection cursors and scoped dedupe — see `docs/runbooks/inbound-mail.md`. The
+> double-processing risk noted here is unchanged: Omnichannel must still honour the
+> `emailToCaseStatus` marker on the `Email` record.
+
 - `packages/mail/src/inbound/index.ts` defines `InboundMailMessage` (with `providerMessageId`,
   **`threadId`**, `inReplyTo`, headers) and the port `InboundMailProvider` (`:37`), plus
   `inboundToEmailRecord` (`:53`) which normalizes a message into `Email` record fields with

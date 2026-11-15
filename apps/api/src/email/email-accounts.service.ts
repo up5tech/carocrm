@@ -15,6 +15,7 @@ import { AuthorizationDeniedError, RecordNotFoundError, ValidationError } from '
 import { decryptSecret, encryptSecret } from '@carocrm/core/utils/crypto.js';
 import { type AccountSmtpConfig,createAccountSmtpTransport } from '@carocrm/mail';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 import { z } from 'zod';
 
 import { patchOf } from '../common/patch-schema.js';
@@ -221,6 +222,23 @@ export class EmailAccountsService {
       .where('is_deleted', '=', false)
       .where('is_active', '=', true)
       .where('is_default', '=', true)
+      .executeTakeFirst();
+    return row?.id ?? null;
+  }
+
+  /**
+   * The sending mailbox that owns this address, when one exists. An inbound connection is bound to
+   * the account with the same address, so an ingested Email carries a real `emailAccountId` — a
+   * connection id would point at an account that does not exist.
+   */
+  async idByEmailAddress(emailAddress: string): Promise<string | null> {
+    const address = emailAddress.trim().toLowerCase();
+    if (address === '') return null;
+    const row = await this.database.db
+      .selectFrom('email_accounts')
+      .select('id')
+      .where(sql`lower(email_address)`, '=', address)
+      .where('is_deleted', '=', false)
       .executeTakeFirst();
     return row?.id ?? null;
   }

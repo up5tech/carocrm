@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { FixtureInboundProvider, type FixtureSettings } from './fixture.js';
-import { GraphInboundProvider, parseGraphSettings, type GraphFetchResponse } from './graph.js';
+import { type GraphFetchResponse,GraphInboundProvider, parseGraphSettings } from './graph.js';
 import { ImapInboundProvider, parseImapSettings, type SocketLike } from './imap.js';
 import { createInboundProvider, inboundDedupeKey, InboundMailError, NullInboundProvider } from './index.js';
 

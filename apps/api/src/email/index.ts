@@ -20,9 +20,9 @@ import { EmailController } from './email.controller.js';
 import { EmailService } from './email.service.js';
 import { EmailAccountController } from './email-account.controller.js';
 import { EmailAccountsService } from './email-accounts.service.js';
-import { InboundConnectionsService } from './inbound-connections.service.js';
 import { EmailTemplateController } from './email-template.controller.js';
 import { EmailTemplatePreviewService } from './email-template-preview.service.js';
+import { InboundConnectionsService } from './inbound-connections.service.js';
 
 export {
   DELIVERY_STATUSES,
@@ -37,7 +37,6 @@ export {
 export { EmailController } from './email.controller.js';
 export type { EmailDeliveryView, QueuedEmail } from './email.service.js';
 export { EmailService } from './email.service.js';
-export { InboundConnectionsService } from './inbound-connections.service.js';
 export { EmailAccountController } from './email-account.controller.js';
 export { EmailAccountsService } from './email-accounts.service.js';
 export { EmailTemplateController } from './email-template.controller.js';
@@ -46,6 +45,7 @@ export {
   EmailTemplatePreviewService,
   PREVIEW_SAMPLE_ENTITIES,
 } from './email-template-preview.service.js';
+export { InboundConnectionsService } from './inbound-connections.service.js';
 export type { MailTransportInfo } from '@carocrm/mail';
 
 /**

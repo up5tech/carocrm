@@ -64,7 +64,7 @@ export function decodeEncodedWord(word: string): string {
 export function decodeHeaderValue(value: string): string {
   const unfolded = value.replace(/\r?\n[ \t]+/g, ' ');
   return unfolded
-    .split(/(\=\?[^?]+\?[BbQq]\?[^?]*\?=)/g)
+    .split(/(=\?[^?]+\?[BbQq]\?[^?]*\?=)/g)
     .map((part) => (part.startsWith('=?') ? decodeEncodedWord(part) : part))
     .join('')
     .replace(/\s+/g, ' ')

@@ -34,12 +34,21 @@ Single-tenant product completion (`plans/PLAN_Phase_24_Product_Completion.md`). 
   provisioning, production install smoke script, and
   `docs/runbooks/installation-and-upgrade.md`. Artifact builds validated; no deployment has been
   exercised.
-- **24.5 (this change)** Release truthfulness: this changelog, the Phase 24 release note, corrected
+- **24.5** Release truthfulness: this changelog, the Phase 24 release note, corrected
   README migration count and quick-start pointer, known-gaps summary reconciliation, Phase 23 plan
   status correction.
+- **24.6** Real inbound mail: an IMAP and a Microsoft Graph adapter behind the
+  `InboundMailProvider` port (plus a filesystem fixture provider for tests), bound by
+  `MAIL_INBOUND_PROVIDER` — the default stays `none` and fails clearly. `POST
+  /api/v1/Email/action/pollInbound` ingests a mailbox into `Email` records exactly once per
+  message and per connection (scoped dedupe, independent cursors, idempotent across restarts),
+  stores attachments through the attachment ACL/malware path, and classifies bounce/auto-reply
+  messages so they never trigger an outbound effect. Mailboxes are administered at installation
+  level under `EmailAccount/action/inbound-connections`; the credential is write-only and encrypted
+  with `ENCRYPTION_KEY`. Operator guide: `docs/runbooks/inbound-mail.md`.
 
 Still open: `api-spec/` registry completion to `--strict` and the typed client (24.4, in flight),
-inbound mail (24.6), email/calendar sync scope (24.7), outbound events/webhooks (24.8), provider
+email/calendar sync scope (24.7), outbound events/webhooks (24.8), provider
 sandbox certification (24.9), UX completion (24.10), quality debt (24.11), final go/no-go (24.12).
 
 ## [1.0.0-alpha] — 2026-11-13 — Phase 23 security hardening

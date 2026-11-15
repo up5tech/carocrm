@@ -18,8 +18,8 @@
  * No network happens at construction: settings are validated in {@link parseGraphSettings}
  * (called at boot), and the token/message calls only run inside `poll()`.
  */
-import { InboundMailError, type InboundMailMessage, type InboundMailProvider, type InboundPollOptions } from './index.js';
 import type { MailAddress } from '../message/index.js';
+import { InboundMailError, type InboundMailMessage, type InboundMailProvider, type InboundPollOptions } from './index.js';
 
 export interface GraphSettings {
   tenantId: string | null;

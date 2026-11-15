@@ -298,11 +298,12 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
   credentials encrypted at rest with `ENCRYPTION_KEY`). POP3/Gmail inbound remain absent. Upstream's
   fetched-mail behaviour is therefore comparable for the IMAP/Graph sources only. See
   `docs/runbooks/inbound-mail.md`.
-- **No mail credential is stored in the database.** `SMTP_*` settings come from the environment, so
-  PLAN §28.3's "secrets and credentials must be stored encrypted at rest" currently has no stored
-  secret to satisfy. This is a deliberate deviation, not an implementation: if mail accounts become
-  editable data (upstream stores inbound/outbound accounts), that rule needs a real secret store and
-  this row must be revisited.
+- **Outbound mail credentials live in the environment; inbound connection credentials are stored
+  encrypted.** `SMTP_*` settings come from the environment, so PLAN §28.3's "secrets and credentials
+  must be stored encrypted at rest" has no stored secret to satisfy on the sending side — a
+  deliberate deviation, not an implementation. The inbound side (Phase 24.6) does store a secret:
+  a Mail Inbound Connection's credential is encrypted with `ENCRYPTION_KEY`, is write-only, and no
+  read path returns it (`hasCredential` only).
 - Anti-spoofing and injection defenses are ours, not upstream-documented: the From address must equal
   the configured mailbox unless `SMTP_STRICT_FROM=false`, header names the envelope owns
   (`From`/`To`/`Subject`/`Message-Id`/`Content-Type`/`Received`…) are refused, header values containing

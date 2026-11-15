@@ -1,0 +1,214 @@
+# PLAN §58 — email module routes. Source: apps/api/src/email/*.controller.ts and
+# email.service.ts / email-accounts.service.ts / inbound-connections.service.ts.
+#
+# The generic record API (`/api/v1/Email`, `/api/v1/EmailTemplate`) is documented in
+# `entities.yaml`; this file covers the module's own static routes: the transport probes, the
+# inbound poll, the delivery ledger, the administration of sending mailboxes and of the
+# installation-administered inbound connections (Phase 24.6).
+group: email
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Email/action/transport
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { transport, configured, maxRecipients, fromAddress? } — what the UI needs before it offers a send"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Email/action/verify
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { transport, verified, error? } — the provider's own failure text, never a stack"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one outbound connection attempt to the configured SMTP server]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Email/action/pollInbound
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { fetched, stored, skipped, failed } — counts per poll; a provider that fails answers 400 VALIDATION_FAILED naming every failing connection"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [email records (status Inbound), attachment rows, inbound_mail_cursors row, inbound_mail_connections lastPolledAt/lastError]
+    idempotency: "idempotent per (connection, provider message id): a repeated poll stores nothing twice, also across a restart"
+  - method: POST
+    path: /api/v1/Email/:id/action/send
+    auth: authenticated
+    permissions: "record ACL on the Email record (edit)"
+    request: none
+    response: "200 { email, deliveries, transport, job } — the record flips to Queued and the ledger holds one row per recipient"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [email_deliveries rows, system.sendEmail job, email record status Queued]
+    idempotency: "a record already Sent is a no-op, so a duplicate queue entry cannot send twice"
+  - method: GET
+    path: /api/v1/Email/:id/deliveries
+    auth: authenticated
+    permissions: "record ACL on the Email record (read)"
+    request: none
+    response: "200 EmailDelivery[] — one row per recipient with the transport, attempts and error"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/EmailAccount
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 EmailAccount[] — sending mailboxes; the password is never included, only hasPassword"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/EmailAccount
+    auth: authenticated
+    permissions: administrator
+    request: "body: { name, emailAddress, fromName?, smtpHost, smtpPort?, smtpSecurity?, smtpUsername?, smtpPassword?, signature?, isActive?, isDefault? }"
+    response: "201 EmailAccount"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [email_accounts row, the password is stored encrypted with ENCRYPTION_KEY]
+    idempotency: none; each call creates a mailbox
+  - method: GET
+    path: /api/v1/EmailAccount/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 EmailAccount"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/EmailAccount/:id
+    auth: authenticated
+    permissions: administrator
+    request: "body: partial mailbox fields; an omitted smtpPassword keeps the stored one"
+    response: "200 EmailAccount"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [email_accounts row, the default flag is exclusive]
+    idempotency: "idempotent for the same body"
+  - method: DELETE
+    path: /api/v1/EmailAccount/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true } — soft delete"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [email_accounts row marked deleted]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/EmailAccount/:id/action/verify
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { verified, error? } — opens the SMTP connection without sending mail"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one outbound connection attempt to the SMTP server of the mailbox]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/EmailAccount/action/inbound-connections
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 InboundConnection[] — installation-administered mailboxes; the credential is never included, only hasCredential"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/EmailAccount/action/inbound-connections/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 InboundConnection — includes lastPolledAt and lastError"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/EmailAccount/action/inbound-connections
+    auth: authenticated
+    permissions: administrator
+    request: "body: { name, provider (imap|graph), mailbox, host?/port?/secure?/folder? (imap) or tenantId?/clientId? (graph), credential? (write-only), ownerUserId?, isActive? }"
+    response: "201 InboundConnection"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [inbound_mail_connections row, the credential is stored encrypted with ENCRYPTION_KEY and is write-only]
+    idempotency: none; each call creates a connection
+  - method: PATCH
+    path: /api/v1/EmailAccount/action/inbound-connections/:id
+    auth: authenticated
+    permissions: administrator
+    request: "body: partial connection fields; an omitted credential keeps the stored one"
+    response: "200 InboundConnection"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [inbound_mail_connections row, the credential is re-encrypted when supplied]
+    idempotency: "idempotent for the same body"
+  - method: DELETE
+    path: /api/v1/EmailAccount/action/inbound-connections/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true } — soft delete; the connection is no longer polled"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [inbound_mail_connections row marked deleted]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/EmailTemplate/action/preview
+    auth: authenticated
+    permissions: authenticated
+    request: "body: { templateId? , subject?, body?, bodyHtml?, variables? }"
+    response: "200 { subject, body, bodyHtml, variables } — the rendered preview; nothing is stored or sent"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

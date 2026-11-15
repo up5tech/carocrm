@@ -133,13 +133,13 @@ export class EmailToCaseService {
   async processInbound(): Promise<{ fetched: number; stored: number; skipped: number; processed: number; failed: number }> {
     const settings = await this.settings.settings();
     if (!settings.features.emailToCase) throw new FeatureDisabledError("emailToCase");
-    let poll: { fetched: number; stored: number; skipped: number };
+    let poll: { fetched: number; stored: number; skipped: number; failed: number };
     try {
       poll = await this.email.pollInbound();
     } catch (error: unknown) {
       // No inbound provider configured: the feature can still convert already-stored inbound
       // records; the poll itself fails clearly at the Email endpoint. (Phase 24.6.)
-      if (error instanceof FeatureDisabledError) poll = { fetched: 0, stored: 0, skipped: 0 };
+      if (error instanceof FeatureDisabledError) poll = { fetched: 0, stored: 0, skipped: 0, failed: 0 };
       else throw error;
     }
     let processed = 0;
@@ -162,7 +162,7 @@ export class EmailToCaseService {
         failed += 1;
       }
     }
-    return { fetched: poll.fetched, stored: poll.stored, skipped: poll.skipped, processed, failed };
+    return { fetched: poll.fetched, stored: poll.stored, skipped: poll.skipped, processed, failed: failed + poll.failed };
   }
 
   async replyByEmail(caseId: string, input: { text: string; attachmentIds?: readonly string[] | undefined }): Promise<CaseEmailReplyResult> {

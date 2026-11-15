@@ -118,9 +118,11 @@ blocker that this register tracks by decision, not by G-ID. Every other open row
 named owner and a review date in `docs/security/exception-register.md`; the exception register, not this table, is
 the authoritative list of what is accepted. No new finding was raised by 23.11.
 
-**Phase 24 status note (2026-11-15).** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) is in progress:
+**Phase 24 status note (2026-11-16).** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) is in progress:
 24.0 audit, 24.1 charter, 24.2 blocker records and 24.3 production artifacts are delivered; 24.4 (`api-spec/`
-to `--strict` + typed client) is in flight; 24.5 reconciled this summary. New findings continue from **G99**;
+to `--strict` + typed client) is in flight; 24.5 reconciled this summary; 24.6 delivered real inbound mail
+(IMAP + Microsoft Graph adapters, per-connection cursors, scoped dedupe, encrypted connection credentials —
+`docs/runbooks/inbound-mail.md`). New findings continue from **G99**;
 history is not renumbered. Rows labelled "exception" above mirror live rows in
 `docs/security/exception-register.md` §2 — where this table and the register disagree, the register wins, and
 review dates there (2026-12-09 / 2026-12-13) govern reopening. The release decision is unchanged: **NO-GO for
