@@ -14,6 +14,7 @@ import type {
 import type { ConnectorCapabilities, ConnectorObjectCapability } from '../../provider-capabilities.js';
 import { CONNECTOR_CAPABILITY_SCHEMA_VERSION } from '../../provider-capabilities.js';
 import { ProviderError } from '../../provider-error.js';
+import { eventBoundaryToInstant } from '../kit/time-zone.js';
 
 /**
  * Phase 19-INT.6 — the deterministic fake provider adapter
@@ -63,6 +64,8 @@ const FAKE_EPOCH_MS = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
 /** The number of seeded contacts and deals. */
 const SEEDED_CONTACT_COUNT = 7;
 const SEEDED_DEAL_COUNT = 5;
+/** The number of seeded calendar events (Phase 24.7 — the calendar sync fixture). */
+const SEEDED_EVENT_COUNT = 3;
 
 /** The scopes the fake provider grants. */
 const FAKE_REQUIRED_SCOPE = 'fake.read';
@@ -129,10 +132,31 @@ const DEAL_FIELDS: readonly ExternalFieldSchema[] = [
   { name: 'updatedAt', label: 'Updated At', type: 'datetime', required: true, unique: false, identifier: false, sensitive: false },
 ];
 
+/**
+ * The fields of the fake's `calendarEvent` object (Phase 24.7).
+ *
+ * The names mirror the Google Workspace connector (`summary`, `start`, `end`, …), so the mapping
+ * an operator writes for a real calendar is the same one a test uses against the fake. The last
+ * event is an all-day event: its `start` is a **date** without a time, which is the case a naive
+ * parser turns into the wrong day.
+ */
+const CALENDAR_EVENT_FIELDS: readonly ExternalFieldSchema[] = [
+  { name: 'id', label: 'Event ID', type: 'string', required: true, unique: true, identifier: true, sensitive: false },
+  { name: 'summary', label: 'Summary', type: 'string', required: true, unique: false, identifier: false, sensitive: false },
+  { name: 'description', label: 'Description', type: 'text', required: false, unique: false, identifier: false, sensitive: false },
+  { name: 'location', label: 'Location', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
+  { name: 'start', label: 'Starts at', type: 'datetime', required: true, unique: false, identifier: false, sensitive: false },
+  { name: 'end', label: 'Ends at', type: 'datetime', required: true, unique: false, identifier: false, sensitive: false },
+  { name: 'allDay', label: 'All day', type: 'bool', required: false, unique: false, identifier: false, sensitive: false },
+  { name: 'timeZone', label: 'Time zone', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
+  { name: 'updated', label: 'Updated at', type: 'datetime', required: false, unique: false, identifier: false, sensitive: false },
+];
+
 /** The schemas the fake provider exposes. */
 const OBJECT_SCHEMAS: readonly ExternalObjectSchema[] = [
   { objectType: 'contact', label: 'Contact', fields: CONTACT_FIELDS, incremental: true, maxPageSize: FAKE_MAX_PAGE_SIZE },
   { objectType: 'deal', label: 'Deal', fields: DEAL_FIELDS, incremental: true, maxPageSize: FAKE_MAX_PAGE_SIZE },
+  { objectType: 'calendarEvent', label: 'Calendar event', fields: CALENDAR_EVENT_FIELDS, incremental: true, maxPageSize: FAKE_MAX_PAGE_SIZE },
 ];
 
 /**
@@ -165,10 +189,24 @@ export function fakeConnectorCapabilities(): ConnectorCapabilities {
     dataSensitivity: 'personal',
   };
   const deal: ConnectorObjectCapability = { ...contact, objectType: 'deal', label: 'Deal' };
+  const calendarEvent: ConnectorObjectCapability = {
+    ...contact,
+    objectType: 'calendarEvent',
+    label: 'Calendar event',
+    // A calendar holds personal data and is never written back by this fake.
+    create: false,
+    update: false,
+    upsert: false,
+    delete: false,
+    syncDirections: ['inbound'],
+    externalIdFields: ['id'],
+    uniqueFields: ['id'],
+    dataSensitivity: 'personal',
+  };
   return {
     schemaVersion: CONNECTOR_CAPABILITY_SCHEMA_VERSION,
     authentication: 'api_key',
-    objects: [contact, deal],
+    objects: [contact, deal, calendarEvent],
     webhook: { supported: false, requiresRawBody: false, requiresEndpointValidation: false },
   };
 }
@@ -488,7 +526,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
   // internals
   // ---------------------------------------------------------------------------------------------
 
-  /** The seeded dataset: seven contacts and five deals, with fixed identifiers and timestamps. */
+  /** The seeded dataset: seven contacts, five deals and three calendar events, with fixed identifiers and timestamps. */
   private seed(): void {
     for (let index = 1; index <= SEEDED_CONTACT_COUNT; index += 1) {
       const suffix = String(index);
@@ -518,6 +556,59 @@ export class FakeProviderAdapter implements ConnectorAdapter {
       this.insertSeeded('deal', externalId, fields, `2025-12-${String(index).padStart(2, '0')}T10:00:00.000Z`);
     }
     this.idSequence.set('deal', SEEDED_DEAL_COUNT + 1);
+
+    // The calendar events. The first two carry an explicit offset, so a reader in another zone
+    // still sees the right instant; the third is an all-day event, whose start is a plain date.
+    const events: Array<{ id: string; fields: Record<string, unknown>; updatedAt: string }> = [
+      {
+        id: 'event-1',
+        fields: {
+          id: 'event-1',
+          summary: 'Fake Meeting One',
+          description: 'A timed event with an explicit offset.',
+          location: 'Room 1',
+          start: '2026-01-05T09:00:00+07:00',
+          end: '2026-01-05T10:00:00+07:00',
+          allDay: false,
+          updated: '2025-12-31T09:00:00.000Z',
+        },
+        updatedAt: '2025-12-31T09:00:00.000Z',
+      },
+      {
+        id: 'event-2',
+        fields: {
+          id: 'event-2',
+          summary: 'Fake Meeting Two',
+          description: 'A timed event in UTC.',
+          location: 'Room 2',
+          start: '2026-01-06T14:00:00.000Z',
+          end: '2026-01-06T15:00:00.000Z',
+          allDay: false,
+          updated: '2025-12-31T09:00:00.000Z',
+        },
+        updatedAt: '2025-12-31T09:00:00.000Z',
+      },
+      {
+        id: 'event-3',
+        fields: {
+          id: 'event-3',
+          summary: 'Fake All-Day Event',
+          description: 'An all-day event: the start is a date, not an instant.',
+          location: '',
+          start: '2026-01-07',
+          end: '2026-01-08',
+          allDay: true,
+          // The all-day event is anchored at midnight in its own zone, so it must carry one.
+          timeZone: 'Asia/Bangkok',
+          updated: '2025-12-31T09:00:00.000Z',
+        },
+        updatedAt: '2025-12-31T09:00:00.000Z',
+      },
+    ];
+    for (const event of events) {
+      this.insertSeeded('calendarEvent', event.id, event.fields, event.updatedAt);
+    }
+    this.idSequence.set('calendarEvent', SEEDED_EVENT_COUNT + 1);
   }
 
   private insertSeeded(objectType: string, externalId: string, fields: Record<string, unknown>, updatedAt: string): void {
@@ -570,11 +661,23 @@ export class FakeProviderAdapter implements ConnectorAdapter {
 
   /** The external shape of one record. */
   private toExternalObject(record: FakeRecord): ExternalObject {
+    const fields: Record<string, unknown> = { ...record.fields };
+    // Phase 24.7 — the calendar boundaries are normalized exactly like the Google connector does:
+    // a timed boundary is an instant (normalized to UTC), an all-day one is a calendar date that is
+    // anchored at midnight in the event's own zone, so the meeting does not silently move a day in a
+    // negative-offset calendar.
+    if (record.objectType === 'calendarEvent') {
+      const timeZone = typeof fields['timeZone'] === 'string' ? fields['timeZone'] : null;
+      const startValue = String(fields['start'] ?? '');
+      const endValue = String(fields['end'] ?? '');
+      fields['start'] = eventBoundaryToInstant(startValue, timeZone) ?? startValue;
+      fields['end'] = eventBoundaryToInstant(endValue, timeZone) ?? endValue;
+    }
     return {
       objectType: record.objectType,
       externalId: record.externalId,
       externalParentId: record.externalParentId,
-      fields: { ...record.fields },
+      fields,
       updatedAt: record.updatedAt,
       version: record.version === 0 ? null : `v${String(record.version)}`,
       deleted: record.deleted,

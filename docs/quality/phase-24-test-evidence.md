@@ -330,3 +330,69 @@ their evidence sections above; no production-ready or parity claim was added.
 - `apps/api` and `packages/mail` typecheck clean (`npx tsc --noEmit`). No real mailbox was ever
   contacted; no customer email was sent.
 
+---
+
+## Phase 24.7 — Installation-Wide Email and Calendar Sync (P1) — delivered 2026-11-16
+
+### 24.7.1 Delivered changes
+
+- `apps/api/src/advanced-integrations/sync-orchestrator.service.ts`: a run's inbound page is now
+  applied **as the connection's owner** (`asOwner` via `runAsUser`, Phase 24.7) — a `user`-owned
+  connection is a personal mailbox/calendar and its records land under that user's authority and
+  ACL; an `organization`-owned connection keeps the caller's authority. The webhook path now enters
+  the same owner authority through `applyObjectForConnection`.
+- `apps/api/src/advanced-integrations/webhook-ingress.service.ts`: personal-owner apply path.
+- `apps/api/src/advanced-integrations/connectors/google-workspace/google-workspace.adapter.ts`:
+  all-day events anchored at midnight in the event's own time zone; outbound write scope as before.
+- `apps/api/src/advanced-integrations/connectors/fake/fake-provider.adapter.ts`: `calendarEvent`
+  object type added to the fake provider (with the Phase 24.7 boundary normalization).
+- `apps/api/src/advanced-integrations/connectors/kit/time-zone.ts`: `eventBoundaryToInstant` /
+  `startOfDayInZone` helpers (DST-aware zone resolution via `Intl.DateTimeFormat`).
+- `database/migrations/096_phase24_7_sync_metadata.sql`: additive metadata for the Phase 24.7 scope —
+  `Call.location` and `Meeting.location` (in `metadata_entries` + `app_settings.entity`) and the
+  Phase 24.6 inbound mail fields (in both layers).
+
+### 24.7.2 Delivered scope (owner decision D5, reconciled in 24.0)
+
+- Inbound mail: IMAP + Microsoft Graph (delivered in 24.6) — installation-administered via
+  `EmailAccount/action/inbound-connections` or the `MAIL_INBOUND_PROVIDER` environment singleton.
+- Inbound calendar: Google Workspace (full + incremental via `syncToken`) and Microsoft 365 (Graph
+  delta links + delivered webhook path) — via the object-mapping sync surface
+  (`POST /api/v1/AdvancedIntegrations/action/mappings/:id/sync`).
+- Out of scope by decision (recorded, not deferred by accident): Google Calendar push notifications
+  (delivered fallback: incremental sync), outbound sending (SES/SendGrid/Microsoft Graph send), the
+  email UI.
+
+### 24.7.3 Tests added / extended
+
+- `apps/api/test/advanced-integrations-engine.test.ts`: new describe
+  **'Advanced Integrations — Phase 24.7 installation-wide inbound sync'** — full fake calendar sync +
+  checkpoint, idempotent re-run, provider outage → dead letter + run `failed`, paused connection
+  refused, two connections independent (overlapping provider ids), personal connection written as
+  owner (owner can read via `runAsUser`), personal webhook via `applyObjectForConnection` as owner,
+  stranger user denied access. File now 36/36 tests.
+- `apps/api/test/advanced-integrations-connectors.test.ts`: the Google Workspace connector reads
+  calendar event boundaries correctly — timed event → UTC ISO instant; all-day → midnight in the
+  event zone. File now 53 tests.
+- `apps/api/test/advanced-integrations-time-zone.test.ts` (new, 4): DST-aware all-day anchoring and
+  timed-boundary normalization.
+
+### 24.7.4 Test evidence
+
+- `npx vitest run apps/api/test/advanced-integrations-engine.test.ts` → **36/36 passed** (incl. the
+  7 Phase 24.7 tests above).
+- `npx vitest run apps/api/test/advanced-integrations-time-zone.test.ts apps/api/test/advanced-integrations-connectors.test.ts` → **57/57 passed**.
+- `npx tsc --noEmit -p tsconfig.json` → clean.
+- No live provider credential, no real mailbox/calendar was contacted; all sync tests ran on the fake
+  provider. No customer data was touched; test records used generated identifiers.
+
+### 24.7.5 Acceptance and outstanding work
+
+- **Met:** compatibility matrix + provider docs name exactly what is implemented/deferred/why; sync
+  is installation-administered and opt-in (fails clearly when unconfigured); supported
+  mailbox/connection counts are documented; ownership and ACL are enforced independently of the
+  single-tenant boundary.
+- **Outstanding:** the Phase 24.7 deliverable has not been exercised against a live vendor sandbox or
+  a real mailbox (the honesty clause of `providers.md`); provider-side facts remain implementation
+  pins; the final Phase 24 go/no-go (24.12) is still open (release decision **NO-GO**).
+

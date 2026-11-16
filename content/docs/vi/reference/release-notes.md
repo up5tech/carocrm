@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-11-15
+updated: 2026-11-16
 ---
 
 Trong ứng dụng không có gì mở ra danh sách những gì đã thay đổi. Không có màn hình **Có gì mới**,
@@ -20,7 +20,7 @@ người bảo trì phiên bản của bạn.
 
 | Tài liệu | Là gì | Mục ghi ngày mới nhất |
 | --- | --- | --- |
-| `docs/releases/2026-11-15-phase-24.md` | Ghi chú trung gian về hoàn thiện sản phẩm: hiến chương single-tenant, artefact cài đặt production và những gì còn mở. | 2026-11-15. |
+| `docs/releases/2026-11-15-phase-24.md` | Ghi chú trung gian về hoàn thiện sản phẩm: hiến chương single-tenant, artefact cài đặt production, real inbound mail và email/calendar sync toàn cài đặt, cùng những gì còn mở. | 2026-11-16. |
 | `docs/releases/2026-11-13-phase-23.md` | Ghi chú phát hành tăng cường bảo mật: các kiểm soát đã kiểm chứng, migration 089–094, việc vận hành cần làm và quyết định NO-GO. | 2026-11-13. |
 | `docs/releases/2026-10-29-phase-22.md` | Ghi chú phát hành tăng cường cho toàn sản phẩm: phạm vi đã kiểm chứng, migration, việc vận hành cần làm và các blocker còn lại. | 2026-10-29. |
 | `docs/modules/crm-chat/RELEASE_NOTES.md` | Ghi chú phát hành của một module, theo phiên bản. | v1.1, phát hành 2026-10-21. |
@@ -43,17 +43,20 @@ Một ghi chú trong kho này được viết như bằng chứng, không như t
 
 ## Bản phát hành gần nhất
 
-Ghi chú có ngày mới nhất là **ghi chú trung gian hoàn thiện sản phẩm Phase 24**, 2026-11-15, với
-**bản phát hành tăng cường bảo mật Phase 23**, 2026-11-13, ngay sau đó. Phase 24 vẫn đang chạy:
-nó phê chuẩn single-tenant làm ranh giới sản phẩm, cung cấp artefact cài đặt production và sửa tài
-liệu phát hành, trong khi quyết định phát hành vẫn là **NO-GO cho production** — cùng các blocker
-về backup, giấy phép và exception chưa ký như Phase 23. Điều người đọc có thể nhận thấy:
+Ghi chú có ngày mới nhất là **ghi chú trung gian hoàn thiện sản phẩm Phase 24**, được cập nhật
+2026-11-16 với **Phase 24.6 (real inbound mail)** và **Phase 24.7 (email/calendar sync toàn cài
+đặt)**, với **bản phát hành tăng cường bảo mật Phase 23**, 2026-11-13, ngay sau đó. Phase 24
+vẫn đang chạy: nó phê chuẩn single-tenant làm ranh giới sản phẩm, cung cấp artefact cài đặt
+production, cung cấp real inbound mail và email/calendar sync toàn cài đặt, và sửa tài liệu phát
+hành, trong khi quyết định phát hành vẫn là **NO-GO cho production** — cùng các blocker về backup,
+giấy phép và exception chưa ký như Phase 23. Điều người đọc có thể nhận thấy:
 
 | Bạn thấy | Điều đó nghĩa là |
 | --- | --- |
 | Tài liệu giờ nói một lần triển khai phục vụ một tổ chức | Single-tenant là ranh giới đã quyết định, không phải tính năng còn thiếu. |
 | Topology Compose production và Dockerfile đã có trong kho mã nguồn | Artefact cài đặt/nâng cấp đã được cung cấp; chưa có lần triển khai nào được thực hiện. |
 | Cẩm nang và README nêu đúng số migration và khả năng | Ghi chú phát hành, trang trạng thái và README mô tả đúng bản dựng thực tế. |
+| Real inbound mail và email/calendar sync được cung cấp (Phase 24.6 / 24.7) | Thu thập qua provider đã cấu hình và sync engine toàn cài đặt; cài đặt chưa cấu hình sẽ báo lỗi rõ ràng. |
 
 Ghi chú Phase 23 vẫn là ghi chú phát hành *hoàn chỉnh* gần nhất. Nó tăng cường đăng nhập, phiên,
 API key và đầu vào không tin cậy, và đổi việc người vận hành phải làm trước khi mang dữ liệu khách

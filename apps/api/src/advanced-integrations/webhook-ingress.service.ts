@@ -285,7 +285,9 @@ export class WebhookIngressService {
       return { status: 'failed', outcome: 'no_external_id' };
     }
 
-    const outcome = await this.orchestrator.applyObject(
+    // The record is written as the connection's owner (Phase 24.7): a personal mailbox's record
+    // belongs to that user whether it arrives by polling or by a provider notification.
+    const outcome = await this.orchestrator.applyObjectForConnection(
       mapping,
       {
         objectType: mapping.objectType,

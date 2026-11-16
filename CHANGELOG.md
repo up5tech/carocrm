@@ -46,10 +46,20 @@ Single-tenant product completion (`plans/PLAN_Phase_24_Product_Completion.md`). 
   messages so they never trigger an outbound effect. Mailboxes are administered at installation
   level under `EmailAccount/action/inbound-connections`; the credential is write-only and encrypted
   with `ENCRYPTION_KEY`. Operator guide: `docs/runbooks/inbound-mail.md`.
+- **24.7** Installation-wide email and calendar sync: the bounded scope chosen in owner decision D5
+  is delivered. Inbound mail collection (IMAP + Microsoft Graph) is wrapped in the installation-wide
+  connection layer — personal or shared mailboxes, each with its own owner, credential scope, cursor
+  and ACL; inbound calendar events are collected through the sync engine (Google Calendar full +
+  incremental via `syncToken` with all-day events anchored at the event's own zone and private
+  events opt-in, Microsoft 365 Graph delta links plus the delivered webhook path); inbound records
+  are written under the connection owner's authority (personal connections) or the caller's (shared);
+  checkpoints are per connection/mapping/direction and advance only past committed pages, with a
+  controlled full re-sync on an expired provider cursor. Runbook: `docs/runbooks/inbound-sync.md`.
+  Migration `096_phase24_7_sync_metadata.sql`. Not exercised against a live mailbox or calendar.
 
 Still open: `api-spec/` registry completion to `--strict` and the typed client (24.4, in flight),
-email/calendar sync scope (24.7), outbound events/webhooks (24.8), provider
-sandbox certification (24.9), UX completion (24.10), quality debt (24.11), final go/no-go (24.12).
+outbound events/webhooks (24.8), provider sandbox certification (24.9), UX completion (24.10), quality
+debt (24.11), final go/no-go (24.12).
 
 ## [1.0.0-alpha] — 2026-11-13 — Phase 23 security hardening
 

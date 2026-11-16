@@ -4,6 +4,8 @@
 > `19-INT.16`–`19-INT.24`).
 > Status: **nine connectors implemented; every contract verified by the platform's own test
 > suite, none verified against a live vendor sandbox.**
+> Phase 24.7 added the installation-wide inbound email/calendar sync on top of this framework (see
+> §3.1 and §3.2 for what each source delivers); outbound events/webhooks remain later scope.
 > Parent document: `docs/compatibility/advanced-integrations.md`.
 > Companions: `oauth-scopes.md`, `sync-semantics.md`, `webhook-security.md`.
 
@@ -52,14 +54,14 @@ kit (`apps/api/src/advanced-integrations/connectors/kit/`) holds them once:
 
 ## 3. The connectors
 
-### 3.1 Google Workspace — `google-workspace` (19-INT.16)
+### 3.1 Google Workspace — `google-workspace` (19-INT.16; inbound sync since Phase 24.7)
 
 | | |
 | --- | --- |
 | Authentication | OAuth 2.0, PKCE (S256), refresh and revocation supported |
 | API | Calendar `v3`, People `v1` |
 | Objects | `calendarEvent`, `contact` |
-| Sync | Full and incremental (Calendar `syncToken`, People `nextSyncToken`) |
+| Sync | Full and incremental (Calendar `syncToken`, People `nextSyncToken`); **no push** — the Phase 24.7 no-push fallback delivers changes through the incremental sync |
 | Webhook | **None.** Google Calendar's push notification is a channel with a verification token rather than a signed payload; the incremental sync covers the requirement instead. |
 | Write | Outbound, and only with the `calendar` / `contacts` scope granted |
 
@@ -74,6 +76,23 @@ kit (`apps/api/src/advanced-integrations/connectors/kit/`) holds them once:
   full enumeration. Because a provider delete maps to *unlink*, the resync cannot erase a record
   that is merely missing from the new snapshot.
 
+**Phase 24.7 — the delivered inbound installation-wide scope.** This connector is one of the two
+sources of the Phase 24.7 installation-wide inbound sync:
+
+- **Full + incremental is delivered.** A run enumerates the calendars named in the connection's
+  `calendarIds` (default `["primary"]`) with `singleEvents=true&showDeleted=true`, and an incremental
+  run continues from the stored `syncToken`. The cursor spans several calendars; an expired token
+  (`410 Gone`) triggers the controlled full re-sync.
+- **All-day events are anchored correctly.** An all-day boundary is a calendar date, not an instant:
+  it is anchored at midnight **in the event's own time zone** (the `timeZone` field of the synced
+  object), and the resulting instant is expressed in UTC. A naive `new Date('YYYY-MM-DD')` would read
+  it as UTC midnight and silently move the event in a negative-offset zone.
+- **Private events stay opt-in.** `includePrivateEvents` gates emission; the attendee list is never
+  emitted even when the connection opts in.
+
+Google Calendar push notifications are still **not implemented**; the delivered fallback for inbound
+calendar changes is the incremental sync, as recorded in `sync-semantics.md` §2.1.
+
 **Per-connection options**
 
 | Option | Meaning | Default |
@@ -81,7 +100,7 @@ kit (`apps/api/src/advanced-integrations/connectors/kit/`) holds them once:
 | `calendarIds` | The calendars to read. | `["primary"]` |
 | `includePrivateEvents` | Whether a private event may leave the provider. | `false` |
 
-### 3.2 Microsoft 365 — `microsoft-365` (19-INT.17)
+### 3.2 Microsoft 365 — `microsoft-365` (19-INT.17; inbound sync since Phase 24.7)
 
 | | |
 | --- | --- |
@@ -112,6 +131,21 @@ kit (`apps/api/src/advanced-integrations/connectors/kit/`) holds them once:
 ids live in the connection's `subscriptionIds` option; a connection without them has nothing to
 renew. Graph subscriptions expire after a few days, and an expired one silently stops delivering —
 which is exactly why the renewal is visible rather than a side effect of a read.
+
+**Phase 24.7 — the delivered inbound installation-wide scope.** Microsoft 365 is the second source of
+the Phase 24.7 installation-wide inbound sync, and it is the source that delivers inbound calendar
+events through both a delta link and a webhook:
+
+- **Full + incremental is delivered.** Full runs enumerate the events via the Graph v1.0 endpoints;
+  incremental runs continue from the stored `@odata.deltaLink` cursor, with the engine paging
+  through `@odata.nextLink` pages and persisting the **final** delta link at the end.
+- **The webhook is delivered and authenticated.** Change notifications arrive through
+  `POST /api/v1/AdvancedIntegrations/action/process-webhook-event` and are authenticated by
+  `clientState`; subscriptions are renewed through the explicit
+  `POST /api/v1/AdvancedIntegrations/action/connections/:id/renew-subscriptions` operator action.
+
+As with Google, an invalid delta link or a `403` that becomes `SCOPE_MISSING` is a controlled,
+actionable outcome, and the sync is written under the connection's owner authority.
 
 ### 3.3 Zoom — `zoom` (19-INT.18)
 
@@ -366,7 +400,7 @@ These are the gaps a deployment must know about. None of them is hidden in a cod
 | No connector was verified against a live vendor account. | Every provider-side fact above is an implementation choice pinned from published documentation. Confirm before production use. |
 | Mailchimp's OAuth grants account-wide access; it publishes no per-object scope. | A Mailchimp connection can reach more of the account than it syncs. The connector reads only what it declares, but the *grant* is broader. |
 | Zoom and Google have no "delete a meeting" or "delete a contact" write in this release. | A cancellation is a business decision, not a technical one. |
-| Google Calendar push notifications are not implemented. | The reconciliation requirement is met by the incremental sync; a push-based deployment waits for a reviewed change. |
+| Google Calendar push notifications are not implemented. | **Since Phase 24.7 the delivered inbound fallback is the incremental sync** (full + `syncToken`), so inbound calendar changes are collected without push; a *push-based* deployment still waits for a reviewed change. |
 | QuickBooks Online has no per-connection webhook. | The `LastUpdatedTime` watermark covers the requirement; a push deployment waits for a proxy. |
 | The generic REST connector reads only. | Outbound delivery to a vetted endpoint needs a reviewed configuration and a separate decision about which data may leave the CRM. |
 | The enrichment provider is a REST endpoint, not a vendor SDK. | The plan asks for one provider at a time, and a vendor SDK would be a dependency without a second provider to justify it. |

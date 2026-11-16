@@ -1,6 +1,8 @@
 # PLAN — Phase 24: Single-Tenant Product Completion (P0 / P1 / P2)
 
-> **Status:** Planned
+> **Status:** Delivered — 24.0, 24.1, 24.2, 24.3, 24.5, 24.6 and **24.7** delivered (2026-11-14 →
+> 2026-11-16); 24.4 (API contract) in flight; 24.8–24.12 not started. The Phase 24 release decision
+> remains **NO-GO for production** (Phase 23 review; final Phase 24 go/no-go in 24.12 pending).
 > **Date:** 2026-11-13
 > **Workstream type:** Product completion, release closure, platform DX and UX — the P0/P1/P2 recommendations from the system review, sequenced after the security workstream. Not a new business module and not a rewrite of the Entity Engine.
 > **Predecessor:** Phase 23 (`plans/PLAN_Phase_23_Security_Hardening.md`), implemented 2026-11-09 → 2026-11-13; its review records **NO-GO for a production release** (`docs/quality/phase-23-security-release-review.md`)
@@ -363,6 +365,14 @@ Replace the null inbound provider with working adapters administered at installa
 ---
 
 ## 13. Phase 24.7 — Installation-Wide Email and Calendar Sync (P1)
+
+> **Status:** Delivered 2026-11-16 — owner decision D5 scope delivered; the delivered scope is inbound
+> IMAP + Microsoft Graph mail (24.6 surface) and inbound Google Calendar + Microsoft 365 calendar sync
+> (full + incremental, no-push fallback for Google, Graph delta + webhook for Microsoft), administered
+> at installation level and opt-in. The approved D5 decisions are recorded in
+> `docs/quality/phase-24-priority-decisions.md`; the delivered facts are in
+> `docs/compatibility/advanced-integrations/providers.md`, `docs/compatibility/advanced-integrations/sync-semantics.md`
+> and `docs/runbooks/inbound-sync.md`.
 
 ### Objective
 

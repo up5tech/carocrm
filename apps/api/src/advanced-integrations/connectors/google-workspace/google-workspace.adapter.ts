@@ -26,6 +26,7 @@ import {
   readStringList,
 } from '../kit/connector-kit.js';
 import type { OAuth2ProviderConfig } from '../kit/oauth2-base.js';
+import { eventBoundaryToInstant } from '../kit/time-zone.js';
 
 /**
  * Phase 19-INT.16 — the Google Workspace connector
@@ -83,6 +84,8 @@ const CALENDAR_EVENT_FIELDS: readonly ExternalFieldSchema[] = [
   { name: 'location', label: 'Location', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
   { name: 'start', label: 'Starts at', type: 'datetime', required: true, unique: false, identifier: false, sensitive: false },
   { name: 'end', label: 'Ends at', type: 'datetime', required: true, unique: false, identifier: false, sensitive: false },
+  { name: 'allDay', label: 'All day', type: 'bool', required: false, unique: false, identifier: false, sensitive: false },
+  { name: 'timeZone', label: 'Time zone', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
   { name: 'status', label: 'Status', type: 'string', required: true, unique: false, identifier: false, sensitive: false },
   { name: 'attendees', label: 'Attendees', type: 'array', required: false, unique: false, identifier: false, sensitive: true },
   { name: 'visibility', label: 'Visibility', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
@@ -620,6 +623,12 @@ function toEventObject(event: Record<string, unknown>, allowPrivate: boolean): E
   const end = isJsonObject(event['end']) ? event['end'] : {};
   const visibility = readString(event, 'visibility') ?? 'default';
   const attendees = Array.isArray(event['attendees']) ? (event['attendees'] as unknown[]) : [];
+  // The event's own zone. An all-day event reports a date without an offset, so the zone is what
+  // turns that date into an instant (Phase 24.7).
+  const timeZone = readString(event, 'timeZone');
+  const startValue = readString(start, 'dateTime') ?? readString(start, 'date') ?? '';
+  const endValue = readString(end, 'dateTime') ?? readString(end, 'date') ?? '';
+  const allDay = readString(start, 'date') !== null && readString(start, 'dateTime') === null;
   return {
     objectType: GOOGLE_CALENDAR_EVENT_OBJECT,
     externalId: readString(event, 'id') ?? '',
@@ -629,8 +638,12 @@ function toEventObject(event: Record<string, unknown>, allowPrivate: boolean): E
       summary: readString(event, 'summary') ?? '',
       description: readString(event, 'description') ?? '',
       location: readString(event, 'location') ?? '',
-      start: readString(start, 'dateTime') ?? readString(start, 'date') ?? '',
-      end: readString(end, 'dateTime') ?? readString(end, 'date') ?? '',
+      // A timed boundary is already an instant; an all-day one is anchored at midnight in the
+      // event's zone, so the meeting does not move a day in a negative-offset calendar.
+      start: eventBoundaryToInstant(startValue, timeZone) ?? startValue,
+      end: eventBoundaryToInstant(endValue, timeZone) ?? endValue,
+      allDay,
+      timeZone: timeZone ?? '',
       status: readString(event, 'status') ?? '',
       // A private event's attendee list is never emitted, even when the event itself is allowed.
       attendees: visibility === 'private' && !allowPrivate ? [] : attendees,

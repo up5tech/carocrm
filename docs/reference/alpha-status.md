@@ -31,6 +31,7 @@ see the portals status section below and PLAN §72 for the remaining priority ma
 | Attachments working | done | `POST /api/v1/Attachment/upload`, MIME/size/extension checks, local FS storage |
 | Outbound email working | done | `MailTransport` port (SMTP + generic relay + disabled/memory), `POST /api/v1/Email/:id/action/send` queues `system.sendEmail`, `email_deliveries` ledger |
 | Inbound email collection working | done (Phase 24.6) | `MAIL_INBOUND_PROVIDER=imap\|graph\|fixture` (default `none` fails clearly), `POST /api/v1/Email/action/pollInbound`, per-connection cursors and scoped dedupe, admin CRUD under `EmailAccount/action/inbound-connections` |
+| Inbound calendar sync working | done (Phase 24.7) | Installation-wide inbound sync via the Advanced Integrations sync engine — Google Calendar full + incremental (`syncToken`, all-day anchored at the event's zone, private events opt-in) and Microsoft 365 Graph delta links + webhook; personal connections write as their owner |
 | Audit working | done | field-level rows in `audit_log`, `GET /api/v1/AuditLog`, secrets redacted |
 | Global and entity search working | done | `GET /api/v1/Search[/:entity]?q=`, ACL-filtered, trigram-indexed (see Phase 12 section) |
 | Saved filters working | done | `/api/v1/SavedFilter` CRUD + `action/run`, private/shared ownership columns |
@@ -231,8 +232,14 @@ outbound side only:
   the explicit unconfigured default that fails clearly. Dedupe is scoped per connection, each
   connection keeps its own cursor, attachments go through the §25 ACL/malware path, and
   bounce/auto-reply messages are classified instead of triggering outbound effects.
+- Installation-wide inbound sync is built (Phase 24.7): the Phase 24.6 mail collection is wrapped in
+  the installation-wide scope — inbound calendar events via the sync engine (Google full + incremental
+  `syncToken`, Microsoft Graph delta links + delivered webhook path), personal connections writing
+  under their owner's authority, installation-administered and opt-in. The delivered scope is
+  IMAP + Microsoft Graph mail and Google Calendar / Microsoft 365 inbound calendar; outbound sending,
+  Google Calendar push, POP3/Gmail inbound and the email UI remain not built.
 - Not built: the later outbound providers above (SES/SendGrid/Graph send), POP3 and Gmail inbound, and
-  the installation-wide email/calendar sync scope (Phase 24.7). There is no email-specific UI (no
+  the email UI (no compose screen, mailbox list or thread view). There is no email-specific UI (no
   compose screen, mailbox list or thread view), but `Email` is a metadata entity, so the generated
   list/detail/edit views already work for drafts and the send is an API action.
 - Verification: 63 package unit tests with a fake sender (no socket is ever opened), 12 API tests
@@ -1085,10 +1092,10 @@ settings search in the rail and the command palette (20.25); frontend quality ga
 WCAG 2.0 A/AA violations on home/list/record/settings (20.26); bounded first load (route-level lazy +
 prefetch) and optimistic writes (20.27). Phase 20 is complete.
 
-## Phase 22–24 status pointer (added 2026-11-15)
+## Phase 22–24 status pointer (added 2026-11-15; updated 2026-11-16)
 
 This report's dated sections end at Phase 21; later work is tracked in its own evidence documents.
-Current states as of Phase 24.5:
+Current states as of Phase 24.7:
 
 - **Phase 22** integration/E2E hardening: complete as a workstream; release review NO-GO
   (`docs/quality/phase-22-release-readiness.md`).
@@ -1097,11 +1104,12 @@ Current states as of Phase 24.5:
   configuration (`OIDC_PROFILES`, Phase 23.3); SAML and SCIM stay **deferred**
   (`docs/runbooks/advanced-integrations.md` §15). MFA is enforceable; self-service password reset,
   session revocation and API-key lifecycle are built (Phase 23.2).
-- **Phase 24** single-tenant product completion: in progress. 24.0–24.3 and 24.5 delivered; 24.4
-  (`api-spec/` to `--strict` + typed client) in flight; the rest not started. The served OpenAPI
-  document is a **route inventory, not a DTO-derived contract** (G1; the D3 disposition makes
-  `api-spec/` canonical and awaits owner sign-off). Production install artifacts exist but are
-  unexercised; release stays NO-GO (`docs/releases/2026-11-15-phase-24.md`).
+- **Phase 24** single-tenant product completion: in progress. 24.0–24.3, 24.5, **24.6 (real inbound
+  mail) and 24.7 (installation-wide email/calendar sync) delivered**; 24.4 (`api-spec/` to `--strict` +
+  typed client) in flight; 24.8–24.12 not started. The served OpenAPI document is a **route inventory,
+  not a DTO-derived contract** (G1; the D3 disposition makes `api-spec/` canonical and awaits owner
+  sign-off). Production install artifacts exist but are unexercised; release stays NO-GO
+  (`docs/releases/2026-11-15-phase-24.md`).
 - **Single-tenant by decision** (owner, 2026-11-13): one deployment serves one customer organisation;
   no tenant id, tenant predicate or tenant-scoped API exists or is planned
   (`docs/reference/product-charter.md`).

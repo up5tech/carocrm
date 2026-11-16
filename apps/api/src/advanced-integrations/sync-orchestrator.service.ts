@@ -4,11 +4,13 @@ import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { AuthService } from '../auth/auth.service.js';
+import { runAsUser } from '../common/async-principal.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
 import { ConflictService, detectFieldDifferences } from './conflict.service.js';
-import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
+import { ConnectionLifecycleService, type IntegrationConnectionView } from './connection-lifecycle.service.js';
 import type { ExternalObject } from './connector-adapter.port.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
 import { DeadLetterService } from './dead-letter.service.js';
@@ -138,6 +140,7 @@ export class SyncOrchestrator {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(AuthService) private readonly auth: AuthService,
     @Inject(ConnectionLifecycleService) private readonly connections: ConnectionLifecycleService,
     @Inject(MappingService) private readonly mappings: MappingService,
     @Inject(ExternalLinkService) private readonly links: ExternalLinkService,
@@ -226,9 +229,18 @@ export class SyncOrchestrator {
         // and they never would be.
         const budget = options.maxRecords === undefined ? page.objects.length : Math.max(0, options.maxRecords - scanned);
         const readable = page.objects.slice(0, budget);
-        for (const object of readable) {
+        // The records of a **personal** connection are written as their owner (Phase 24.7): the
+        // scope is entered once for the page, not once per object, so the owner's roles are read
+        // once and every record of the page lands under the same authority.
+        const outcomes = await this.asOwner(connection, async () => {
+          const appliedOutcomes: ApplyOutcome[] = [];
+          for (const object of readable) {
+            appliedOutcomes.push(await this.applyObject(mapping, object, run.id));
+          }
+          return appliedOutcomes;
+        });
+        for (const outcome of outcomes) {
           scanned += 1;
-          const outcome = await this.applyObject(mapping, object, run.id);
           if (outcome.action === 'created' || outcome.action === 'updated') applied += 1;
           else if (outcome.action === 'skipped') skipped += 1;
           else failed += 1;
@@ -282,6 +294,40 @@ export class SyncOrchestrator {
     }
 
     return this.getRun(run.id);
+  }
+
+  /**
+   * Apply one provider object **as the connection's owner** (Phase 24.7).
+   *
+   * The webhook path has no run and therefore no page to scope: it enters the owner's authority
+   * for the one object it applies, so a personal mailbox's record is written the same way whether
+   * it arrived by polling or by a provider notification.
+   */
+  async applyObjectForConnection(
+    mapping: ObjectMappingView,
+    object: ExternalObject,
+    runId: string | null,
+  ): Promise<ApplyOutcome> {
+    const connection = await this.connections.get(mapping.connectionId);
+    return this.asOwner(connection, () => this.applyObject(mapping, object, runId));
+  }
+
+  /**
+   * Run work under the authority of the connection's owner (Phase 24.7).
+   *
+   * A `user`-owned connection is a **personal** mailbox or calendar. Its records belong to that
+   * user, not to whoever happened to trigger the run: writing as the owner is what keeps personal
+   * content out of the installation-wide view — the record is assigned to the owner, the entity's
+   * own/team scope applies to it, and the owner's own CRM rights decide whether it may be written
+   * at all. A deactivated owner stops the sync instead of letting it continue under another
+   * identity.
+   *
+   * An `organization`-owned connection is shared installation data, so the write keeps the current
+   * authority — the administrator or the scheduler that runs it.
+   */
+  private async asOwner<T>(connection: IntegrationConnectionView, work: () => Promise<T>): Promise<T> {
+    if (connection.ownerType !== 'user') return work();
+    return runAsUser(this.auth, this.scope, connection.ownerId, `integrationSync:${connection.id}`, work);
   }
 
   /**

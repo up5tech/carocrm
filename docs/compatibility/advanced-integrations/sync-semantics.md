@@ -4,6 +4,8 @@
 > `19-INT.16`–`19-INT.24`).
 > Status: **the engine's semantics are delivered; each provider's pagination facts are the
 > implementation's pins, not verified observations of a live account.**
+> Phase 24.7 delivered the installation-wide inbound scope on top of this engine (personal vs
+> organization ownership, all-day anchoring, no-push fallback).
 > Parent document: `docs/compatibility/advanced-integrations.md`.
 
 ## 1. The engine's contract (provider-neutral)
@@ -20,6 +22,7 @@ These rules hold for every connector, and they are the platform's, not a vendor'
 | An expired cursor is a **controlled resync**, never a mass deletion. | The connector reports `cursorExpired`; the engine drops the cursor and re-runs the full enumeration. Because a delete maps to *unlink*, a resync cannot erase a record that is merely absent from the new snapshot. |
 | The same record may not be written by two directions at once. | `record-origin.service.ts` — the origin table prevents an inbound sync from echoing back to the provider. |
 | A conflict never overwrites silently. | `conflict.service.ts` — the default `manual` policy opens a conflict instead. |
+| A **personal** connection's inbound objects are written as the connection's owner, not as the caller. | `sync-orchestrator.service.ts` — `asOwner`; a deactivated owner stops the sync under that identity. An `organization`-owned connection keeps the caller's authority. |
 
 ## 2. The provider facts
 

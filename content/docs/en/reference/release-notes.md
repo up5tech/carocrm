@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-11-15
+updated: 2026-11-16
 ---
 
 Nothing inside the application opens a list of what changed. There is no **What's new** screen, no version
@@ -43,17 +43,20 @@ A note in this repository is written as evidence, not as marketing. Four parts a
 
 ## The most recent release
 
-The newest dated note is the **Phase 24 interim product-completion note**, 2026-11-15, with the
-**Phase 23 security-hardening release**, 2026-11-13, behind it. Phase 24 is still in progress: it
-ratifies single-tenancy as the product boundary, ships production install artifacts and corrects
-release documentation, while the release decision stays **NO-GO for production** — the same backup,
-licence and unsigned-exception blockers as Phase 23. What a reader can notice:
+The newest dated note is the **Phase 24 interim product-completion note**, updated 2026-11-16 with
+**Phase 24.6 (real inbound mail)** and **Phase 24.7 (installation-wide email/calendar sync)**, 2026-11-15,
+with the **Phase 23 security-hardening release**, 2026-11-13, behind it. Phase 24 is still in progress: it
+ratifies single-tenancy as the product boundary, ships production install artifacts, delivers real
+inbound mail and the installation-wide email/calendar sync, and corrects release documentation, while
+the release decision stays **NO-GO for production** — the same backup, licence and unsigned-exception
+blockers as Phase 23. What a reader can notice:
 
 | What you see | What it means |
 | --- | --- |
 | Documentation now says one deployment serves one organisation | Single-tenant is a decided product boundary, not a missing feature. |
 | A production Compose topology and Dockerfile exist in the repository | Install/upgrade artifacts are provided; no deployment has been exercised yet. |
 | The handbook and README state migration and capability facts correctly | Release notes, status pages and the README describe the build that actually ships. |
+| Inbound mail and calendar sync are delivered (Phase 24.6 / 24.7) | Opt-in installation-wide collection via configured providers and the sync engine; unconfigured installs fail clearly. |
 
 The Phase 23 note remains the most recent *completed* release note. It hardened sign-in, sessions,
 API keys and untrusted input, and it changed what an operator must do before carrying real customer

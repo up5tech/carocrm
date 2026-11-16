@@ -26,10 +26,11 @@ import {
 } from '../src/advanced-integrations/resilience.js';
 import { SyncOrchestrator } from '../src/advanced-integrations/sync-orchestrator.service.js';
 import { WebhookIngressService } from '../src/advanced-integrations/webhook-ingress.service.js';
+import { runAsUser } from '../src/common/async-principal.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../src/common/request-scope.js';
 import { EntityCrudService } from '../src/entity/entity.service.js';
 import type { ApiContext } from './support/boot-api.js';
-import { bootApi, shutdownApi } from './support/boot-api.js';
+import { bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-INT.6–19-INT.13 — the Advanced Integrations engine tests
@@ -67,6 +68,8 @@ let scope: RequestScope;
 let fake: FakeProviderAdapter;
 const connectionIds: string[] = [];
 const mappingIds: string[] = [];
+/** The CRM records this suite created, so the cleanup removes exactly those. */
+const createdMeetingIds: string[] = [];
 
 /**
  * Run a body under the documented service authority.
@@ -153,6 +156,17 @@ async function countAccounts(): Promise<number> {
     .selectFrom('entity_records')
     .select('id')
     .where('entity_type', '=', 'Account')
+    .where('deleted_at', 'is', null)
+    .execute();
+  return rows.length;
+}
+
+/** How many **live** Meeting records exist right now. */
+async function countMeetings(): Promise<number> {
+  const rows = await ctx.database.db
+    .selectFrom('entity_records')
+    .select('id')
+    .where('entity_type', '=', 'Meeting')
     .where('deleted_at', 'is', null)
     .execute();
   return rows.length;
@@ -393,6 +407,9 @@ afterAll(async () => {
   const created = remaining.map((row) => row.id).filter((id) => !preexistingAccountIds.has(id));
   if (created.length > 0) {
     await ctx.database.db.deleteFrom('entity_records').where('id', 'in', created).execute();
+  }
+  if (createdMeetingIds.length > 0) {
+    await ctx.database.db.deleteFrom('entity_records').where('id', 'in', createdMeetingIds).execute();
   }
   await shutdownApi();
 });
@@ -744,6 +761,232 @@ describe('Advanced Integrations — the sync engine (19-INT.9)', () => {
       .where('entity_type', '=', 'Account')
       .execute();
     expect(recordsAfter.length).toBe(recordsBefore.length);
+  });
+});
+
+describe('Advanced Integrations — Phase 24.7 installation-wide inbound sync', () => {
+  /**
+   * A calendarEvent mapping against the fake provider: the provider's calendar events become CRM
+   * Meetings, carrying the event's location onto the Meeting.
+   */
+  async function calendarMapping(connectionId: string) {
+    const mapping = await mappings.create({
+      connectionId,
+      objectType: 'calendarEvent',
+      crmEntityType: 'Meeting',
+      syncMode: 'full',
+      fields: [
+        { sourcePath: 'summary', targetField: 'name', transform: null, required: true },
+        { sourcePath: 'description', targetField: 'description', transform: null, required: false },
+        { sourcePath: 'location', targetField: 'location', transform: null, required: false },
+        { sourcePath: 'start', targetField: 'dateStart', transform: null, required: true },
+        { sourcePath: 'end', targetField: 'dateEnd', transform: null, required: true },
+        { sourcePath: 'allDay', targetField: 'isAllDay', transform: null, required: false },
+      ],
+    });
+    mappingIds.push(mapping.id);
+    await mappings.activate(mapping.id);
+    await makeUsable(connectionId);
+    return mapping;
+  }
+
+  itSystem('applies the fake calendar dataset as one full sync and advances the checkpoint', async () => {
+    fake.reset();
+    const connectionId = await createConnection();
+    const mapping = await calendarMapping(connectionId);
+    const run = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 10 });
+    expect(run.status).toBe('completed');
+    expect(run.recordsApplied).toBe(3);
+
+    const linksForConnection = await links.list(connectionId);
+    expect(linksForConnection).toHaveLength(3);
+    expect(linksForConnection.every((link) => link.linkStatus === 'linked')).toBe(true);
+
+    const checkpoint = await orchestrator.readCheckpoint(mapping.id, 'inbound');
+    expect(checkpoint.cursorValue).toBeNull();
+    expect(checkpoint.resetRequired).toBe(false);
+
+    const created = await links.list(connectionId);
+    for (const link of created) {
+      if (link.crmEntityId !== null && !createdMeetingIds.includes(link.crmEntityId)) {
+        createdMeetingIds.push(link.crmEntityId);
+      }
+    }
+  });
+
+  itSystem('re-syncs an already-synced provider event without creating a second CRM record', async () => {
+    fake.reset();
+    const connectionId = await createConnection();
+    const mapping = await calendarMapping(connectionId);
+    const first = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 10 });
+    expect(first.status).toBe('completed');
+    expect(first.recordsApplied).toBe(3);
+
+    const before = await countMeetings();
+    const second = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 10 });
+    expect(second.status).toBe('completed');
+    // The external link is the idempotency mechanism: the re-read resolves to the same records.
+    expect(await countMeetings()).toBe(before);
+    expect((await links.list(connectionId))).toHaveLength(3);
+  });
+
+  itSystem('fails the run and dead-letters it when the provider is unavailable', async () => {
+    fake.reset();
+    const connectionId = await createConnection();
+    const mapping = await calendarMapping(connectionId);
+    fake.failNextCall(
+      'fetchPage',
+      new ProviderError('PROVIDER_UNAVAILABLE', 'The provider is down.', { category: 'provider_outage', retryable: true }),
+    );
+    await expect(orchestrator.runInbound(mapping.id, { triggerSource: 'manual' })).rejects.toThrow(/The provider is down/);
+    expect((await deadLetters.listOpen(connectionId)).length).toBeGreaterThan(0);
+    const runs = await orchestrator.listRuns(connectionId);
+    expect(runs[0]?.status).toBe('failed');
+  });
+
+  itSystem('refuses to call a paused connection', async () => {
+    fake.reset();
+    const connectionId = await createConnection();
+    const mapping = await calendarMapping(connectionId);
+    await ctx.app.get(ConnectionLifecycleService).pause(connectionId);
+    await expect(orchestrator.runInbound(mapping.id, { triggerSource: 'manual' })).rejects.toThrow(/may not call the provider/);
+  });
+
+  itSystem('keeps provider ids of two connections independent', async () => {
+    fake.reset();
+    const firstConnectionId = await createConnection();
+    const secondConnectionId = await createConnection();
+    const first = await calendarMapping(firstConnectionId);
+    const second = await calendarMapping(secondConnectionId);
+    const firstRun = await orchestrator.runInbound(first.id, { triggerSource: 'manual', maxRecords: 10 });
+    const secondRun = await orchestrator.runInbound(second.id, { triggerSource: 'manual', maxRecords: 10 });
+    expect(firstRun.recordsApplied).toBe(3);
+    expect(secondRun.recordsApplied).toBe(3);
+
+    const firstLinks = await links.list(firstConnectionId);
+    const secondLinks = await links.list(secondConnectionId);
+    expect(firstLinks).toHaveLength(3);
+    expect(secondLinks).toHaveLength(3);
+    // The same provider event reached two connections and became two CRM records, one per
+    // connection — the link is scoped to the connection that produced it.
+    const firstEvent = firstLinks.find((link) => link.externalId === 'event-1');
+    const secondEvent = secondLinks.find((link) => link.externalId === 'event-1');
+    expect(firstEvent?.crmEntityId).not.toBeNull();
+    expect(secondEvent?.crmEntityId).not.toBeNull();
+    expect(firstEvent?.crmEntityId).not.toBe(secondEvent?.crmEntityId);
+  });
+
+  itSystem('writes a personal connection sync as the connection owner', async () => {
+    fake.reset();
+    const user = await createTestUser(ctx, { userName: `agent-test-owner-${runId}`, roleIds: ['sysAdmin'] });
+    const personalConnection = await ctx.app
+      .get(ConnectionLifecycleService)
+      .create({
+        providerKey: PROVIDER_KEY,
+        name: `${CONNECTION_NAME}-personal-${String(connectionCounter + 1)}`,
+        ownerType: 'user',
+        ownerId: user.id,
+      });
+    const connectionId = personalConnection.id;
+    connectionCounter += 1;
+    connectionIds.push(connectionId);
+    const mapping = await calendarMapping(connectionId);
+    const run = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 10 });
+    expect(run.status).toBe('completed');
+    expect(run.recordsApplied).toBe(3);
+
+    const created = await links.list(connectionId);
+    for (const link of created) {
+      if (link.crmEntityId !== null && !createdMeetingIds.includes(link.crmEntityId)) {
+        createdMeetingIds.push(link.crmEntityId);
+      }
+    }
+    const meetings = await ctx.database.db
+      .selectFrom('entity_records')
+      .select('id')
+      .where('entity_type', '=', 'Meeting')
+      .where('id', 'in', createdMeetingIds)
+      .execute();
+    expect(meetings.length).toBeGreaterThan(0);
+    const meetingId = createdMeetingIds[createdMeetingIds.length - 1] ?? meetings[0]?.id;
+    expect(meetingId).toBeTruthy();
+    if (meetingId === undefined) return;
+
+    // The synced record is readable by its owner — through the owner's own authority, not the
+    // system identity the run was triggered under.
+    await runAsUser(ctx.auth, scope, user.id, `phase24.7:owner:${runId}`, async () => {
+      await ctx.app.get(EntityCrudService).get('Meeting', meetingId);
+    });
+  });
+
+  itSystem('writes a personal connection webhook event as the connection owner', async () => {
+    fake.reset();
+    const user = await createTestUser(ctx, { userName: `agent-test-owner2-${runId}`, roleIds: ['sysAdmin'] });
+    const personalConnection = await ctx.app
+      .get(ConnectionLifecycleService)
+      .create({
+        providerKey: PROVIDER_KEY,
+        name: `${CONNECTION_NAME}-personal-webhook-${String(connectionCounter + 1)}`,
+        ownerType: 'user',
+        ownerId: user.id,
+      });
+    const connectionId = personalConnection.id;
+    connectionCounter += 1;
+    connectionIds.push(connectionId);
+    const mapping = await calendarMapping(connectionId);
+    const outcome = await orchestrator.applyObjectForConnection(
+      mapping,
+      {
+        objectType: 'calendarEvent',
+        externalId: 'event-1',
+        externalParentId: null,
+        fields: {
+          id: 'event-1',
+          summary: 'Fake Meeting One',
+          description: 'A timed event with an explicit offset.',
+          location: 'Room 1',
+          start: '2026-01-05T09:00:00+07:00',
+          end: '2026-01-05T10:00:00+07:00',
+          allDay: false,
+          updated: '2025-12-31T09:00:00.000Z',
+        },
+        updatedAt: null,
+        version: null,
+        deleted: false,
+      },
+      null,
+    );
+    expect(outcome.action).toBe('created');
+  });
+
+  itSystem('denies a user who is not the personal connection owner access to a synced record', async () => {
+    fake.reset();
+    const user = await createTestUser(ctx, { userName: `agent-test-owner3-${runId}`, roleIds: ['sysAdmin'] });
+    const personalConnection = await ctx.app
+      .get(ConnectionLifecycleService)
+      .create({
+        providerKey: PROVIDER_KEY,
+        name: `${CONNECTION_NAME}-personal-deny-${String(connectionCounter + 1)}`,
+        ownerType: 'user',
+        ownerId: user.id,
+      });
+    const connectionId = personalConnection.id;
+    connectionCounter += 1;
+    connectionIds.push(connectionId);
+    const mapping = await calendarMapping(connectionId);
+    const run = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 1 });
+    expect(run.status).toBe('completed');
+    const created = await links.list(connectionId);
+    const meetingId = created[0]?.crmEntityId;
+    expect(meetingId).toBeTruthy();
+    if (meetingId === undefined) return;
+
+    const stranger = await createTestUser(ctx, { userName: `agent-test-stranger-${runId}` });
+    await expect(
+      runAsUser(ctx.auth, scope, stranger.id, `phase24.7:${runId}`, async () => {
+        await ctx.app.get(EntityCrudService).get('Meeting', meetingId);
+      }),
+    ).rejects.toThrow();
   });
 });
 

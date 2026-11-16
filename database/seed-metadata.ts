@@ -483,6 +483,8 @@ export const coreMetadata: MetadataSeedEntry[] = [
       isEntity: true,
       fields: activityFields({
         direction: { type: 'enum', values: ['Internal', 'Outbound', 'Inbound'], defaultValue: 'Internal', inList: true, inDetail: true, inEdit: true },
+        /** Where the call happens. A calendar sync carries the event's location here (Phase 24.7). */
+        location: { type: 'varchar', maxLength: 255, inList: true, inDetail: true, inEdit: true },
       }),
       relations: activityRelations,
       indexes: [],
@@ -505,6 +507,8 @@ export const coreMetadata: MetadataSeedEntry[] = [
           inDetail: true,
           inEdit: true,
         },
+        /** Where the meeting happens. A calendar sync carries the event's location here (Phase 24.7). */
+        location: { type: 'varchar', maxLength: 255, inList: true, inDetail: true, inEdit: true },
       }),
       relations: activityRelations,
       indexes: [],

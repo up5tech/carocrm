@@ -496,6 +496,78 @@ describe('the Google Workspace connector keeps private events private', () => {
   });
 });
 
+describe('the Google Workspace connector reads calendar event boundaries', () => {
+  it('normalises a timed event boundary to the UTC instant it already is', async () => {
+    const { fetchImpl } = stubFetch([
+      {
+        body: JSON.stringify({
+          items: [
+            {
+              id: 'e1',
+              summary: 'Sync',
+              description: 'A timed event with an explicit offset.',
+              location: 'Room 1',
+              start: { dateTime: '2026-01-05T09:00:00+07:00' },
+              end: { dateTime: '2026-01-05T10:00:00+07:00' },
+              allDay: false,
+              status: 'confirmed',
+            },
+          ],
+        }),
+      },
+    ]);
+    const adapter = new GoogleWorkspaceAdapter({ identity, fetchImpl, resolveHost: publicResolver });
+    const page = await adapter.fetchPage({
+      context: context(),
+      objectType: 'calendarEvent',
+      cursor: null,
+      pageSize: 10,
+      since: null,
+    });
+    expect(page.objects).toHaveLength(1);
+    expect(page.objects[0]?.fields['start']).toBe('2026-01-05T02:00:00.000Z');
+    expect(page.objects[0]?.fields['end']).toBe('2026-01-05T03:00:00.000Z');
+    expect(page.objects[0]?.fields['allDay']).toBe(false);
+    expect(page.objects[0]?.fields['timeZone']).toBe('');
+  });
+
+  it('anchors an all-day event at midnight in the event zone', async () => {
+    const { fetchImpl } = stubFetch([
+      {
+        body: JSON.stringify({
+          items: [
+            {
+              id: 'e2',
+              summary: 'Holiday',
+              description: 'An all-day event: the start is a date, not an instant.',
+              location: '',
+              start: { date: '2026-01-07' },
+              end: { date: '2026-01-08' },
+              allDay: true,
+              timeZone: 'Asia/Bangkok',
+              status: 'confirmed',
+            },
+          ],
+        }),
+      },
+    ]);
+    const adapter = new GoogleWorkspaceAdapter({ identity, fetchImpl, resolveHost: publicResolver });
+    const page = await adapter.fetchPage({
+      context: context(),
+      objectType: 'calendarEvent',
+      cursor: null,
+      pageSize: 10,
+      since: null,
+    });
+    expect(page.objects).toHaveLength(1);
+    // 2026-01-07 in +07:00 is 2026-01-06T17:00:00Z — midnight local, not midnight UTC.
+    expect(page.objects[0]?.fields['start']).toBe('2026-01-06T17:00:00.000Z');
+    expect(page.objects[0]?.fields['end']).toBe('2026-01-07T17:00:00.000Z');
+    expect(page.objects[0]?.fields['allDay']).toBe(true);
+    expect(page.objects[0]?.fields['timeZone']).toBe('Asia/Bangkok');
+  });
+});
+
 describe('the Mailchimp connector will not silently resubscribe a suppressed member', () => {
   it('refuses a resubscribe without consent evidence and accepts one with it', async () => {
     const { fetchImpl } = stubFetch([
