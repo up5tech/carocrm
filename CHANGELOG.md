@@ -60,7 +60,8 @@ Single-tenant product completion (`plans/PLAN_Phase_24_Product_Completion.md`). 
 Still open: `api-spec/` registry completion to `--strict` and the typed client (24.4, in flight),
 outbound events/webhooks (24.8), provider sandbox certification (24.9 — inventory and sandbox plans
 recorded in `docs/quality/phase-24-9-sandbox-certification.md`, live certification pending), UX
-completion (24.10), quality debt (24.11), final go/no-go (24.12).
+completion (24.10 — gap inventory recorded in `docs/quality/phase-24-10-ux-completion.md`, implementation
+pending), quality debt (24.11), final go/no-go (24.12).
 
 ## [1.0.0-alpha] — 2026-11-13 — Phase 23 security hardening
 
