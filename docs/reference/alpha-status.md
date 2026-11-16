@@ -1109,7 +1109,7 @@ Current states as of Phase 24.7:
   typed client) in flight; **24.8 (outbound events) not started**; **24.9 (provider sandbox certification)
   in progress** — inventory and sandbox plans recorded, no adapter certified, live certification pending;
   **24.10 (UX completion) in progress** — UX gap re-measurement recorded, implementation pending; **24.11 (quality debt and single-tenant scale) in progress** — open exception list, dead tenant cleanup, JSONB/EAV baselines and G71/test-drift reconciliation recorded; implementation pending;
-  24.12 not started. The served OpenAPI document is a **route inventory,
+  **24.12 (product release review and go/no-go) in progress** — release review in progress, final decision pending; the served OpenAPI document is a **route inventory,
   not a DTO-derived contract** (G1; the D3 disposition makes `api-spec/` canonical and awaits owner
   sign-off). Production install artifacts exist but are unexercised; release stays NO-GO
   (`docs/releases/2026-11-15-phase-24.md`).
