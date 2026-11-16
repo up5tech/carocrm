@@ -61,7 +61,8 @@ Still open: `api-spec/` registry completion to `--strict` and the typed client (
 outbound events/webhooks (24.8), provider sandbox certification (24.9 — inventory and sandbox plans
 recorded in `docs/quality/phase-24-9-sandbox-certification.md`, live certification pending), UX
 completion (24.10 — gap inventory recorded in `docs/quality/phase-24-10-ux-completion.md`, implementation
-pending), quality debt (24.11), final go/no-go (24.12).
+pending), quality debt (24.11 — inventory and task status recorded in `docs/quality/phase-24-11-quality-debt-scale.md`,
+implementation pending), final go/no-go (24.12).
 
 ## [1.0.0-alpha] — 2026-11-13 — Phase 23 security hardening
 
