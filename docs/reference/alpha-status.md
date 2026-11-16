@@ -1106,7 +1106,9 @@ Current states as of Phase 24.7:
   session revocation and API-key lifecycle are built (Phase 23.2).
 - **Phase 24** single-tenant product completion: in progress. 24.0–24.3, 24.5, **24.6 (real inbound
   mail) and 24.7 (installation-wide email/calendar sync) delivered**; 24.4 (`api-spec/` to `--strict` +
-  typed client) in flight; 24.8–24.12 not started. The served OpenAPI document is a **route inventory,
+  typed client) in flight; **24.8 (outbound events) not started**; **24.9 (provider sandbox certification)
+  in progress** — inventory and sandbox plans recorded, no adapter certified, live certification pending;
+  24.10–24.12 not started. The served OpenAPI document is a **route inventory,
   not a DTO-derived contract** (G1; the D3 disposition makes `api-spec/` canonical and awaits owner
   sign-off). Production install artifacts exist but are unexercised; release stays NO-GO
   (`docs/releases/2026-11-15-phase-24.md`).
