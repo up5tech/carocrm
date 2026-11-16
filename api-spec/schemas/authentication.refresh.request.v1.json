@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.refresh.request.v1",
+  "title": "RefreshRequest",
+  "description": "POST /api/v1/Refresh body. The JSON body is optional: when it does not parse as { refreshToken } the HttpOnly CRM-REFRESH cookie is used instead, so every field is optional here.",
+  "type": "object",
+  "properties": {
+    "refreshToken": { "type": "string", "minLength": 1 }
+  }
+}

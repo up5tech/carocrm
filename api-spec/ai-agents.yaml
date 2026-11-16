@@ -1,0 +1,902 @@
+# PLAN §58 — Phase 19 AI Agents module: diagnostics, definitions, runs, approvals,
+# conversations/memory, evaluations, pricing/quotas, providers and the worker doors.
+# Source: apps/api/src/ai-agents/ai-agents.controller.ts and the services it calls
+# (definitions, runs, approvals, memory, evaluations, pricing, quota, settings, policy,
+# provider connections, gateway, module health).
+# Authorization is per-route: the controller checks AIAgentsPermissionService capabilities
+# (synthetic ACL resources such as AIAgent/AIAgentPolicy) and several services re-check;
+# run/conversation/agent reads are additionally scoped to owner, team or the `audit`
+# capability. The five `action/worker/*` routes are @Public() and are authorized only by
+# the shared `x-worker-secret` header.
+# Format and required fields: api-spec/README.md §2.
+group: ai-agents
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/AIAgents/action/health
+    auth: authenticated
+    permissions: "capability use (AIAgent read); provider connection keys/default are only revealed to a caller who also holds providerAdmin"
+    request: none
+    response: "200 AIAgentsModuleHealthView { module, ok, execution, dependencies[], optionalIntegrations[], features[], structures[], providers{count,enabledCount,credentialCount,adapterKeys,adapters,presets,defaultKey,defaultResolvable,encryptionConfigured}, settings{version,updatedAt,warnings}, checks[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/capabilities
+    auth: authenticated
+    permissions: "capability use (AIAgent read)"
+    request: none
+    response: "200 { capabilities: [{key,label,description,granted}], execution{enabled,paused,available}, memory{enabled}, evaluations{enabled} }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/settings
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: none
+    response: "200 AIAgentsSettingsView { settings{features,provider,limits,approval,retention,safety,tools,dataPolicy}, version, updatedAt, updatedBy, defaults, warnings[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/settings
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit); the service re-checks AIAgentPolicy edit"
+    request: "settings patch object (deep-merged into the aiAgents row, then validated by the strict AIAgentsSettingsSchema; unknown keys refused)"
+    response: "200 AIAgentsSettingsView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row 'aiAgents' upserted with version+1 and updatedBy]
+    idempotency: a repeat of the same patch is a no-op; every accepted write bumps version
+  - method: GET
+    path: /api/v1/AIAgents/action/providers
+    auth: authenticated
+    permissions: "capability providerAdmin (AIAgentProvider edit)"
+    request: none
+    response: "200 { list: ProviderConnectionView[] } ordered by key — never contains apiKey, only hasApiKey"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: key ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/providers/:key
+    auth: authenticated
+    permissions: "capability providerAdmin (AIAgentProvider edit)"
+    request: none
+    response: "200 ProviderConnectionView { id, key, kind, label, baseUrl, models[], dataClasses[], hasApiKey, config, enabled, createdAt, modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/providers
+    auth: authenticated
+    permissions: "capability providerAdmin (AIAgentProvider edit)"
+    request: "ProviderConnectionCreateSchema { kind: openai-compatible|anthropic|fake, key, label, baseUrl, models[1..100], dataClasses?, apiKey?, config{allowLoopback?,organization?,authHeader?}, enabled? } (strict)"
+    response: "201 ProviderConnectionView — apiKey is write-only and never returned"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_provider_connections row with api_key_encrypted (AES-256-GCM via ENCRYPTION_KEY); baseUrl SSRF-checked]
+    idempotency: none; a duplicate key answers 409
+  - method: PATCH
+    path: /api/v1/AIAgents/action/providers/:key
+    auth: authenticated
+    permissions: "capability providerAdmin (AIAgentProvider edit)"
+    request: "ProviderConnectionPatchSchema { label?, baseUrl?, models?, dataClasses?, apiKey? (omit keeps, null clears), config?, enabled? } (strict)"
+    response: "200 ProviderConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_provider_connections row updated; apiKey re-encrypted when supplied, cleared on null]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/AIAgents/action/providers/:key
+    auth: authenticated
+    permissions: "capability providerAdmin (AIAgentProvider edit)"
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_provider_connections row deleted; a key referenced by a published agent version answers 422 (disable instead)]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/AIAgents/action/providers/:key/check
+    auth: authenticated
+    permissions: "capability providerAdmin (AIAgentProvider edit)"
+    request: "ProviderCheckSchema { model?, prompt? } (strict; prompt <= 500 chars)"
+    response: "200 { ok, connectionKey, model, latencyMs, category, message, providerRequestId, usage } — never the model text or the credential"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one real outbound provider call (16-token probe); ai_agent_provider_requests ledger row]
+    idempotency: none; each call is a fresh provider request
+  - method: GET
+    path: /api/v1/AIAgents/action/tools
+    auth: authenticated
+    permissions: "capability use (AIAgent read)"
+    request: none
+    response: "200 { tools: [{key,label,effectClass,enabled}] } — the registered tool catalogue"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/templates
+    auth: authenticated
+    permissions: "capability use (AIAgent read)"
+    request: none
+    response: "200 { list: [{key,name,description,icon,config}] } — reviewed read-only starter configs"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed catalogue order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/agents
+    auth: authenticated
+    permissions: "capability use (AIAgent read); results are visibility-scoped to organization agents, owned agents, owning-team agents, or everything for admin/publish holders; scope=mine narrows to the caller"
+    request: "query: offset?, maxSize? (default 20, max 50), status? (draft|published|paused|archived), q? (name/key substring), scope? (mine)"
+    response: "200 { list: AgentView[], total, offset, count } — AgentView includes draftConfig, configIssues, tools, capabilities, latestVersion"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, FEATURE_DISABLED]
+    pagination: "offset (default 0) and maxSize (default 20, capped at 50); total is the filtered count"
+    sorting: "fixed: modified_at descending"
+    filtering: "status enum (unknown value refused), q ilike on name/agent_key, scope=mine"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/agents/:id
+    auth: authenticated
+    permissions: "capability use (AIAgent read); a hidden agent answers 404 exactly like a missing one"
+    request: none
+    response: "200 AgentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/agents
+    auth: authenticated
+    permissions: "capability manageDraft (AIAgent edit)"
+    request: "AgentCreateSchema { key, name, description?, purpose?, category?, icon?, visibility? (private|team|organization, default team), teamId?, config } (strict)"
+    response: "201 AgentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents row created as draft owned by the caller]
+    idempotency: none; a duplicate agent key answers 409
+  - method: PATCH
+    path: /api/v1/AIAgents/action/agents/:id
+    auth: authenticated
+    permissions: "capability manageDraft (AIAgent edit) plus edit rights: owner, owning team or administrator; archived agents refuse edits"
+    request: "AgentUpdateSchema { name?, description?, purpose?, category?, icon?, visibility?, teamId?, config? } (strict)"
+    response: "200 AgentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents row updated; draft_config and data_sensitivity change when config is sent]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/AIAgents/action/agents/:id
+    auth: authenticated
+    permissions: "capability manageDraft (AIAgent edit) plus owner/owning-team/administrator; only a never-published draft may be deleted"
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents.is_deleted set; published or paused agents must be archived instead]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/AIAgents/action/agents/:id/versions
+    auth: authenticated
+    permissions: "agent visibility only (organization, owner or owning team); no module capability is asserted on this route"
+    request: none
+    response: "200 { list: AgentVersionView[] } ordered by version descending"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: version descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/agents/:id/versions/:version
+    auth: authenticated
+    permissions: "agent visibility only (organization, owner or owning team); no module capability is asserted on this route"
+    request: "path :version must be a positive integer"
+    response: "200 AgentVersionDetail { id, version, checksum, providerKey, model, publishedById, publishedAt, note, tools[], config, limits, approvalPolicy, memoryPolicy, triggerPolicy, outputSchema }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/agents/:id/validate
+    auth: authenticated
+    permissions: "capability use (AIAgent read); agent visibility applies"
+    request: none
+    response: "200 AgentValidationReport { ok, issues[{code,path,message,blocking}], checks[{id,ok,detail}] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/validate
+    auth: authenticated
+    permissions: "capability use (AIAgent read); agent visibility applies"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AgentValidationReport — same as GET"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/publish
+    auth: authenticated
+    permissions: "capability publish (AIAgentVersion edit) plus owner/owning-team/administrator; evaluation publication gate may additionally refuse"
+    request: "AgentPublishSchema { note?, checksum? } (strict)"
+    response: "200 { agent: AgentView, version: AgentVersionView, report: AgentValidationReport }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_versions row (immutable snapshot + checksum), ai_agent_tool_grants rows, ai_agents status->published and current_version, scheduled_jobs row reconciled; all in one transaction]
+    idempotency: none; republishing an identical draft answers 422
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/pause
+    auth: authenticated
+    permissions: "capability lifecycle (AIAgentLifecycle edit) plus owner/owning-team/administrator; only a published agent may pause"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AgentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents.status -> paused; scheduled_jobs row disabled]
+    idempotency: a repeat on a paused agent answers 422
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/resume
+    auth: authenticated
+    permissions: "capability lifecycle (AIAgentLifecycle edit) plus owner/owning-team/administrator; only a paused agent may resume and its validation must have no blocking findings"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AgentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents.status -> published; scheduled_jobs row reconciled]
+    idempotency: a repeat on a published agent answers 422
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/archive
+    auth: authenticated
+    permissions: "capability lifecycle (AIAgentLifecycle edit) plus owner/owning-team/administrator; any non-archived status may archive"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AgentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents.status -> archived; scheduled_jobs row disabled]
+    idempotency: a repeat on an archived agent answers 422
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/restore
+    auth: authenticated
+    permissions: "capability lifecycle (AIAgentLifecycle edit) plus owner/owning-team/administrator; only an archived agent may restore"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AgentView — status draft with the published config copied into draft_config; version rows are never mutated"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agents row (status->draft, draft_config replaced); scheduled_jobs row reconciled]
+    idempotency: a repeat on a draft agent answers 422
+  - method: GET
+    path: /api/v1/AIAgents/action/runs
+    auth: authenticated
+    permissions: "capability use (AIAgent read); without the audit capability only runs the caller initiated are listed; scope=all widens to all runs for audit holders"
+    request: "query: offset?, maxSize? (default 25, max 100), status? (13-value run status enum), agentId?, scope? (all)"
+    response: "200 { list: AIAgentRunView[], total, offset, count } — includes counters and truncated input"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 25, capped at 100); total is the filtered count"
+    sorting: "fixed: created_at descending"
+    filtering: "status enum (unknown value refused), agentId, scope=all"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:id/runs
+    auth: authenticated
+    permissions: "capability use (AIAgent read) plus execution enabled and not globally paused; agent must be published and visible to the caller"
+    request: "RunCreateSchema { input?{text?, record?{entity,id}, records?[{entity,id} max 8]}, idempotencyKey? (8-120 chars), conversationId? } (strict)"
+    response: "201 AIAgentRunView — status queued; execution happens asynchronously via the job queue"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_runs row (queued, 24h expiry), optional ai_agent_conversations/messages rows, run.queued timeline event, BullMQ job enqueue, quota and per-user rate checks; record refs are ACL-checked at creation]
+    idempotency: "idempotencyKey is unique-indexed; a repeat returns the existing run"
+  - method: GET
+    path: /api/v1/AIAgents/action/runs/:id
+    auth: authenticated
+    permissions: "capability use (AIAgent read); only the initiating user or an audit-capability holder may see the run (404 otherwise)"
+    request: none
+    response: "200 AIAgentRunView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/runs/:id/events
+    auth: authenticated
+    permissions: "capability use (AIAgent read); run visibility as GET /runs/:id; without audit only 'user'-visibility events are returned"
+    request: none
+    response: "200 { list: AIAgentRunEventView[] } ordered by seq ascending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: seq ascending"
+    filtering: "visibility=user for non-audit callers"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/runs/:id/toolCalls
+    auth: authenticated
+    permissions: "capability use (AIAgent read); run visibility as GET /runs/:id"
+    request: none
+    response: "200 { list: [{id,step,toolKey,policyResult,status,summary,errorCategory,durationMs,resultRef,createdAt}] } ordered by created_at"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: created_at ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/runs/:id/retry
+    auth: authenticated
+    permissions: "capability use (AIAgent read); run visibility as GET /runs/:id; only failed/canceled/expired/blocked_by_policy runs may retry"
+    request: "RunRetrySchema { idempotencyKey? } (strict)"
+    response: "200 AIAgentRunView — the NEW run created from the old one's stored input"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new ai_agent_runs row (causation_id points at the retried run), run.retried timeline event, job enqueue, conversation/message rows as for a normal run]
+    idempotency: "idempotencyKey dedups the new run; runs with outcome_unknown tool calls are refused"
+  - method: POST
+    path: /api/v1/AIAgents/action/runs/:id/cancel
+    auth: authenticated
+    permissions: "capability use (AIAgent read); run visibility as GET /runs/:id"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AIAgentRunView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_runs.cancel_requested/status update; queued/waiting runs end canceled immediately; pending approvals invalidated; run.canceled/cancel_requested event; conversation outcome message]
+    idempotency: "a repeat on a terminal run returns the run unchanged"
+  - method: POST
+    path: /api/v1/AIAgents/action/runs/:id/input
+    auth: authenticated
+    permissions: "capability use (AIAgent read); run visibility as GET /runs/:id; only a run in waiting_for_input may receive input"
+    request: "RunInputSchema { text } (1-4000 chars, strict)"
+    response: "200 AIAgentRunView — status returns to queued"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_runs.input merged and status->queued; run.input_received timeline event]
+    idempotency: none; each call overwrites the pending input text
+  - method: POST
+    path: /api/v1/AIAgents/action/runs/:id/resume
+    auth: authenticated
+    permissions: "capability use (AIAgent read); run visibility as GET /runs/:id; only waiting_for_input/waiting_for_approval runs change state"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 AIAgentRunView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_runs.status -> queued when waiting; run.resumed timeline event]
+    idempotency: safe to repeat; a non-waiting run is returned unchanged
+  - method: POST
+    path: /api/v1/AIAgents/action/runs/:id/execute
+    auth: authenticated
+    permissions: "capability use (AIAgent read) via the visibility check; the run owner or an audit holder may re-attempt a queued run"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 { run: AIAgentRunView, claimed, waitingForApproval }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [lease-claimed execution of the run: model calls to the configured provider, tool executions, ai_agent_run_events/tool_calls/provider_requests rows, run counters and terminal status]
+    idempotency: "lease claim makes a duplicate dispatch a no-op; terminal runs return untouched"
+  - method: POST
+    path: /api/v1/AIAgents/action/triggers/run
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit) plus execution enabled"
+    request: "RunTriggerSchema { agentId, trigger: event|schedule|integration|record, input?{text?,record?,records?}, idempotencyKey?, causationId?, depth? (0-10) } (strict)"
+    response: "200 AIAgentRunView — a queued run started as the calling principal"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_runs row, timeline events, job enqueue, conversation rows; feature flags eventTriggers/scheduledTriggers and the agent's own trigger allowlist and depth<=3 are enforced]
+    idempotency: "idempotencyKey dedups the run"
+  - method: GET
+    path: /api/v1/AIAgents/action/mcp/tools
+    auth: authenticated
+    permissions: "capability use (AIAgent read)"
+    request: none
+    response: "200 { tools: [{name,description,inputSchema}] } — MCP-shaped tool list"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "registry order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/mcp/call
+    auth: authenticated
+    permissions: "capability use (AIAgent read); the tool executes as the calling user — approval-gated tools are refused because a direct call has no run to attach a decision to"
+    request: "{ name, arguments?, idempotencyKey? } (strict inline schema)"
+    response: "200 { content: [{type:text, text}], isError:false, toolCallId? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [the tool's own effect (CRM reads/writes under the caller's ACL); ai_agent_mcp_direct_calls claim/complete rows for write-capable tools]
+    idempotency: "write-capable tools require idempotencyKey; a repeat replays the stored result, read tools are never receipted"
+  - method: POST
+    path: /api/v1/AIAgents/action/worker/runs/:id/execute
+    auth: public
+    permissions: "shared worker capability: x-worker-secret header compared in constant time against the configured worker secret; refused when unset"
+    request: none
+    response: "200 { run, claimed, waitingForApproval } — same execution result as the authenticated door"
+    errors: [AUTHENTICATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as POST /action/runs/:id/execute: lease-claimed run execution with provider calls, tool calls, events and ledger rows]
+    idempotency: "lease claim and run-state checks make re-delivery a no-op"
+  - method: GET
+    path: /api/v1/AIAgents/action/conversations
+    auth: authenticated
+    permissions: "capability use plus features.memory enabled; strictly owner-scoped — only the caller's own conversations"
+    request: "query: agentId?, maxSize? (default 25, max 100)"
+    response: "200 { list: ConversationView[] } ordered by last_activity_at descending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "maxSize only (default 25, capped at 100); no offset"
+    sorting: "fixed: last_activity_at descending"
+    filtering: "agentId"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/conversations/:id
+    auth: authenticated
+    permissions: "capability use plus features.memory; owner only — another user's conversation answers 404"
+    request: none
+    response: "200 { conversation: ConversationView, messages: ConversationMessageView[] } ordered by seq"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: "fixed: messages by seq ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/conversations/:id/archive
+    auth: authenticated
+    permissions: "capability use plus features.memory; owner only"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 ConversationView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_conversations.status -> archived]
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/AIAgents/action/conversations/:id
+    auth: authenticated
+    permissions: "capability use plus features.memory; owner only"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_memory_items and ai_agent_conversations rows for the conversation deleted]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/AIAgents/action/memory
+    auth: authenticated
+    permissions: "capability use plus features.memory; strictly owner-scoped memory items (run checkpoints excluded)"
+    request: "query: agentId?, maxSize? (default 50, max 100)"
+    response: "200 { list: MemoryItemView[] } ordered by created_at descending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "maxSize only (default 50, capped at 100); no offset"
+    sorting: "fixed: created_at descending"
+    filtering: "agentId"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/AIAgents/action/memory/:id
+    auth: authenticated
+    permissions: "capability use plus features.memory; owner only — soft delete (deleted_at)"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_memory_items.deleted_at set]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/AIAgents/action/retention/dryRun
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: none
+    response: "200 { conversations, memoryItems, providerRequests, runEvents, evaluationRuns } — row counts the sweep would delete"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/retention/run
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 { conversations, memoryItems, providerRequests, runEvents, evaluationRuns } — counts actually deleted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [deletes expired ai_agent_conversations, ai_agent_memory_items, ai_agent_provider_requests, ai_agent_run_events and ai_agent_eval_runs rows past their retention windows]
+    idempotency: safe to repeat; a second sweep deletes only newly expired rows
+  - method: POST
+    path: /api/v1/AIAgents/action/worker/retention
+    auth: public
+    permissions: "shared worker capability: x-worker-secret header, constant-time compared"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 { conversations, memoryItems, providerRequests, runEvents, evaluationRuns } — counts deleted"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same retention deletes as POST /action/retention/run]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/worker/trigger-event
+    auth: public
+    permissions: "shared worker capability: x-worker-secret header, constant-time compared"
+    request: "{ eventId, eventType (entity.created|entity.updated|entity.deleted|entity.restored), entityType, entityId } — validated inline, not a strict zod object"
+    response: "200 { disabled?, matched, started, skipped[{agent,reason}], errors[{agent,category}] } — quiet {disabled:true} when eventTriggers is off"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [up to 5 published opted-in agents each start a run as their owner (ai_agent_runs rows, events, job enqueues); at-least-once delivery dedups via evt:<eventId>:<agentId> idempotency keys]
+    idempotency: "per-agent idempotency key makes re-delivery a no-op"
+  - method: POST
+    path: /api/v1/AIAgents/action/worker/trigger-schedule
+    auth: public
+    permissions: "shared worker capability: x-worker-secret header, constant-time compared"
+    request: "{ agentId (uuid), scheduledForMs? (number) } — validated inline"
+    response: "200 { disabled?, started, runId?, reason? } — quiet {disabled:true} or {started:0,reason} when the feature/agent does not qualify"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one ai_agent_runs row per firing as the agent owner; dedup via sched:<agentId>:<scheduledForMs> idempotency key]
+    idempotency: "per-firing idempotency key makes a retried delivery a no-op"
+  - method: POST
+    path: /api/v1/AIAgents/action/worker/trigger-integration
+    auth: public
+    permissions: "shared worker capability: x-worker-secret header, constant-time compared"
+    request: "{ eventId, eventType (integration.* pattern), payload } — validated inline; payload is untrusted external data"
+    response: "200 { disabled?, matched, started, skipped[{agent,reason}], errors[{agent,category}] } or {matched:0,...} when the payload names no record"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [up to 5 published opted-in record-context agents each start a run as their owner; dedup via int:<eventId>:<agentId>]
+    idempotency: "per-agent idempotency key makes re-delivery a no-op"
+  - method: GET
+    path: /api/v1/AIAgents/action/usage
+    auth: authenticated
+    permissions: "capability usage (AIAgentUsage read)"
+    request: none
+    response: "200 { totals{runs,modelCalls,toolCalls,inputTokens,outputTokens,estimatedCostUsd,costLabel,ledgerWriteFailures}, byAgent[], byProvider[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "byAgent/byProvider sorted by volume descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/evaluations
+    auth: authenticated
+    permissions: "capability use (AIAgent read)"
+    request: none
+    response: "200 { list: EvalSuiteView[] } — suites with their cases"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: suite_key ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/evaluations
+    auth: authenticated
+    permissions: "capability evaluation (AIAgentEvaluation edit)"
+    request: none
+    response: "200 EvalSuiteView — the built-in publication-gate suite (created if absent)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_eval_suites + ai_agent_eval_cases rows for the standard suite on first call]
+    idempotency: "idempotent: returns the existing suite when present"
+  - method: DELETE
+    path: /api/v1/AIAgents/action/evaluations/:suiteKey
+    auth: authenticated
+    permissions: "capability evaluation (AIAgentEvaluation edit); suite may be addressed by id or key"
+    request: none
+    response: "204 no content"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_eval_suites row deleted; a suite that already produced runs is refused (would erase evidence) — disable it instead]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/AIAgents/action/evaluations/:suiteKey
+    auth: authenticated
+    permissions: "capability evaluation (AIAgentEvaluation edit); suite addressed by id or key"
+    request: "EvaluationCaseCreateSchema { caseKey, title, grader, graderConfig? } (strict); grader must be a known grader"
+    response: "200 { id, caseKey, title, grader, kind } — the created case"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_eval_cases row]
+    idempotency: none; a duplicate caseKey in the suite answers 422
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:agentId/evaluations/run
+    auth: authenticated
+    permissions: "capability use (AIAgent read) plus agent visibility; deterministic graders only — no model calls"
+    request: "RunEvaluationSchema { suiteId? } (strict; defaults to the first enabled suite)"
+    response: "200 EvalRunView { id, agentId, suiteId, suiteKey, configChecksum, agentVersion, status, results[], createdAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_eval_runs row recording the deterministic grade of the current draft]
+    idempotency: none; each call records a new run (history is the evidence)
+  - method: GET
+    path: /api/v1/AIAgents/action/agents/:agentId/evaluations
+    auth: authenticated
+    permissions: "capability use (AIAgent read) plus agent visibility"
+    request: "query: maxSize? (default 25, max 100)"
+    response: "200 { list: EvalRunView[] } ordered by created_at descending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "maxSize only (default 25, capped at 100); no offset"
+    sorting: "fixed: created_at descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/agents/:agentId/evaluations/:runId/decide
+    auth: authenticated
+    permissions: "capability evaluation (AIAgentEvaluation edit) plus visibility of the agent the run belongs to"
+    request: "DecisionEvaluationSchema { caseKey, decision: approve|reject, note? } (strict)"
+    response: "200 EvalRunView with the decided case result and recomputed status"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_eval_runs.results and status updated; only human_review cases may be decided]
+    idempotency: a repeat re-decides the same case with the latest decision
+  - method: GET
+    path: /api/v1/AIAgents/action/agents/:agentId/evaluations/compare
+    auth: authenticated
+    permissions: "capability use (AIAgent read) plus agent visibility"
+    request: none
+    response: "200 { draft: EvalRunView|null, published: EvalRunView|null, regressions[{caseKey,title,published,draft}] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/pricing
+    auth: authenticated
+    permissions: "capability usage (AIAgentUsage read)"
+    request: "query: providerKey?"
+    response: "200 { list: PricingSnapshotView[] } ordered by provider_key, model"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: provider_key then model ascending"
+    filtering: "providerKey exact match"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/pricing
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: "PricingSnapshotCreateSchema { providerKey, model (or *), currency? (3 letters, default USD), inputPricePerMillion, outputPricePerMillion, cachedInputPricePerMillion? } (strict; prices 0-1,000,000)"
+    response: "201 PricingSnapshotView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_pricing_snapshots row; future provider-ledger cost estimates use it]
+    idempotency: none; a second snapshot for the same provider+model answers 409 — use replace
+  - method: POST
+    path: /api/v1/AIAgents/action/pricing/:id/replace
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: "PricingSnapshotReplaceSchema { inputPricePerMillion, outputPricePerMillion, cachedInputPricePerMillion? } (strict)"
+    response: "200 PricingSnapshotView — valid_from bumps so recorded estimates stay traceable"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_pricing_snapshots row updated]
+    idempotency: a repeat with the same body is a no-op apart from valid_from
+  - method: DELETE
+    path: /api/v1/AIAgents/action/pricing/:id
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: none
+    response: "200 { deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_pricing_snapshots row deleted; new estimates for that provider/model then report source none]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/AIAgents/action/quotas
+    auth: authenticated
+    permissions: "capability usage (AIAgentUsage read)"
+    request: none
+    response: "200 { list: BudgetPolicyView[] } ordered by scope, period"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: scope then period ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/quotas/status
+    auth: authenticated
+    permissions: "capability usage (AIAgentUsage read)"
+    request: none
+    response: "200 { list: BudgetPolicyStatus[] } — each policy with live usage, warning and exhausted flags"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: scope then period ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/quotas
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: "BudgetPolicyCreateSchema { scope: global|user|team|agent|provider, scopeRef?, providerKey?, agentId?, period: day|month, maxRequests?, maxTokens?, maxCostUsd?, maxRuns?, maxConcurrentRuns?, warnPercent?, enabled? } (strict; at least one limit required)"
+    response: "201 BudgetPolicyView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_budget_policies row; enforced atomically inside run creation]
+    idempotency: none; a duplicate scope/target/provider/agent/period answers 422
+  - method: DELETE
+    path: /api/v1/AIAgents/action/quotas/:id
+    auth: authenticated
+    permissions: "capability policyAdmin (AIAgentPolicy edit)"
+    request: none
+    response: "200 { deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_budget_policies row deleted; the scope stops being enforced]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/AIAgents/action/approvals
+    auth: authenticated
+    permissions: "capability approval (AIAgentApproval edit)"
+    request: "query: status? (pending default; pending|approved|rejected|changes_requested|expired|invalidated|executed|all), offset?, maxSize? (default 25, max 100), runId?, agentId?"
+    response: "200 { list: ApprovalView[], total, offset, count, expired }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 25, capped at 100); total is the filtered count"
+    sorting: "fixed: created_at descending"
+    filtering: "status enum (unknown value refused), runId, agentId"
+    sideEffects: [expireDue() runs first: overdue pending approvals become expired and their runs settle as expired]
+    idempotency: safe to repeat; expiry is itself idempotent
+  - method: GET
+    path: /api/v1/AIAgents/action/runs/:id/approvals
+    auth: authenticated
+    permissions: "capability approval, or the user who initiated the run"
+    request: none
+    response: "200 { list: ApprovalView[] } ordered by created_at descending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: created_at descending"
+    filtering: "runId fixed by the path"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/approvals/:id
+    auth: authenticated
+    permissions: "capability use plus approval/audit capability or run initiator; others get a 422 'does not exist'"
+    request: none
+    response: "200 ApprovalView { id, runId, agentId, agentName, agentVersion, toolKey, actionClass, riskLevel, summary, proposal, targets, status, requestedByUserId, decidedByUserId, decidedAt, decisionNote, revalidation, executionResult, expiresAt, createdAt, selfApproval, awaitingSecondApproval }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/approvals/:id/approve
+    auth: authenticated
+    permissions: "capability approval (AIAgentApproval edit); self-approval of material_write/high_impact proposals is refused or needs a second approver per settings"
+    request: "ApprovalDecisionSchema { note? } (strict)"
+    response: "200 { approval: ApprovalView, resumed } — the run is requeued and execution is requested"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, AI_APPROVAL_SELF_APPROVAL_FORBIDDEN, AI_APPROVAL_SECOND_APPROVER_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_approvals decision recorded with revalidation, ai_agent_runs requeued, approval.approved timeline event, job enqueue; a stale proposal invalidates the approval and settles the run blocked_by_policy]
+    idempotency: "a second decision on a non-pending approval answers 422"
+  - method: POST
+    path: /api/v1/AIAgents/action/approvals/:id/reject
+    auth: authenticated
+    permissions: "capability approval (AIAgentApproval edit); rejecting one's own proposal stays allowed"
+    request: "ApprovalDecisionSchema { note? } (strict)"
+    response: "200 { approval: ApprovalView, resumed:false } — the run is canceled"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_approvals status->rejected, ai_agent_runs canceled, sibling pending approvals invalidated, approval.rejected timeline event]
+    idempotency: "a second decision on a non-pending approval answers 422"

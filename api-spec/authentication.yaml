@@ -8,6 +8,9 @@ endpoints:
     path: /api/v1/Authentication
     auth: public
     permissions: none
+    operationId: authentication.login
+    requestSchema: schemas/authentication.login.request.v1.json
+    responseSchema: schemas/authentication.login.response.v1.json
     request: "LoginRequest { userName, password, rememberMe? }"
     response: "200/201 LoginResult { accessToken, expiresIn, csrfToken, userId, portalId, role[], type }; 200 LoginChallengeResult { challengeId } when 2FA is required"
     errors: [VALIDATION_FAILED, AUTHENTICATION_FAILED, RATE_LIMITED]
@@ -20,6 +23,9 @@ endpoints:
     path: /api/v1/Authentication/challenge
     auth: public
     permissions: none
+    operationId: authentication.challenge
+    requestSchema: schemas/authentication.challenge.request.v1.json
+    responseSchema: schemas/authentication.challenge.response.v1.json
     request: "LoginChallengeSchema { challengeId, code }"
     response: "200/201 LoginResult"
     errors: [VALIDATION_FAILED, AUTHENTICATION_FAILED, RATE_LIMITED]
@@ -32,8 +38,11 @@ endpoints:
     path: /api/v1/Refresh
     auth: cookie+csrf
     permissions: none
+    operationId: session.refresh
+    requestSchema: schemas/authentication.refresh.request.v1.json
+    responseSchema: schemas/authentication.refresh.response.v1.json
     request: "optional RefreshSchema { refreshToken }; the HttpOnly CRM-REFRESH cookie is the primary source"
-    response: "200 AuthTokens { accessToken, refreshToken, expiresIn }"
+    response: "200 LoginResult { accessToken, refreshToken, expiresIn, userId, portalId, role[], type, csrfToken } — the refresh handler answers through the same respond() path as login"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RATE_LIMITED]
     pagination: none
     sorting: none
@@ -68,6 +77,9 @@ endpoints:
     path: /api/v1/Logout
     auth: authenticated
     permissions: none
+    operationId: session.logout
+    requestSchema: schemas/authentication.logout.request.v1.json
+    responseSchema: schemas/authentication.logout.response.v1.json
     request: "optional LogoutSchema { refreshToken }; cookies are the fallback"
     response: "200 { status: true }"
     errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
@@ -80,6 +92,8 @@ endpoints:
     path: /api/v1/AppUser/me
     auth: authenticated
     permissions: authenticated
+    operationId: session.me
+    responseSchema: schemas/authentication.me.response.v1.json
     request: none
     response: "200 Principal { id, userName, roles[], type, locale, timezone, avatarId, capabilities, … }"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]

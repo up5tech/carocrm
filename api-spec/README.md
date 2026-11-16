@@ -1,9 +1,11 @@
 # API endpoint registry (PLAN §58)
 
 > **Started:** 2026-11-13
+> **Completed:** 2026-11-16 — every `/api` route is documented (920 endpoints across 29 files) and
+> `pnpm ci:api-spec` runs the checker in `--strict` mode inside `pnpm ci:gate`: a newly added
+> undocumented route now fails the nightly gate.
 > **Plan:** `plans/PLAN.md` §58 — “Create a machine-readable endpoint registry.”
-> **Status:** in progress. Five groups are documented (`authentication`, `metadata`, `users`, `entities`, `email`); the remaining
-> groups are listed in §4 and are added one file at a time. `pnpm ci:api-spec` already fails on a
+> **Status:** complete for Phase 24.4 registry coverage. `pnpm ci:api-spec` already fails on a
 > phantom or malformed entry, so every documented endpoint is guaranteed to exist in the source.
 
 ## 1. Why this exists
@@ -65,19 +67,41 @@ endpoints:
 `request`/`response`/`pagination`/`sorting`/`filtering`/`idempotency` values may be quoted because they
 often contain `:` and `{}`.
 
+### 2.1 Schema-backed operations (Phase 24.4, 2026-11-16)
+
+An endpoint may additionally carry three fields for the bounded typed-client surface:
+
+- `operationId` — a stable dotted identifier (`authentication.login`), unique across the registry;
+- `requestSchema` / `responseSchema` — paths to versioned JSON Schema documents under
+  `api-spec/schemas/` (draft 2020-12 subset: `type`, `properties`, `required`, `items`, `enum`,
+  `anyOf`/`oneOf`, `$ref`/`$defs`, string/number bounds; see the files themselves for the exact shape).
+
+`scripts/generate-api-client.mjs` consumes these fields and emits
+`packages/api-client/src/generated.ts` — TypeScript types plus a typed `createApiClient` transport.
+The generator **fails** on a missing schema file, an unresolvable `$ref`, an unsupported keyword, a
+path parameter, or an `operationId` collision; it never falls back to `any` or to the prose fields.
+`pnpm ci:api-client` (`--check`) runs inside `pnpm ci:gate` and fails when the committed
+`generated.ts` is stale. `apps/api/test/api-spec-client-contract.test.ts` proves the JSON Schemas and
+the controller Zod schemas agree on a fixture corpus. Registry coverage (all 920 routes) and
+typed-client coverage (the operations carrying schemas — currently the five session operations) are
+reported separately on purpose.
+
 ## 3. Validation
 
 ```bash
-pnpm ci:api-spec            # documented endpoints must exist; schema must be valid
-pnpm ci:api-spec --strict   # additionally require every /api route to be documented (registry-wide)
-pnpm ci:api-spec --print    # dump the parsed registry (debugging the parser)
+pnpm ci:api-spec            # strict: documented endpoints must exist AND every /api route must be documented
+node scripts/check-api-spec.mjs          # lenient form: validates documented entries only
+node scripts/check-api-spec.mjs --strict # same as pnpm ci:api-spec
+node scripts/check-api-spec.mjs --print  # dump the parsed registry (debugging the parser)
 ```
 
 pnpm forwards arguments after the script name to the command, so no `--` separator is needed;
 `pnpm ci:api-spec -- --strict` behaves the same. Verified on 2026-11-13 with pnpm 10: `--print` reached the
 script and `--strict` reached it too (exiting 1 while most `/api` routes were still undocumented). If a future package-manager
 change swallows the flag, the checker silently loses `--strict`, so the CI gate invokes the script through
-`pnpm ci:api-spec` without flags and the strict run is a documented manual command, not the gate.
+`pnpm ci:api-spec` (which carries `--strict` in `package.json`) and the strict behaviour is pinned by
+`apps/api/test/api-spec-registry.test.ts`, a DB-free regression that proves an undocumented probe route
+fails the gate.
 
 The checker fails when:
 
@@ -88,9 +112,10 @@ The checker fails when:
   compared by position, so `:id` and `:sessionId` match);
 - the same endpoint is documented twice.
 
-It is part of `pnpm ci:gate` (so the nightly lane runs it). `--strict` is **not** part of the gate yet:
-coverage is incomplete by design while the groups below are still being written, and a gate that fails on
-known-missing documentation would be turned off.
+It is part of `pnpm ci:gate` (so the nightly lane runs it) **in `--strict` mode since 2026-11-16**:
+coverage is complete, so an undocumented `/api` route is now a gate failure. The DB-free regression
+`apps/api/test/api-spec-registry.test.ts` proves both directions — a probe route fails strict and the
+committed registry passes it.
 
 ## 4. Coverage
 
@@ -101,20 +126,35 @@ known-missing documentation would be turned off.
 | Metadata | `metadata.yaml` | documented (2026-11-13) |
 | Users, roles, teams, API users and API keys | `users.yaml` | documented (2026-11-13) — 26 routes; every route except `GET /User/assignable` is administrator-only |
 | Generic entity CRUD, relations, mass actions | `entities.yaml` | documented (2026-11-13) — 13 route shapes under the `:entity` wildcard, with ACL level and record-predicate rules |
-| Relationships | `relationships.yaml` | not started |
-| Attachments and chunked upload | `attachments.yaml` | not started |
-| Activities, calendar, stream | `activities.yaml`, `stream.yaml` | not started |
-| Search, saved filters, import/export, dashboards | `search.yaml` | not started |
-| Reports | `reports.yaml` | not started |
-| Workflows, BPM processes | `workflows.yaml` | not started |
-| Jobs and schedules | `jobs.yaml` | not started |
-| Administration (`AdminPanel`, `Settings`, `AdminInternal`, `StorageUsage`, `Navigation`) | `admin.yaml` | not started |
-| i18n | `i18n.yaml` | not started |
-| Phase 19 modules (AI agents, chat, sales, service desk, …) | one file per module | not started |
+| Email (transport probes, inbound poll, delivery ledger, mailbox + inbound-connection admin) | `email.yaml` | documented (2026-11-16) — 17 routes |
+| Administration (`AdminPanel`, `AdminInternal`, `Settings`, `StorageUsage`, `Navigation`, preferences, docs) | `admin.yaml` | documented (2026-11-16) — 21 routes |
+| Jobs and schedules | `jobs.yaml` | documented (2026-11-16) — 13 routes, all administrator |
+| Attachments and chunked upload | `attachments.yaml` | documented (2026-11-16) — 11 routes |
+| Document templates and preview | `documents.yaml` | documented (2026-11-16) — 5 routes |
+| Stream, notes, notifications, calendar | `stream.yaml` | documented (2026-11-16) — 12 routes |
+| Search, saved filters, import/export, dashboards | `search.yaml` | documented (2026-11-16) — 25 routes |
+| Reports | `reports.yaml` | documented (2026-11-16) — 14 routes |
+| Workflows and runs | `workflows.yaml` | documented (2026-11-16) — 13 routes, all administrator |
+| BPM processes, instances, tasks | `processes.yaml` | documented (2026-11-16) — 18 routes |
+| Extensions and domain events | `extensions.yaml` | documented (2026-11-16) — 8 routes |
+| Portal administration and portal-user surface | `portal.yaml` | documented (2026-11-16) — 32 routes |
+| Service desk | `service-desk.yaml` | documented (2026-11-16) — 39 routes |
+| Projects and project tasks | `projects.yaml` | documented (2026-11-16) — 30 routes |
+| Lead scoring | `lead-score.yaml` | documented (2026-11-16) — 32 routes |
+| Omnichannel inbox, web chat, provider webhook | `omnichannel.yaml` | documented (2026-11-16) — 45 routes |
+| CRM chat (AI assistant surface) | `crm-chat.yaml` | documented (2026-11-16) — 27 routes |
+| E-signature | `esignature.yaml` | documented (2026-11-16) — 61 routes |
+| Sales (documents, payments, pricing, inventory, subscriptions) | `sales.yaml` | documented (2026-11-16) — 86 routes |
+| Marketing automation | `marketing-automation.yaml` | documented (2026-11-16) — 81 routes |
+| AI agents | `ai-agents.yaml` | documented (2026-11-16) — 74 routes |
+| Advanced integrations | `advanced-integrations.yaml` | documented (2026-11-16) — 68 routes |
+| Voice communications | `voice-communications.yaml` | documented (2026-11-16) — 66 routes |
+| Customer success | `customer-success.yaml` | documented (2026-11-16) — 54 routes |
+| Platform misc (i18n, audit log, formula, hooks, setup checklist) | `platform.yaml` | documented (2026-11-16) — 7 routes |
 
 `pnpm ci:api-spec` prints the current counts (documented, matched, missing, undocumented) on every run, so
-the coverage row above can be checked instead of trusted. At the time of writing it reports 4 files,
-63 documented endpoints, 63 matched and 0 problems, against 915 `/api` routes in the controllers.
+the coverage row above can be checked instead of trusted. Since 2026-11-16 it reports **29 files, 920
+documented endpoints, 920 matched, 0 problems, 0 undocumented** — strict coverage is complete.
 
 ## 5. Adding a group
 
@@ -122,7 +162,7 @@ the coverage row above can be checked instead of trusted. At the time of writing
 2. Read the controller (route + guards + `@Public()`), the DTO/Zod schema and the service's side effects —
    do not infer permissions from the SPA.
 3. Run `pnpm ci:api-spec`; a phantom path means the controller and the file disagree.
-4. Run `pnpm ci:api-spec` until the file is green. `--strict` is **registry-wide**, not per group: it fails
-   while *any* `/api` route is undocumented, so it is the completion gate for the whole directory, not a
-   check you can turn on for one finished group.
+4. Run `pnpm ci:api-spec` until the file is green. `--strict` is **registry-wide** and is now the gate:
+   coverage is complete, so it fails on any undocumented `/api` route anywhere in the tree — including
+   routes added by a later change. That is intentional: document the new route in the same change.
 5. Update the coverage table above and `docs/quality/ci-gates.md` if the gate contract changed.

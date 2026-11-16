@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.login.response.v1",
+  "title": "LoginResponse",
+  "description": "POST /api/v1/Authentication success body: LoginResult when no second factor is required, LoginChallengeResult when TOTP/2FA stands in the way.",
+  "anyOf": [
+    { "$ref": "#/$defs/LoginResult" },
+    { "$ref": "#/$defs/LoginChallengeResult" }
+  ],
+  "$defs": {
+    "LoginResult": {
+      "type": "object",
+      "required": ["accessToken", "refreshToken", "expiresIn", "userId", "portalId", "role", "type", "csrfToken"],
+      "properties": {
+        "accessToken": { "type": "string" },
+        "refreshToken": { "type": "string" },
+        "expiresIn": { "type": "integer", "minimum": 0 },
+        "userId": { "type": "string" },
+        "portalId": { "type": ["string", "null"] },
+        "role": { "type": "array", "items": { "type": "string" } },
+        "type": { "type": "string" },
+        "csrfToken": { "type": "string" }
+      }
+    },
+    "LoginChallengeResult": {
+      "type": "object",
+      "required": ["challengeId"],
+      "properties": {
+        "challengeId": { "type": "string" }
+      }
+    }
+  }
+}

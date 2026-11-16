@@ -451,20 +451,9 @@ export interface Principal extends ProfileInfo {
   teams: string[];
 }
 
-export interface LoginResult {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-  userId: string;
-  type: string;
-  role: string[];
-  csrfToken: string;
-}
-
-/** §4.9: the password matched, but a TOTP code still stands between it and the session. */
-export interface LoginChallengeResult {
-  challengeId: string;
-}
+// Phase 24.4: the sign-in contract types come from the generated api-spec client so the SPA and
+// integrators share one schema-backed definition (api-spec/schemas/authentication.*.v1.json).
+export type { LoginChallengeResult, LoginResult } from '@carocrm/api-client';
 
 /**
  * Phase 23.3 (PLAN §17.3): one configured OpenID Connect provider.

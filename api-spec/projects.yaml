@@ -1,0 +1,375 @@
+# PLAN §58 — the Projects domain commands (plans/PLAN_Phase_19_Projects.md §7.2).
+# Source: apps/api/src/projects/projects.controller.ts and the services it calls
+# (project-access, project-view, project-group, project-member, project-task,
+# project-clone, project-dependency, project-board).
+# All routes sit behind the global AuthGuard (no @Public). Generic Project/ProjectTask/
+# ProjectGroup CRUD, relations and attachments stay on /api/v1/:entity (entities.yaml);
+# these routes exist only where a request mutates more than one record or must be
+# interpreted. Authorization is two-layered: the global entity ACL must grant the
+# action, and inside a project either that global level stands alone ('all'/'yes') or
+# the caller's ProjectMember role must grant the named dimension — a role can never
+# open a project the user is not a member of (project-access.service.ts).
+# Format and required fields: api-spec/README.md §2.
+group: projects
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Project/:id/action/capabilities
+    auth: authenticated
+    permissions: "authenticated — the project must exist; no membership is required to ask, the answer reports what this caller may do"
+    request: none
+    response: "200 ProjectCapabilities { projectId, boardId, isMember, role, roleName, capabilities { readTasks, createTask, editTask, moveTask, deleteTask, manageGroups, manageMembers, editProject, projectStream }, features { dependenciesEnabled, collaboratorsEnabled, priorityEnabled, pointsEnabled, estimatedHoursEnabled, ganttEnabled } }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Project/:id/action/plan
+    auth: authenticated
+    permissions: "record ACL (Project read) for the project itself; task/group rows go through the generic entity list so record ACL and field masking apply"
+    request: none
+    response: "200 PlanProjection { project, stages[], groups[] { group, tasks[] }, truncated } — groups and tasks ordered by sortOrder"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: "internal paging only: up to 4 pages of 500 rows per entity; overflow is reported as truncated=true, not paged to the caller"
+    sorting: "fixed: sortOrder ascending (groups, stages, tasks)"
+    filtering: "fixed: projectId equals :id; board stages filtered by the project's boardId"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Project/:id/action/board
+    auth: authenticated
+    permissions: "record ACL (Project read) plus the entity record predicate on ProjectTask/ProjectGroup/ProjectBoardStage rows"
+    request: "query: groupId? — a ProjectGroup id; absent means the project's activeGroupId, or every task when the project has no groups"
+    response: "200 BoardProjection { project, group, columns[] { stage, tasks[] }, truncated } — one Kanban column per board stage"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: "internal paging only: up to 4 pages of 500 task rows; overflow is truncated=true"
+    sorting: "fixed: sortOrder ascending inside each column"
+    filtering: "fixed: projectId equals :id, optionally groupId equals the query value"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Project/:id/action/gantt
+    auth: authenticated
+    permissions: "record ACL (Project read) plus the entity record predicate on task/group/dependency rows"
+    request: "query: allGroupTypes? — 'true' includes Triage and Backlog groups; anything else keeps the default set"
+    response: "200 GanttProjection { project, groups[], tasks[], dependencies[] { id, taskId, predecessorTaskId, dependencyType }, truncated } — dated tasks and milestones plus dependency edges"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: "internal paging only: up to 4 pages of 500 task rows; overflow is truncated=true"
+    sorting: "fixed: sortOrder ascending"
+    filtering: "fixed: projectId equals :id; group-type filter unless allGroupTypes=true; only dated tasks and milestones are returned"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Project/:id/action/stages
+    auth: authenticated
+    permissions: "authenticated — the project must exist; stage rows are structural configuration read without a record predicate"
+    request: none
+    response: "200 { list: StageRow[] } — the stages of the project's board in board order (the Kanban column definition)"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: board order (sortOrder)"
+    filtering: "fixed: boardId of the project"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Project/:id/action/members
+    auth: authenticated
+    permissions: "record ACL (ProjectMember) through the generic entity list; the project must exist"
+    request: none
+    response: "200 { list: ProjectMemberView[] } — membership rows with resolved userName and roleName, at most 200"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: "bounded at 200 rows by the service; no paging parameters"
+    sorting: "entity-list default order"
+    filtering: "fixed: projectId equals :id"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Project/:id/action/members
+    auth: authenticated
+    permissions: "project-role memberManage on :id (or unrestricted Project:edit); the user and the ProjectRole must exist"
+    request: "MemberAddSchema { userId, projectRoleId }"
+    response: "200 ProjectMember record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectMember entity record via the generic create path, audit/stream side effects of that path; a duplicate membership answers 422]
+    idempotency: a repeat with the same body answers 422 (already a member)
+  - method: POST
+    path: /api/v1/Project/:id/action/memberUpdate
+    auth: authenticated
+    permissions: "project-role memberManage on :id; memberId must belong to :id; changing the last owner-capable member's role answers 422"
+    request: "MemberUpdateSchema { memberId, projectRoleId }"
+    response: "200 ProjectMember record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectMember entity record update; the new role applies to the member's next request]
+    idempotency: a repeat with the same body is a no-op for the role value
+  - method: POST
+    path: /api/v1/Project/:id/action/memberRemove
+    auth: authenticated
+    permissions: "project-role memberManage on :id; memberId must belong to :id; removing the last owner without a transfer answers 422"
+    request: "MemberRemoveSchema { memberId, transferToMemberId? } — when the member is the last owner-capable member, transferToMemberId must name the member who inherits the role"
+    response: "200 { memberId, clearedTasks } — clearedTasks counts the tasks whose assigneeUserId was cleared"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: ProjectMember removed, every ProjectTask of the project assigned to that user cleared to null, their ProjectTaskCollaborator rows removed, audit/stream side effects of each entity write; with transferToMemberId the target member inherits the owner-capable role first]
+    idempotency: a second call answers 422 (member no longer exists in the project)
+  - method: POST
+    path: /api/v1/Project/:id/action/memberBulk
+    auth: authenticated
+    permissions: "project-role memberManage checked per project; the route prepends :id to the submitted projectIds so the addressed project is always included; each project is authorized on its own and refusals are reported per project"
+    request: "MemberBulkSchema { projectIds (1-100), userIds (1-200), projectRoleId, operation (add|remove|role) }"
+    response: "200 { succeeded: projectId[], failed: { projectId, message }[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectMember creates/updates/removes plus the same cleanup as the single-member commands, per project; partially successful — succeeded and failed are both reported]
+    idempotency: add skips existing memberships; role and remove are naturally repeatable
+  - method: POST
+    path: /api/v1/Project/:id/action/groupCreate
+    auth: authenticated
+    permissions: "project-role groupManage on :id (or unrestricted Project:edit)"
+    request: "GroupCreateSchema { name, groupType? (default Work), color?, newTaskPlacement? (Top|Bottom, default Bottom), sortOrder? }"
+    response: "200 ProjectGroup record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectGroup entity record via the generic create path; sortOrder defaults to the next rank in the project]
+    idempotency: none; each call creates a new group
+  - method: POST
+    path: /api/v1/Project/:id/action/groupUpdate
+    auth: authenticated
+    permissions: "project-role groupManage on :id; groupId must belong to :id"
+    request: "GroupUpdateSchema (patch of GroupCreateSchema plus required groupId) — omitted keys unchanged; projectId cannot be moved"
+    response: "200 ProjectGroup record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectGroup entity record update]
+    idempotency: a repeat with the same body is a no-op for the field values
+  - method: POST
+    path: /api/v1/Project/:id/action/groupRemove
+    auth: authenticated
+    permissions: "project-role groupManage on :id; groupId must belong to :id"
+    request: "GroupDeleteSchema { groupId, moveToGroupId? } — a group that still holds tasks must name a destination group in the same project"
+    response: "200 { groupId, moved } — moved counts the tasks reassigned first"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: tasks moved to moveToGroupId when given, Project.activeGroupId cleared when it pointed at the group, ProjectGroup removed; a group with tasks and no destination answers 422 and nothing changes]
+    idempotency: a second call answers 422 (group does not exist in the project)
+  - method: POST
+    path: /api/v1/Project/:id/action/groupReorder
+    auth: authenticated
+    permissions: "project-role groupManage on :id"
+    request: "GroupReorderSchema { groupIds (1-500) } — every id must belong to :id; unlisted groups keep their place behind the submitted block"
+    response: "200 { count } — number of groups whose sortOrder was rewritten"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectGroup sortOrder updates in one transaction; unchanged ranks are skipped]
+    idempotency: a repeat with the same order is a no-op
+  - method: POST
+    path: /api/v1/Project/:id/action/taskReorder
+    auth: authenticated
+    permissions: "per-task project-role taskEditScope, enforced by the entity update guard on each ProjectTask; every id must sit in the addressed group or under the addressed parent of :id"
+    request: "TaskReorderSchema { groupId?, parentTaskId?, taskIds (1-500) } — exactly one of groupId/parentTaskId scopes the ordering"
+    response: "200 { count }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTask sortOrder updates in one transaction; tasks whose rank already matches are skipped]
+    idempotency: a repeat with the same order is a no-op
+  - method: POST
+    path: /api/v1/Project/:id/action/taskCreate
+    auth: authenticated
+    permissions: "project-role taskCreate on the project (entity ProjectTask); groupId, stageId and parentTaskId must resolve inside the project"
+    request: "TaskCreateSchema { projectId, groupId, name, stageId?, parentTaskId?, description?, taskType? (Task|Milestone, default Task), ownerUserId?, assigneeUserId?, dateStart?, dateEnd?, priority?, points?, estimateHours? } — note the body repeats projectId; the route address :id is the authority"
+    response: "200 ProjectTask record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTask entity record via the generic create path — the beforeValidate guard derives status from the stage, checks dates, group/board membership, assignee eligibility and feature switches; audit/stream side effects of that path]
+    idempotency: none; each call creates a new task
+  - method: POST
+    path: /api/v1/Project/:id/action/milestone
+    auth: authenticated
+    permissions: "project-role taskCreate on :id (delegates to taskCreate); groupId must belong to :id"
+    request: "MilestoneSchema { groupId, name, dateStart (single day — a milestone has no duration), description?, ownerUserId?, assigneeUserId? }"
+    response: "200 ProjectTask record with taskType Milestone"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTask entity record via the generic create path]
+    idempotency: none; each call creates a new milestone
+  - method: POST
+    path: /api/v1/Project/:id/action/settings
+    auth: authenticated
+    permissions: "project-role projectEdit on :id (or unrestricted Project:edit)"
+    request: "ProjectSettingsSchema (all optional) { dependenciesEnabled?, collaboratorsEnabled?, priorityEnabled?, pointsEnabled?, estimatedHoursEnabled?, ganttEnabled?, activeGroupId? (nullable) }"
+    response: "200 Project record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Project entity record update via the generic update path; the new feature flags gate later task/dependency/collaborator writes]
+    idempotency: a repeat with the same body is a no-op for the field values
+  - method: POST
+    path: /api/v1/Project/:id/action/clone
+    auth: authenticated
+    permissions: "Project:create and Project:edit in the global ACL, plus project-role projectEdit on the source project (unless the global edit level is unrestricted)"
+    request: "CloneProjectSchema { name?, dateStart?, copyMembers? (default true), copyTaskOwners? (default true), copyTaskAssignees? (default false), copyAttachments? (default false) }"
+    response: "200 CloneResult { projectId, name, counts { members, groups, tasks, dependencies, collaborators, attachments } }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: new Project plus copied ProjectMember/ProjectGroup/ProjectTask/ProjectTaskDependency/ProjectTaskCollaborator rows with all ids remapped and dates optionally shifted; outbox event project.cloned; when copyAttachments is true the attachment bytes are copied to new storage objects after commit and a failed copy deletes its row]
+    idempotency: none; each call creates a new project
+  - method: POST
+    path: /api/v1/ProjectTask/action/bulk
+    auth: authenticated
+    permissions: "per-record: complete/cancel run the transition path (taskEditScope + stageMoveScope guards); selfAssign runs the entity update guard (taskEditScope); each id is authorized on its own"
+    request: "TaskBulkSchema { ids (1-200), operation (complete|cancel|selfAssign) }"
+    response: "200 { succeeded: id[], failed: { id, message }[] } — partial success is reported, not thrown"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTask stage moves or assignee updates per id, each through the generic entity path with its guards; parent reopen and dependency/subtask rules apply per task]
+    idempotency: safe to repeat — a task already in the target state still goes through the transition guards; failures are reported per id
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/update
+    auth: authenticated
+    permissions: "record ACL (ProjectTask edit) plus the project-role taskEditScope dimension enforced by the beforeValidate guard"
+    request: "TaskUpdateSchema (patch of TaskCreateSchema minus projectId) — groupId, parentTaskId, stageId, name, dates, priority, points, estimateHours and friends; status cannot be written directly"
+    response: "200 ProjectTask record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTask entity record update; a stageId change re-derives status and runs the stage-move guards (dependencies, subtasks, stageMoveScope)]
+    idempotency: a repeat with the same body is a no-op for the field values
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/move
+    auth: authenticated
+    permissions: "record ACL (ProjectTask edit) plus project-role stageMoveScope for stage changes, evaluated with the task's owner/assignee/collaborator facts"
+    request: "TaskMoveSchema { stageId?, groupId?, beforeTaskId?, afterTaskId?, parentTaskId? (id|null), version? } — the drag-and-drop command; omitted fields stay"
+    response: "200 ProjectTask record (unchanged record echoed when nothing moved)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: ProjectTask update with a computed sortOrder rank; a reopened child may reopen its completed parent to the board's Started stage; stage changes run dependency and subtask guards]
+    idempotency: a repeat with the same body and version is a no-op or a 409 on a stale version
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/transition
+    auth: authenticated
+    permissions: "record ACL (ProjectTask edit) plus project-role stageMoveScope — the transition is expressed as a stage move to the board stage that maps to the target status"
+    request: "TaskTransitionSchema { kind (start|complete|cancel), version? }"
+    response: "200 ProjectTask record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTask stage move; completing is refused while subtasks are open or blocking dependencies exist; a board without the target status stage answers 422]
+    idempotency: repeating complete/cancel on an already-transitioned task is guarded by the same rules; a stale version answers 409
+  - method: GET
+    path: /api/v1/ProjectTask/:id/action/dependencies
+    auth: authenticated
+    permissions: "authenticated — dependency edges are read structurally; no project-role or record-ACL check is applied in this handler"
+    request: none
+    response: "200 { predecessors[], successors[] } — each edge { id, dependencyType, taskId|predecessorTaskId }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: "fixed: taskId equals :id in both directions"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/dependencies
+    auth: authenticated
+    permissions: "project-role taskEditScope on the task's project; the project's dependenciesEnabled feature must be on; the edge must not create a cycle (guard)"
+    request: "DependencyCreateSchema { predecessorTaskId, dependencyType? } — :id is the successor, predecessorTaskId the task it waits for; both tasks must be in the same project"
+    response: "200 ProjectTaskDependency record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTaskDependency entity record via the generic create path; the guard refuses self-links, cross-project edges, cycles and disabled projects]
+    idempotency: none; each call creates a new edge
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/dependencyUpdate
+    auth: authenticated
+    permissions: "project-role taskEditScope on the edge's project; dependenciesEnabled must be on; dependencyId must belong to :id"
+    request: "DependencyUpdateSchema { dependencyId, dependencyType } — nullable type"
+    response: "200 ProjectTaskDependency record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTaskDependency entity record update; the type change re-runs the dependency guards because a different type blocks a different transition]
+    idempotency: a repeat with the same body is a no-op for the type value
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/dependencyRemove
+    auth: authenticated
+    permissions: "project-role taskEditScope on the edge's project; dependenciesEnabled must be on; dependencyId must belong to :id — an unknown or foreign edge still answers success"
+    request: "DependencyRemoveSchema { dependencyId }"
+    response: "200 { removed: boolean } — false when no matching edge exists"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTaskDependency entity record removal when found]
+    idempotency: safe to repeat — a second call answers { removed: false }
+  - method: GET
+    path: /api/v1/ProjectTask/:id/action/collaborators
+    auth: authenticated
+    permissions: "authenticated — collaborator rows are read structurally; no project-role or record-ACL check is applied in this handler"
+    request: none
+    response: "200 { list: { id, userId }[] }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: "fixed: taskId equals :id"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/collaboratorAdd
+    auth: authenticated
+    permissions: "project-role taskEditScope on the task's project; the project's collaboratorsEnabled feature must be on; the user must be a project member (guard)"
+    request: "CollaboratorSchema { userId }"
+    response: "200 ProjectTaskCollaborator record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTaskCollaborator entity record via the generic create path; a duplicate answers 422]
+    idempotency: a repeat with the same userId answers 422 (already a collaborator)
+  - method: POST
+    path: /api/v1/ProjectTask/:id/action/collaboratorRemove
+    auth: authenticated
+    permissions: "authenticated plus the entity delete ACL on ProjectTaskCollaborator; the handler itself performs no project-role check"
+    request: "CollaboratorSchema { userId }"
+    response: "200 { removed: boolean } — false when the user was not a collaborator"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ProjectTaskCollaborator entity record removal(s) for the task+user pair]
+    idempotency: safe to repeat — a second call answers { removed: false }

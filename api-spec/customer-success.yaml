@@ -1,0 +1,665 @@
+# PLAN §58 — Phase 19 customer success module commands (/api/v1/CustomerSuccess).
+# Source: apps/api/src/customer-success/customer-success.controller.ts and the domain services it calls.
+# Entity CRUD for profiles, plans, goals, risks, playbook templates/runs and reviews stays on the
+# generic /api/v1/:entity API (see entities.yaml); these routes are the module commands that a single
+# record cannot express. Most routes enforce record-level ACL on the Customer Success entity named in
+# `permissions`; the eight `-batch`/scan routes are @Public and authorised by the x-worker-secret
+# capability instead of a session. Shape failures are INVALID_QUERY (400); domain rule failures are
+# VALIDATION_FAILED (422). Format and required fields: api-spec/README.md §2.
+group: customer-success
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/health
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ModuleHealthView { module, ok, dependencies[], optionalIntegrations[], features[], settings{version,updatedAt,warnings}, checks[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/settings
+    auth: authenticated
+    permissions: authenticated — any signed-in principal may read the module settings document
+    request: none
+    response: "200 CustomerSuccessSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings[] }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/settings
+    auth: authenticated
+    permissions: administrator
+    request: "SettingsPatchSchema — a flat record of setting keys to values; merged over the stored document, unknown keys refused"
+    response: "200 CustomerSuccessSettingsView with the bumped version"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row 'customerSuccess' rewritten, in-process settings cache invalidated]
+    idempotency: a repeat with the same patch is a no-op merge but still bumps the version
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/dashlets
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { list: CustomerSuccessDashletDefinition[] } — 12 static definitions (key, label, description, kind, optional queue/entity)"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: "fixed catalog order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/ensureProfile
+    auth: authenticated
+    permissions: "record ACL (Account read) + entity create on CustomerSuccessProfile"
+    request: "ProfileCreateSchema { accountId, csmUserId?, csmTeamId?, segment?, lifecycleStage?, renewalDate?, customerSince? } (strict)"
+    response: "200 { id, created } — created=false when a live profile already exists for the account"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile row when absent, customerSuccess.profile.created event; accountOwner default policy may copy the account owner as CSM]
+    idempotency: safe to repeat — an existing profile is returned with created=false
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/profileSummary
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required)"
+    response: "200 profile summary { profileId, accountId, accountName, csmUserId, csmTeamId, lifecycleStage, segment, health{status,calculatedStatus,score,at,trend,overridden}, onboarding{status,targetDate,completedAt}, renewal{date,status,source}, plan, openRisks, nextReview }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/assignProfile
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit) + destination User/Team must exist"
+    request: "query: profileId; ProfileAssignSchema { csmUserId?, csmTeamId? } (strict; absent leaves the field, null clears it)"
+    response: "200 { profileId, csmUserId?, csmTeamId? } — the applied patch"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile row patched, customerSuccess.profile.assigned event, notification to the new CSM or the previous CSM on unassignment]
+    idempotency: a repeat with the same assignment is a no-op write but emits another notification
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/transitionLifecycle
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit)"
+    request: "query: profileId; LifecycleTransitionSchema { to (stage enum), reason?, version? } (strict)"
+    response: "200 { profileId, from, to, changed }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile lifecycle fields patched when the edge is allowed, customerSuccess.lifecycle.changed event; important stages require a reason per settings]
+    idempotency: a same-stage transition answers changed=false
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/transitionLifecycleBulk
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit) checked per id before the batch runs"
+    request: "LifecycleBulkSchema { ids[1..200], to, reason? } (strict)"
+    response: "200 { results: [{ id, ok, from?, to?, error? }] } — per-record outcomes, one failure does not fail the rest"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile lifecycle fields and events for each successful id]
+    idempotency: per-record; a repeat re-applies allowed transitions and reports changed states again
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/transitionPreview
+    auth: authenticated
+    permissions: authenticated — reads profiles structurally; no per-record ACL is applied to the preview
+    request: "LifecyclePreviewSchema { ids[1..200], to } (strict)"
+    response: "200 { movable: [profileId], blocked: [{ id, reason }] }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/portfolioQueues
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile) — the entity list applies the caller's record predicate before narrowing"
+    request: "query: queue? (myPortfolio|unassigned|atRiskHealth|criticalHealth|onboardingNow|onboardingOverdue|upcomingRenewals|missingPlan|missingNextReview), limit?, offset?"
+    response: "200 { queue, list: PortfolioRow[], count, truncated } — rows ordered by healthScore ascending"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: "limit (default 50, max 200) and offset (default 0, max 100000); the scan itself is bounded at 500 profiles"
+    sorting: "fixed: healthScore ascending"
+    filtering: "queue name selects the predicate; in-memory narrowing over the ACL-scoped page"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/portfolioSummary
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile) — aggregates only over the caller's visible profiles"
+    request: none
+    response: "200 { total, scanned, truncated, byHealth, byLifecycle, bySegment, unassigned, onboardingInProgress, onboardingOverdue, openRiskTotal, renewalsByWindow }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: "none; the scan is bounded at 500 profiles and truncated is reported"
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/recalculateHealth
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit)"
+    request: "RecalculateSchema { profileId, force? (default false), triggerReason? } (strict)"
+    response: "200 HealthView { profileId, accountId, score, status, effectiveStatus, override{status,reason,expiresAt,active}, coverage, configurationVersion, calculatedAt, components[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [health snapshot row when the signature changed or force=true, CustomerSuccessProfile health fields patched, customerSuccess.health.calculated and possibly .statusChanged events, notification to the CSM on a drop into atRisk/critical]
+    idempotency: a repeat with unchanged inputs writes no snapshot but still refreshes the profile row
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/bulkRecalculateHealth
+    auth: authenticated
+    permissions: administrator
+    request: "BulkRecalculateSchema { limit? (1..1000, default 200) } (strict)"
+    response: "200 { job } — the enqueued customerSuccess.recalculateHealthBatch job row"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [jobs row; the worker later runs the bounded batch recalculation]
+    idempotency: none; each call enqueues another job
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/healthHistory
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required), limit? (1..500, default 50)"
+    response: "200 { list: health snapshot rows, newest first }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: "limit only (default 50, max 500); no offset"
+    sorting: "fixed: calculatedAt descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/healthExplanation
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required)"
+    response: "200 HealthView including per-signal components explaining the current score"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/setHealthOverride
+    auth: authenticated
+    permissions: "administrator, or the profile's CSM/assigned user (elevated record check)"
+    request: "OverrideSchema { profileId, status (health status except unknown), reason (required), expiresAt? } (strict)"
+    response: "200 { profileId, override, calculatedStatus }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile healthOverride fields patched in a transaction]
+    idempotency: a repeat replaces the override; expiresAt bounds its life
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/clearHealthOverride
+    auth: authenticated
+    permissions: "administrator, or the profile's CSM/assigned user (elevated record check)"
+    request: "ClearOverrideSchema { profileId, reason? } (strict)"
+    response: "200 { profileId, cleared: true, calculatedStatus }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile healthOverride cleared in a transaction]
+    idempotency: a repeat is a no-op clear
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/createPlan
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit) — naming accountId resolves to the profile first, so an Account can never skip the check"
+    request: "PlanCreateSchema { profileId?, accountId?, name, planType?, ownerUserId?, startDate?, endDate?, nextReviewDate?, outcomes?, baselineSummary?, executiveSponsorContactId?, projectId?, contactIds? } (strict; one of profileId/accountId required)"
+    response: "200 CustomerSuccessPlan record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessPlan row, customerSuccess.plan event]
+    idempotency: none; each call creates a plan
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/activatePlan
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlan edit)"
+    request: "PlanTransitionSchema { planId, status (draft|active|onHold|completed|canceled), allowSecondary?, closeOutSummary? } (strict)"
+    response: "200 { planId, status, primary? } for active; { planId, from, to } for other transitions"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessPlan status patched; activating demotes any existing primary unless allowSecondary, customerSuccess.plan event]
+    idempotency: re-activating an active plan answers changed=false style { status:'active' }
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/completePlan
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlan edit)"
+    request: "PlanTransitionSchema { planId, status?, allowSecondary?, closeOutSummary? } — only planId and closeOutSummary are used"
+    response: "200 { planId, status: 'completed' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessPlan status=completed with closeOutSummary, customerSuccess.plan event]
+    idempotency: completing an already-completed plan is refused by the transition rules
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/duplicatePlan
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlan read)"
+    request: "PlanDuplicateSchema { planId } (strict)"
+    response: "200 { planId: <new id>, copiedFrom: <source id> }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new CustomerSuccessPlan row copying the source]
+    idempotency: none; each call creates another copy
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/planSummary
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required)"
+    response: "200 { profileId, activePlan{id,name,status,progress,endDate,nextReviewDate}|null, goals[{id,name,status,progress}], historyCount }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/createGoal
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlan edit) + destination User check when ownerUserId is set"
+    request: "GoalCreateSchema { planId, name, description?, category?, direction, baselineValue?, baselineDate?, targetValue?, targetDate?, currentValue?, currentDate?, unit?, ownerUserId?, contactId?, tolerance?, manualProgress? } (strict)"
+    response: "200 CustomerSuccessGoal record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessGoal row, parent plan progress recomputed, customerSuccess.goal event]
+    idempotency: none; each call creates a goal
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/updateGoalProgress
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessGoal edit)"
+    request: "GoalProgressSchema { goalId, currentValue?, manualProgress? (0..100), note? } (strict)"
+    response: "200 { goalId, progress, status }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessGoal progress fields patched, parent plan progress recomputed]
+    idempotency: a repeat with the same values is a no-op write
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/createRisk
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit) — accountId resolves to a profile first; destination User/Team checks apply"
+    request: "RiskCreateSchema { profileId?, accountId?, planId?, title, description?, riskType?, severity, ownerUserId?, escalationTeamId?, detectedDate?, nextReviewDate?, targetResolutionDate?, evidenceSummary?, mitigationPlan?, nextAction?, contributesToHealth?, contactId?, opportunityId?, subscriptionId?, probability?, impact? } (strict)"
+    response: "200 CustomerSuccessRisk record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessRisk row, customerSuccess.risk event, notification to owner/escalation team]
+    idempotency: none; each call creates a risk
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/transitionRisk
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessRisk edit)"
+    request: "RiskTransitionSchema { riskId, status (open|mitigating|escalated|resolved|accepted|closed) } (strict)"
+    response: "200 { riskId, from, to, changed }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessRisk status patched when the transition edge is allowed]
+    idempotency: a same-status transition answers changed=false
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/escalateRisk
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessRisk edit)"
+    request: "RiskEscalateSchema { riskId, escalationTeamId?, reason? } (strict)"
+    response: "200 { riskId, status: 'escalated' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessRisk status=escalated with team/reason, notification to the escalation team]
+    idempotency: escalating an already-escalated risk is refused by the transition rules
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/resolveRisk
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessRisk edit)"
+    request: "RiskResolveSchema { riskId, outcome (required) } (strict)"
+    response: "200 { riskId, status: 'resolved' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessRisk status=resolved with outcome, notification]
+    idempotency: resolving an already-resolved risk is refused by the transition rules
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/reopenRisk
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessRisk edit)"
+    request: "RiskReopenSchema { riskId, reason? } (strict)"
+    response: "200 { riskId, status: 'open' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessRisk status=open with reason, notification]
+    idempotency: reopening a non-resolved/closed risk is refused by the transition rules
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/createPlaybookTemplate
+    auth: authenticated
+    permissions: administrator
+    request: "PlaybookTemplateSchema { name, description?, playbookType?, triggerMode?, triggerConfig?, isActive?, steps[1..200]{key,name,stepType,order,required?,dueOffsetDays?,assigneePolicy?,dependsOn?,instructions?} } (strict)"
+    response: "200 CustomerSuccessPlaybookTemplate record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessPlaybookTemplate row with the next version for its name]
+    idempotency: none; each call creates a new template version
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/startPlaybook
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit) when profileId is given; accountId resolves to a profile inside the service"
+    request: "PlaybookStartSchema { profileId?, accountId?, templateId, triggerKey?, triggerSource? } (strict)"
+    response: "200 { runId, created, steps } — created=false when triggerKey idempotency finds an existing run"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessPlaybookRun row plus one CustomerSuccessPlaybookStepRun per step, customerSuccess.playbook.started event; refused with VALIDATION_FAILED when the playbooks feature is disabled]
+    idempotency: triggerKey dedup returns the existing run when settings.playbooks.enforceIdempotency is on
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/playbookRun
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlaybookRun read)"
+    request: "query: runId (required)"
+    response: "200 { id, profileId, accountId, templateId, status, onboarding, startedAt, completedAt, stepCount, completedStepCount, steps[] }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: "steps ordered by stepOrder"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/completePlaybookStep
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlaybookStepRun edit)"
+    request: "PlaybookStepCompleteSchema { stepRunId, note? } (strict)"
+    response: "200 { stepRunId, status: 'completed', produced? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [step run completed, run counters recomputed, allow-listed producer may create a Task/CustomerSuccessRisk/CustomerSuccessPlan once, notification on producer failure]
+    idempotency: completing an already-completed step answers changed=false
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/skipPlaybookStep
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlaybookStepRun edit); administrator additionally required to skip a required step"
+    request: "PlaybookStepSkipSchema { stepRunId, reason (required), overrideRequired? } (strict)"
+    response: "200 { stepRunId, status: 'skipped' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [step run skipped with reason]
+    idempotency: a repeat on a skipped step is refused by the status rules
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/waitPlaybookStep
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlaybookStepRun edit)"
+    request: "PlaybookStepWaitSchema { stepRunId, until (YYYY-MM-DD) } (strict)"
+    response: "200 { stepRunId, status: 'inProgress', waitUntil }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [step run parked until the date; the worker scan resumes it later]
+    idempotency: setting the same waitUntil again is a no-op write
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/cancelPlaybookRun
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlaybookRun edit)"
+    request: "PlaybookCancelSchema { runId, reason (required) } (strict)"
+    response: "200 { runId, status: 'canceled' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [run and its open steps canceled with reason, customerSuccess.playbook event]
+    idempotency: canceling a finished run answers its current status with changed=false
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/retryFailedSteps
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessPlaybookRun edit)"
+    request: "PlaybookRetrySchema { runId } (strict)"
+    response: "200 { retried }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [failed step runs reset to pending, run status back to running]
+    idempotency: a repeat with no failed steps retries 0
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/startOnboarding
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit)"
+    request: "OnboardingStartSchema { profileId, templateId? } (strict)"
+    response: "200 { profileId, runId, created, steps? } — runId may be null with manual:true when no template resolves"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [playbook run for onboarding plus step runs, or profile marked manual-onboarding, onboardingStatus set inProgress]
+    idempotency: an in-progress onboarding run is reused (created=false)
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/completeOnboarding
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit); administrator additionally required when override=true"
+    request: "OnboardingCompleteSchema { profileId, override? } (strict)"
+    response: "200 { profileId, status: 'completed' }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [profile onboardingStatus=completed with completedAt; mandatory incomplete steps refuse with VALIDATION_FAILED unless override]
+    idempotency: completing twice is refused/returns the completed state per service rules
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/renewalSummary
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required)"
+    response: "200 RenewalSummary { profileId, accountId, renewalDate, daysToRenewal, windowDays, overdue, status, source, syncedAt, commercialSource{available,subscriptionId,subscriptionStatus,renewalDate}, healthTrend, openRisks, activePlanProgress, nextAction, csmUserId }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/setRenewal
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit)"
+    request: "RenewalSetSchema { profileId, renewalDate? (YYYY-MM-DD or null to clear), status? (renewal status enum) } (strict)"
+    response: "200 { profileId, renewalSource: 'manual', renewalDate?, renewalStatus? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile renewal fields patched with renewalSource=manual]
+    idempotency: a repeat with the same values is a no-op write
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/syncRenewal
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit)"
+    request: "RenewalSyncSchema { profileId, force? } (strict)"
+    response: "200 { profileId, synced, renewalDate?, reason?, manualDate?, error? } — reason explains noAccount/noSource/manualPreferred/sourceError"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CustomerSuccessProfile renewalDate/renewalSource=subscription/renewalSyncedAt when a commercial source supplies a date; a source failure never clears a value]
+    idempotency: safe to repeat; a manual-preferred date is kept unless force=true
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/recentTouchpoints
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required)"
+    response: "200 { list: recent customer-linked activities, lastMeaningfulTouchAt }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: "list bounded at 25 activities server-side"
+    sorting: "service-defined (newest activity first)"
+    filtering: "only Task/Call/Meeting/Email linked to the account or its contacts"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/scheduleReview
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile edit)"
+    request: "ReviewScheduleSchema { profileId, name, activityType? (Call|Meeting|Task|Email), dateStart, duration? (15..480), ownerUserId?, objectives?, outcomes?, openRisks?, goalProgressNote?, sentiment?, actionItems?, nextReviewDate?, contactIds? } (strict)"
+    response: "200 { reviewId, activityId, activityType, profileId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [activity row (Meeting/Call/Task/Email) linked to the account, CustomerSuccessReview row, profile nextSuccessReviewAt/lastHealthReviewAt patched, customerSuccess.review.scheduled event]
+    idempotency: none; each call schedules another review and activity
+  - method: GET
+    path: /api/v1/CustomerSuccess/action/reviews
+    auth: authenticated
+    permissions: "record ACL (CustomerSuccessProfile read)"
+    request: "query: profileId (required), limit? (default 20)"
+    response: "200 { list: CustomerSuccessReview rows, newest first }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND]
+    pagination: "limit only (default 20); no offset"
+    sorting: "fixed: review date descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # ---------------------------------------------------------------------------
+  # Worker-authorized operations (§11.1): @Public, authorised by the shared worker→API
+  # capability in the x-worker-secret header (constant-time compare, refused when unset).
+  # Each runs as the documented system principal (sysAdmin role) and is a bounded,
+  # re-runnable scan.
+  # ---------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/recalculate-batch
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "BulkRecalculateSchema { limit? (1..1000, default 200) } (strict)"
+    response: "200 RecalculateBatchScan { processed, skipped, errors, ids[], durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [health snapshots and profile health fields for up to limit profiles, recalculation events]
+    idempotency: bounded re-runnable scan; unchanged signatures write no snapshot
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/expire-overrides
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ExpireOverridesSchema { today? (YYYY-MM-DD), limit? (1..1000, default 200) } (strict)"
+    response: "200 ExpireOverrideScan { processed, skipped, expired, errors, durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [expired health overrides cleared on up to limit profiles]
+    idempotency: bounded re-runnable scan; an already-expired override counts as skipped
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/update-goal-overdue-state
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ScanSchema { today? (YYYY-MM-DD), limit? (1..1000, default 500) } (strict)"
+    response: "200 GoalOverdueScan { processed, updated, cleared, skipped, errors, notified, durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [goal overdue flags updated/cleared, notifications to overdue recipients]
+    idempotency: bounded re-runnable scan
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/evaluate-renewal-windows
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ScanSchema { today? (YYYY-MM-DD), limit? (1..1000, default 500) } (strict)"
+    response: "200 RenewalWindowScan { processed, skipped, entered, errors, durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [profiles newly entering a renewal window recorded/notified per settings]
+    idempotency: bounded re-runnable scan; already-entered windows are skipped
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/evaluate-risk-escalations
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ScanSchema { today? (YYYY-MM-DD), limit? (1..1000, default 500) } (strict)"
+    response: "200 RiskEscalationScan { processed, candidates, notified, skipped, errors, durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [risk escalation evaluations, notifications to escalation teams]
+    idempotency: bounded re-runnable scan
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/evaluate-review-reminders
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ScanSchema { today? (YYYY-MM-DD), limit? (1..1000, default 500) } (strict)"
+    response: "200 ReviewReminderScan { processed, skipped, notified, errors, due[{profileId,reviewDate}], durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [review reminders notified to the responsible users]
+    idempotency: bounded re-runnable scan; notification dedup keys suppress repeats
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/process-playbook-wait-steps
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ScanSchema { today? (YYYY-MM-DD), limit? (1..1000, default 500) } (strict)"
+    response: "200 PlaybookWaitScan { processed, skipped, resumed, errors, durationMs }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [waitUntil step runs whose date arrived resumed; producers may create Task/Risk/Plan records]
+    idempotency: bounded re-runnable scan; resumed steps leave the pending-wait set
+  - method: POST
+    path: /api/v1/CustomerSuccess/action/repair-stale-playbook-runs
+    auth: public
+    permissions: "worker capability (x-worker-secret header)"
+    request: "ScanSchema { limit? (1..1000, default 500) } — today is accepted but unused (strict)"
+    response: "200 StaleRunRepair { processed, skipped, repaired, errors, durationMs } — runs untouched for 30+ days"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provably-safe stale playbook runs repaired; live runs needing a human are skipped, never force-advanced]
+    idempotency: bounded re-runnable scan

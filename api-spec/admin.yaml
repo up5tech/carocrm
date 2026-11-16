@@ -1,0 +1,271 @@
+# PLAN §58 — administration surface: the admin panel descriptor, the settings document API, the
+# legacy flat Settings routes, navigation, internal diagnostics and danger-zone actions, storage
+# usage, per-user preferences and the documentation reader.
+# Source: apps/api/src/admin-panel/*.controller.ts, settings/settings.controller.ts,
+# preferences/preferences.controller.ts, docs/docs.controller.ts and their services.
+# Format and required fields: api-spec/README.md §2.
+#
+# Permission notes verified in the services, not the SPA:
+#  - `admin` and `sysAdmin` document levels resolve to the same administrative predicate
+#    (SettingsRegistryService.mayRead), so "administrator" covers both.
+#  - `GET /Navigation` is open to every signed-in user; every entry is filtered by record ACL and
+#    `?previewAs=<userId>` is administrator-only inside NavigationService.resolveFor.
+#  - `GET /AdminPanel` returns only the tabs the caller may open; it is not administrator-only.
+#  - `POST /Settings` is the legacy flat write: administrator-only on the server.
+#  - The `docs` document has readLevel `user`, so `GET /Settings/documents/docs` answers any
+#    signed-in caller while every other document requires at least `admin` to read.
+group: admin
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/AdminPanel
+    auth: authenticated
+    permissions: authenticated — tabs are filtered server-side by each tab's settings level; a non-administrator sees only the tabs they may open
+    request: none
+    response: "200 { groups: AdminPanelGroup[], defaultTab } — groups of tab descriptors { key, labelKey, descriptionKey?, icon, order, level, kind, route, document?, docKey?, keywords?, moduleEndpoint?, usesSaveBar? }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: "fixed: group order, then tab order, ties by key"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdminPanel/action/acl-explain
+    auth: authenticated
+    permissions: administrator
+    request: "AclExplainSchema { userId, entity, action: create|read|edit|delete|stream }"
+    response: "200 AclExplanation { userId, userName, entity, action, level, administrator, roles: [{ id, name, level }] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Navigation
+    auth: authenticated
+    permissions: "authenticated — every entity/page entry is filtered by the caller's record ACL; query previewAs=<userId> resolves another internal user's menu and requires administrator"
+    request: "query: previewAs? (user id; administrator only)"
+    response: "200 NavigationTree { version, items: NavigationNode[], warnings } — nodes { key, kind, route, label, icon?, accent?, order, inQuickSearch, children? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: order then key at every level"
+    filtering: none
+    sideEffects: none
+    idempotency: "safe to repeat; resolved trees are cached per principal for 30 s and dropped on a navigation or docs settings write"
+  - method: GET
+    path: /api/v1/AdminInternal
+    auth: authenticated
+    permissions: administrator (sysAdmin level — the instance's single administrative tier)
+    request: none
+    response: "200 InternalInfoView { metadataVersion, entityCount, overrideCount, jobQueue { name, counts }, extensions, nodeVersion, uptimeSeconds }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdminInternal/action/operations
+    auth: authenticated
+    permissions: administrator (sysAdmin level)
+    request: none
+    response: "200 OperationsSnapshotView { generatedAt, outbox, jobs, deadLetters, webhooks, integrations, ai, security } — status-count maps derived from outbox_events, jobs, integration_* , ai_agent_* and auth_login_attempts; labels and counts only, no record content"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdminInternal/action/metadata-reset
+    auth: authenticated
+    permissions: administrator (sysAdmin level)
+    request: "body: { confirm } — must equal the exact string 'RESET METADATA'"
+    response: "200 { cleared } — number of administrator-written entity overrides removed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings 'entity' row deleted, metadata store cache invalidated, schema_changes audit row 'admin.internal.metadataReset']
+    idempotency: "a repeat clears 0 rows and audits again; record data is never touched"
+  - method: POST
+    path: /api/v1/AdminInternal/action/queue-purge
+    auth: authenticated
+    permissions: administrator (sysAdmin level)
+    request: "body: { confirm } — must equal the exact string 'PURGE QUEUE'"
+    response: "200 { drained } — number of waiting jobs removed; null never returned, an unreachable queue answers 422 instead"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [waiting jobs purged from the BullMQ queue, schema_changes audit row 'admin.internal.queuePurge' with the pre-purge counts]
+    idempotency: "a repeat drains whatever new jobs arrived in between; active and completed jobs are untouched"
+  - method: GET
+    path: /api/v1/Settings/documents
+    auth: authenticated
+    permissions: "authenticated — the catalog is filtered per document readLevel (public/user/admin/sysAdmin); 'docs' is readable by any signed-in user, 'brand'/'i18n' are public-level"
+    request: none
+    response: "200 { documents: RegisteredDocument[] } — { name, row, group, labelKey, descriptionKey?, readLevel, writeLevel } in registration order"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: "fixed: registration order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Settings/documents/:name
+    auth: authenticated
+    permissions: "per document readLevel — public/user/admin/sysAdmin resolve to authenticated / signed-in / administrator"
+    request: none
+    response: "200 SettingsDocumentView { name, group, labelKey, descriptionKey?, readLevel, writeLevel, value, version, updatedAt, updatedBy, warnings }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Settings/documents/:name
+    auth: authenticated
+    permissions: "per document writeLevel — admin or sysAdmin, both resolving to the same administrative predicate"
+    request: "body: { value: object, version?: int } — strict envelope; value is merged key-by-key over the stored document (objects merge, arrays/scalars replace)"
+    response: "200 SettingsDocumentView — version incremented"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row upserted, schema_changes audit row 'settings.document.update' with changed key names only, settings.document.updated event, in-process change listeners]
+    idempotency: "optimistic concurrency: a stale version answers 409 CONCURRENCY_CONFLICT; a replayed payload cannot apply twice"
+  - method: POST
+    path: /api/v1/Settings/documents/:name/reset
+    auth: authenticated
+    permissions: "per document writeLevel — admin or sysAdmin"
+    request: none
+    response: "200 SettingsDocumentView — the registered defaults restored"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row replaced by the registered defaults, schema_changes audit row, settings.document.updated event]
+    idempotency: "a repeat writes the same defaults again and bumps the version"
+  - method: GET
+    path: /api/v1/Settings
+    auth: public
+    permissions: none
+    request: none
+    response: "200 SettingsView { pageTitle, footerText, logoAttachmentId, primaryColor, logoUrl, availableLocales, defaultLocale, enabledLocales, defaultTimezone } — the sign-in page needs it before a principal exists"
+    errors: []
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Settings/logo
+    auth: public
+    permissions: none
+    request: none
+    response: "200 image/* stream with content-disposition inline and cache-control public max-age=60; 404 when no logo is configured"
+    errors: [RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Settings
+    auth: authenticated
+    permissions: administrator
+    request: "SettingsPatchSchema { pageTitle?, footerText?, logoAttachmentId?, primaryColor? (named accent, not hex), defaultLocale?, enabledLocales?, defaultTimezone? } — flat keys delegated to the 'brand' and 'i18n' documents; omitted keys are unchanged, explicit null clears"
+    response: "200 SettingsView — same shape as GET /Settings"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings 'brand' and/or 'i18n' rows written through the document registry, schema_changes audit row, settings.document.updated event]
+    idempotency: "a repeat with the same body writes the same values; brand/i18n are flat documents so no version check applies on this legacy route"
+  - method: GET
+    path: /api/v1/StorageUsage
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 StorageUsageView { attachments, bytes, largest: { name, bytes } | null } — metadata counts only; no file is opened and no storage provider is contacted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Preferences
+    auth: authenticated
+    permissions: authenticated — the caller's own user_preferences rows only; the routes carry no user id so no path can reach another account's rows
+    request: none
+    response: "200 { items: PreferenceView[] } — { name, value, updatedAt }; only names that have a row are listed"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Preferences/:name
+    auth: authenticated
+    permissions: authenticated — caller's own row only
+    request: none
+    response: "200 PreferenceView { name, value, updatedAt } — a name with no stored row answers { name, value: null, updatedAt: epoch }"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PUT
+    path: /api/v1/Preferences/:name
+    auth: authenticated
+    permissions: authenticated — caller's own row only
+    request: "body: { value } — the value is validated against the registered schema for that preference name (density, theme, listPageSize, defaultDashboard, columns, columnWidths, favorites, lastVisited, dismissedSetupSteps, setupChecklistDismissed)"
+    response: "200 PreferenceView — the stored value and its modified_at"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [user_preferences row upserted on (user_id, name)]
+    idempotency: "a repeat with the same value is an upsert of identical data"
+  - method: GET
+    path: /api/v1/Docs/tree
+    auth: authenticated
+    permissions: "authenticated — portal principals are refused; pages are filtered per page by audience and by the caller's record ACL on the page's requires permission; administrators additionally receive diagnostics"
+    request: "query: locale? (must be an enabled locale, else the caller's/instance default)"
+    response: "200 DocsTree { enabled, externalUrl, locale, fallbackLocale, hash, sections, diagnostics? } — ETag W/\"hash-locale\"; a matching If-None-Match answers 304"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: "safe to repeat; content index is rebuilt only when the file signature changes"
+  - method: GET
+    path: /api/v1/Docs/page/:section/:slug
+    auth: authenticated
+    permissions: "authenticated — portal principals are refused; the page's requires permission is checked against the caller's record ACL"
+    request: "query: locale? ; path params are looked up in the built index, never resolved against the filesystem"
+    response: "200 { page } — the parsed block tree; 301 with Location when the key is a declared redirect; 304 on a matching If-None-Match"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Docs/search
+    auth: authenticated
+    permissions: "authenticated — portal principals are refused; hits are filtered by the same per-page ACL as the tree"
+    request: "query: q (min 2 chars, truncated at 120), locale?, limit? (default 20, max 50)"
+    response: "200 DocsSearchResult { query, locale, total, hits } — ranked hits with highlighted snippet ranges, scoped to this caller; never cached"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED]
+    pagination: "limit query param only (default 20, max 50); total is the number of visible hits returned"
+    sorting: "ranked by the docs search engine"
+    filtering: "q full-text over the caller-visible corpus"
+    sideEffects: none
+    idempotency: safe to repeat

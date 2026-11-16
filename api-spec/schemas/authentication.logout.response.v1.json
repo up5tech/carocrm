@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.logout.response.v1",
+  "title": "LogoutResponse",
+  "description": "POST /api/v1/Logout success body.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": { "type": "boolean" }
+  }
+}

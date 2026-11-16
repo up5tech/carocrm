@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.login.request.v1",
+  "title": "LoginRequest",
+  "description": "POST /api/v1/Authentication body. Mirrors LoginSchema in apps/api/src/auth/auth.controller.ts; unknown keys are stripped by the server, so additionalProperties stays permissive.",
+  "type": "object",
+  "required": ["userName", "password"],
+  "properties": {
+    "userName": { "type": "string", "minLength": 1 },
+    "password": { "type": "string", "minLength": 1 },
+    "rememberMe": { "type": "boolean" }
+  }
+}

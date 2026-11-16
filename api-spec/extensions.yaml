@@ -1,0 +1,109 @@
+# PLAN §58 — extensions administration plus the domain-event outbox read side.
+# Source: apps/api/src/extensions/extension.controller.ts, extension.service.ts, extension-trust.ts;
+#         apps/api/src/events/domain-event.controller.ts
+# Every /Extension route except GET /Extension/frontend calls requireAdmin() in the controller;
+# install additionally scans packages under the EXTENSION_TRUST_MODE policy, so an unsigned or
+# altered package is absent from the installable list rather than refused with a nicer error.
+# GET /api/v1/DomainEvent is the platform event-bus read side (ApiTags 'platform'); it lives here
+# because it is an administrative observability surface like the rest of this file, not a process
+# definition concern — move it if a dedicated events group is ever added.
+# Format and required fields: api-spec/README.md §2.
+group: extensions
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Extension
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: ExtensionView[], total } — every package found in EXTENSIONS_DIR that passes the trust scan, with installed/enabled/running flags, dependencies, permissions and contributes summary; running packages sort first in load order"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the answer is bounded by the packages on disk"
+    sorting: "running packages first in extension load order, then by id"
+    filtering: "implicit: packages failing the EXTENSION_TRUST_MODE scan are omitted entirely"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Extension/frontend
+    auth: authenticated
+    permissions: authenticated — any principal; adminOnly nav entries are filtered out server-side
+    request: none
+    response: "200 { nav: FrontendNavContribution[] } — extension-declared navigation items with extension id and extensionOrder"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: "manifest order per extension, packages in load order"
+    filtering: "adminOnly entries are dropped unless the principal is an admin"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Extension/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ExtensionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Extension/action/install
+    auth: authenticated
+    permissions: administrator
+    request: "{ id } — lowercase kebab-case extension id of a package present in EXTENSIONS_DIR"
+    response: "200 { id, version, installed: true, migrations: { applied[], skipped[] }, restartRequired: true } — providers, controllers and metadata take effect only after an API/worker restart"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [extension SQL migrations applied to the database, installed_extensions row, audit_log row; package code is not loaded until restart]
+    idempotency: "installing an already-installed id answers 422; migrations are applied per-file so a retry after a failure is safe"
+  - method: POST
+    path: /api/v1/Extension/:id/action/uninstall
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, uninstalled: true, restartRequired: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [installed_extensions row deleted — applied SQL migrations are intentionally left in place, audit_log row; restart required for the package to unload]
+    idempotency: "uninstalling a dependent-blocked id answers 422 listing dependents; a second uninstall answers 404"
+  - method: POST
+    path: /api/v1/Extension/:id/action/enable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ExtensionView — enabled true"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [installed_extensions.enabled set, audit_log row; takes effect on next boot]
+    idempotency: a repeat is a no-op
+  - method: POST
+    path: /api/v1/Extension/:id/action/disable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ExtensionView — enabled false"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [installed_extensions.enabled cleared, audit_log row; takes effect on next boot]
+    idempotency: a repeat is a no-op
+  - method: GET
+    path: /api/v1/DomainEvent
+    auth: authenticated
+    permissions: administrator
+    request: "query: status? (pending|running|processed|failed), eventType?, offset?, limit?"
+    response: "200 { list: [{ id, eventType, payload, status, attempts, lastError, createdAt, availableAt, processedAt }], total, offset, count } — the outbox_events table, newest first"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "offset (default 0, max 100000) and limit (default 25, max 100)"
+    sorting: "fixed: created_at descending"
+    filtering: "status enum and exact eventType match; an unknown status answers 422"
+    sideEffects: none
+    idempotency: safe to repeat

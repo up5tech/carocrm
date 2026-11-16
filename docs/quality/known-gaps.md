@@ -11,7 +11,7 @@
 
 | ID | Title | Module | Severity | Status |
 |---|---|---|---|---|
-| G1 | Route-level OpenAPI exists; DTO schemas absent (security schemes added 23.5) | platform | Medium | Partial — D3 deviation recorded (24.2), owner sign-off pending |
+| G1 | Route-level OpenAPI exists; DTO schemas absent (security schemes added 23.5) | platform | Medium | Partial — D3 deviation recorded (24.2); registry complete + strict gate + bounded typed client delivered (24.4, 2026-11-16); owner sign-off pending |
 | G2 | Event payloads carry no `schemaVersion`, `correlationId` or `dedupeKey` | platform | Medium | Deferred (22.7) |
 | G3 | `LeadConversionService` has no direct service-level test | lead-score | Low | Open |
 | G4 | `advanced-integrations-contracts.test.ts` leaves two contacts behind | advanced-integrations | Low | Open |
@@ -190,6 +190,25 @@ agent. **G90** (the inventory is served without authentication) is a separate ow
 does not resolve. Closure evidence is a signed D3 sign-off plus `pnpm ci:api-spec --strict` green in
 24.4; until then this entry stays open. The matching register note is
 `docs/security/exception-register.md` §5.
+
+### G1 update (Phase 24.4, 2026-11-16 — registry complete, strict gate enabled)
+
+The registry half of the D3 disposition is now **done in code**: `api-spec/` holds 29 files documenting
+all **920 `/api` routes** (was 63 of 915 at 24.0), `pnpm ci:api-spec` runs the checker in `--strict`
+mode inside `pnpm ci:gate`, and `apps/api/test/api-spec-registry.test.ts` proves an undocumented probe
+route fails the gate. The schema-backed half is started: endpoints may now carry `operationId` +
+`requestSchema`/`responseSchema` references to versioned JSON Schema documents under
+`api-spec/schemas/`; the first bounded set (the five session operations — login, challenge, refresh,
+logout, `AppUser/me`) is covered, `scripts/generate-api-client.mjs` emits
+`packages/api-client/src/generated.ts` deterministically (`pnpm ci:api-client` fails on stale output
+inside `ci:gate`), the generator refuses missing/unresolvable schemas rather than falling back to
+`any`, and `apps/api/test/api-spec-client-contract.test.ts` proves the JSON Schemas and the controller
+Zod schemas agree on a fixture corpus. The SPA consumes the generated types for the session contract
+(`apps/web/src/api/types.ts` re-exports them).
+
+**G1 is still not closed**: D3 sign-off remains an owner act, `api-spec/*.yaml` prose fields are not yet
+JSON-Schema-backed for the other 915 routes (only the bounded client set is), and G90 is undecided.
+Status stays `Partial`.
 
 ## G2 — Event payloads carry no version, correlation or dedupe key
 

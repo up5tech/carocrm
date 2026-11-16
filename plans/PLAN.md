@@ -2912,7 +2912,9 @@ demonstrated security regression; and the final review records an honest go/no-g
 Status: **In progress** (started 2026-11-14). 24.0 baseline audit, 24.1 single-tenant charter,
 24.2 NO-GO blocker records and 24.3 production install/upgrade artifacts are delivered; 24.5
 (release truthfulness) is delivered; 24.6 (real inbound mail), **24.7 (installation-wide email and
-calendar sync)** and **24.8 (outbound events and developer surface)** are delivered; 24.4 (`api-spec/` to `--strict` + typed client) is in flight; 24.9–24.12
+calendar sync)** and **24.8 (outbound events and developer surface)** are delivered; 24.4 is in flight —
+the `api-spec/` registry is complete at `--strict` (920/920 routes, gate-enabled 2026-11-16) and the
+schema-backed typed client remains; 24.9–24.12
 have not started. The release decision remains
 **NO-GO for production** — see
 `docs/releases/2026-11-15-phase-24.md`. Scope, priority definitions, owner decisions and
@@ -2939,14 +2941,16 @@ recovered from documented artifacts; and the final review records an honest go/n
 
 # 58. API Endpoint Inventory Plan
 
-Status (2026-11-13): **started** — `api-spec/README.md` defines the format, `authentication.yaml` (20 routes incl.
-OIDC), `metadata.yaml` (4 routes), `users.yaml` (26 User/Role/Team/ApiUser/ApiKey routes, administrator-only except
-the assignee picker) and `entities.yaml` (13 generic `:entity` route shapes: CRUD, relations, restore, mass actions and
-row actions, each with its ACL level, record-scope rule and query grammar) are documented, and
-`scripts/check-api-spec.mjs` (`pnpm ci:api-spec`, part of `pnpm ci:gate`) statically proves every documented
-`method + path` exists in a controller and fails on a phantom or duplicate entry. Coverage: **63 of 915 `/api`
-routes**; `--strict` is the completion gate and is not enabled yet. The remaining groups are listed in
-`api-spec/README.md` §4.
+Status (2026-11-16): **registry complete, strict gate enabled** — `api-spec/` now holds 29 files
+documenting all **920 `/api` routes** (authentication/metadata/users/entities/email/admin/jobs/
+attachments/documents/stream/search/reports/workflows/processes/extensions/portal/service-desk/
+projects/lead-score/omnichannel/crm-chat/esignature/sales/marketing-automation/ai-agents/
+advanced-integrations/voice-communications/customer-success/platform). `pnpm ci:api-spec` runs
+`scripts/check-api-spec.mjs --strict` inside `pnpm ci:gate`: every documented `method + path` must
+exist in a controller, every `/api` route must be documented, and the DB-free regression
+`apps/api/test/api-spec-registry.test.ts` pins both directions. Remaining 24.4 work: the schema-backed
+typed client in `packages/api-client` (bounded operation set + one consumer), the G1/G90 records, and
+contract tests for the error envelope.
 
 Create a machine-readable endpoint registry:
 

@@ -1,0 +1,481 @@
+# PLAN §58 — service desk module routes. Source: apps/api/src/service-desk/service-desk.controller.ts
+# and the domain services it calls (case-lifecycle, case-assignment, case-conversation,
+# email-to-case, knowledge-base, case-merge, csat, sla, web-to-case, settings, metrics, health).
+#
+# Case/KnowledgeArticle/CaseQueue CRUD itself stays on the generic `/api/v1/:entity` API
+# (documented in `entities.yaml`); this file covers only the module's own `/api/v1/ServiceDesk`
+# command surface: diagnostics, settings, the case state machine, conversation, email-to-case,
+# SLA scans, knowledge lifecycle, assignment/routing, merge, CSAT and the public web-to-case intake.
+# Three routes are `@Public()`: web-to-case intake (abuse controls only), CSAT submit (token
+# state) and the worker twin of the scheduled SLA scan (x-worker-secret capability).
+group: service-desk
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/ServiceDesk/action/health
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ModuleHealthView { module, ok, dependencies, optionalIntegrations, features, settings, checks } — live diagnostics, never hard-coded"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/settings
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 ServiceDeskSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings } — readable by any authenticated user"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/settings
+    auth: authenticated
+    permissions: administrator
+    request: "body: SettingsPatchSchema — a partial settings object (features, numbering, defaults, resolution, assignment, sla, email); deep-merged then strictly validated"
+    response: "200 ServiceDeskSettingsView — the stored settings after the patch"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row "serviceDesk" upserted, version incremented, write-through cache invalidated]
+    idempotency: "idempotent for the same body; each accepted change bumps the settings version"
+  - method: GET
+    path: /api/v1/ServiceDesk/action/caseNumberPreview
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { format, prefix, padding } — the number the next allocation would produce, without consuming it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/metrics
+    auth: authenticated
+    permissions: "record ACL on the Case entity (read); CSAT block is restricted unless the caller has read-all"
+    request: "query: { from?, to? } — ISO dates bounding case creation; default is the last 30 days"
+    response: "200 ServiceDeskMetrics { range, total, active, unassigned, escalated, breached, resolved, reopened, reopenRate, byStatus, byPriority, bySource, csat, definitions } — every aggregate runs through the same record ACL as the list API"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/capabilities
+    auth: authenticated
+    permissions: "record ACL on the Case record (read; edit evaluated to list allowed commands)"
+    request: none
+    response: "200 { caseId, status, allowedCommands, resolution, assignment, conversation } — what the current actor may do on this case"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/transition
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema { command?, to?, reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? } — at least one of command/to; both must agree when given"
+    response: "200 CaseTransitionResult { caseId, from, to, command, changed, idempotent, transitionId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/timestamp patch, CaseTransition history row, serviceDesk.case.statusChanged/resolved/closed/reopened/escalated events]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/start
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema (command implied: start) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? }"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/timestamp patch, CaseTransition history row, serviceDesk.case.statusChanged event]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/resolve
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema (command implied: resolve) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? } — resolution code/summary enforced by settings"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/resolvedAt/resolvedById patch, CaseTransition history row, serviceDesk.case.statusChanged and serviceDesk.case.resolved events]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/close
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema (command implied: close) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? }"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/closedAt patch, CaseTransition history row, serviceDesk.case.statusChanged and serviceDesk.case.closed events]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/reopen
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit); reopening a closed/cancelled case needs broader edit permission and respects the reopen window"
+    request: "body: CaseTransitionSchema (command implied: reopen) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? }"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/reopenedAt patch keeping prior resolution stamps, CaseTransition history row, serviceDesk.case.statusChanged and serviceDesk.case.reopened events]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/cancel
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema (command implied: cancel) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? }"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status patch, CaseTransition history row, serviceDesk.case.statusChanged event]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/escalate
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema (command implied: escalate) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? }"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/isEscalated/escalationLevel patch, CaseTransition history row, serviceDesk.case.statusChanged and serviceDesk.case.escalated events]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/deEscalate
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit)"
+    request: "body: CaseTransitionSchema (command implied: deEscalate) { reason?, resolutionCode?, resolutionSummary?, idempotencyKey?, version? }"
+    response: "200 CaseTransitionResult"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record status/isEscalated patch, CaseTransition history row, serviceDesk.case.statusChanged event]
+    idempotency: "idempotencyKey returns the prior transition unchanged; version gives optimistic concurrency"
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/history
+    auth: authenticated
+    permissions: "record ACL on the Case record (read)"
+    request: none
+    response: "200 { list: CaseTransitionView[] } — status-transition history oldest first with actor link labels"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: occurredAt ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/reply
+    auth: authenticated
+    permissions: "record ACL on the Case record (read + stream); portal principals are denied — staff-only"
+    request: "body: CaseMessageSchema { text (max 20000, may be empty only with attachments), attachmentIds?, mentionIds?, idempotencyKey? }"
+    response: "200 CaseMessageResult { caseId, messageId, visibility: public, created }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [stream_items row (Post, visibility public), Case lastActivityAt/lastAgentResponseAt/firstResponseAt stamps, serviceDesk.case.replySent event, follower/assignee notifications, SLA first-response clock evaluation]
+    idempotency: "idempotencyKey returns the existing stream item instead of posting twice"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/note
+    auth: authenticated
+    permissions: "record ACL on the Case record (read + stream); portal principals are denied — staff-only"
+    request: "body: CaseMessageSchema { text (max 20000, may be empty only with attachments), attachmentIds?, mentionIds?, idempotencyKey? }"
+    response: "200 CaseMessageResult { caseId, messageId, visibility: internal, created }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [stream_items row (Note, visibility internal — never customer-visible), Case lastActivityAt stamp, serviceDesk.case.noteAdded event; internal notes never move SLA response clocks or notify watchers]
+    idempotency: "idempotencyKey returns the existing stream item instead of posting twice"
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/conversation
+    auth: authenticated
+    permissions: "record ACL on the Case record (read); portal principals receive customer-visible entries only"
+    request: "query: { maxSize?, offset? } — timeline paging"
+    response: "200 CaseConversationTimeline { list: StreamItemDto[], total, offset, count } — visibility-filtered, oldest first"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "maxSize default 50 max 200; offset default 0"
+    sorting: "fixed: created_at ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/emailToCase
+    auth: authenticated
+    permissions: "record ACL on the Email record (read) plus entity create on Case; an already-processed email is a no-op"
+    request: "body: EmailToCaseSchema { emailId }"
+    response: "200 ProcessEmailResult { emailId, caseId, streamItemId, created, skipped, reason? } — creates a case for a new thread or appends to the existing one"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record created (source Email) or stream_items row appended to the thread case, Email attrs marked emailToCaseStatus processed/skipped with caseId and threadId, Case lastActivityAt/lastCustomerResponseAt stamps; bounces and auto-replies are skipped, never cased]
+    idempotency: "an email already marked processed returns its existing case; skipped statuses are recorded and replayed"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/emailToCase/processInbound
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { fetched, stored, skipped, processed, failed } — drives the kernel inbound poll then converts every unprocessed inbound email"
+    errors: [AUTHENTICATION_REQUIRED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [inbound email records stored by the poll, Case records and stream items per message, inbound poll cursors and connection state, per-email emailToCaseStatus marks]
+    idempotency: "per-message: an email already processed or skipped is never converted twice"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/emailReply
+    auth: authenticated
+    permissions: "record ACL enforced through the case stream write and Email create; suppressed requester addresses are refused"
+    request: "body: CaseEmailReplySchema { text (1-20000), attachmentIds? }"
+    response: "200 CaseEmailReplyResult { caseId, emailId, messageId, queued } — an outbound Email draft threaded to the last inbound message"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Email record created (status Draft, direction Outbound, parentType Case), system.sendEmail job when queueing succeeds, stream_items row on the case, Case lastActivityAt/lastAgentResponseAt/firstResponseAt stamps]
+    idempotency: none; each call creates another outbound email
+  - method: POST
+    path: /api/v1/ServiceDesk/action/sla/checkBreaches
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { checked, breached, warned, truncated } — bounded scan of open SLA clocks, earliest deadline first"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CaseSLAClock status/due-state updates, Case slaState recompute, serviceDesk.case.slaBreached events on breach]
+    idempotency: "safe to repeat; already-breached or met clocks are not reprocessed"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/sla/runScheduledCheck
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { checked, breached, warned, notified, escalated, expiredArticles, truncated } — warnings, breaches, deduplicated notifications, escalations and knowledge expiry in one pass"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CaseSLAClock updates including firedWarnings/breachNotified, watcher notifications with dedup keys, Case escalation flags on active cases only, KnowledgeArticle rows expired past expiresAt, app_settings serviceDesk sla.lastScanAt]
+    idempotency: "idempotent by clock state and notification dedup keys; a retry creates no duplicate notification"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/sla/run-scheduled-check
+    auth: public
+    permissions: "x-worker-secret capability (REPORT_WORKER_SECRET, constant-time compare; refused when unconfigured)"
+    request: none
+    response: "200 { checked, breached, warned, notified, escalated, expiredArticles, truncated } — the worker's twin of runScheduledCheck, run as the service-desk system principal"
+    errors: [AUTHENTICATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CaseSLAClock updates, watcher notifications with dedup keys, Case escalation flags, KnowledgeArticle expiry, app_settings sla.lastScanAt]
+    idempotency: "idempotent by clock state and notification dedup keys; a retry creates no duplicate notification"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/knowledge/:id/publish
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 KnowledgeArticleView { id, title, slug, summary, status, isInternal, publishedAt, expiresAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [KnowledgeArticle status Published and publishedAt stamped]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/knowledge/:id/archive
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 KnowledgeArticleView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [KnowledgeArticle status Archived]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/knowledge/portal
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 KnowledgeArticleView[] — published, non-internal, in-date articles only (portal-safe)"
+    errors: [AUTHENTICATION_REQUIRED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/knowledgeSuggestions
+    auth: authenticated
+    permissions: "record ACL on the Case record (read)"
+    request: none
+    response: "200 KnowledgeArticleView[] — up to 10 published portal-visible articles whose title/summary overlaps the case subject"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/assign
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit) plus assignment scope: self-claim, own team/queue, or shared scope with the target; unrestricted editors bypass the scope check"
+    request: "body: CaseAssignSchema { assignedUserId?, teamId?, queueId?, strategy?, reason?, idempotencyKey?, version? } — null clears an owner; strategy one of manual/roundRobin/leastBusy"
+    response: "200 CaseAssignmentResult { caseId, assignedUserId, teamId, queueId, strategy, changed, idempotent, warnings, assignmentId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case assignedUserId/teamId/queueId patch, CaseAssignment history row, CaseQueue round-robin cursor advance under row lock, serviceDesk.case.assigned event, assignee notification (best-effort, outside the transaction)]
+    idempotency: "idempotencyKey returns the prior assignment unchanged; version gives optimistic concurrency"
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/route
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit) plus the assignment scope check"
+    request: "body: CaseRouteSchema { idempotencyKey? }"
+    response: "200 CaseRouteResult — CaseAssignmentResult plus decision { routingRuleId, routingRuleName, queueId, teamId, assignedUserId, strategy, fallbackReason }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [first matching active RoutingRule applied (declarative conditions only, never stored code), Case ownership patch or safe fallback retention in queue, CaseAssignment history row, round-robin cursor advance, serviceDesk.case.assigned event, assignee notification]
+    idempotency: "idempotencyKey returns the prior routing decision unchanged"
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/assignments
+    auth: authenticated
+    permissions: "record ACL on the Case record (read)"
+    request: none
+    response: "200 { list: CaseAssignmentView[] } — assignment history oldest first with actor/queue/rule link labels"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: occurredAt ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/queues
+    auth: authenticated
+    permissions: "administrator or unrestricted Case read (entity-level read-all)"
+    request: none
+    response: "200 { list: (QueueView & { memberCount, unassigned })[] } — every CaseQueue ordered by sortOrder"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: CaseQueue sortOrder"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ServiceDesk/action/queues/:id/workload
+    auth: authenticated
+    permissions: "administrator, unrestricted Case read, or membership of the queue or its default team"
+    request: none
+    response: "200 QueueWorkload { queue, source, members[{ userId, activeCases }], unassigned } — per-agent active-case counts for one queue"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/webToCase
+    auth: public
+    permissions: none
+    request: "body: { name (1-255, required), description? (max 10000), requesterName?, requesterEmail?, idempotencyKey?, website? (honeypot — a filled value pretends success) }"
+    response: "200 { caseNumber, created, duplicate } — the case is created under the service-desk system principal with server-fixed source/status/priority"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record created (source Web Form, status New), intakeKey attr when idempotencyKey given, per-IP rate-limit counter (5 per minute)]
+    idempotency: "idempotencyKey returns the existing case as duplicate; the honeypot field short-circuits bots"
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/duplicateCandidates
+    auth: authenticated
+    permissions: "record ACL on the Case record (read); each candidate is re-checked through the entity service so unreadable cases never leak"
+    request: none
+    response: "200 { caseId, candidates: string[] } — up to 10 case ids sharing account/contact with a related subject"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/merge
+    auth: authenticated
+    permissions: "record ACL on both Case records (read) plus edit on the source case"
+    request: "body: { intoCaseId } — the surviving case"
+    response: "200 { merged: true, transitionId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [source Case cancelled with mergedIntoCaseId set, CaseTransition history row (command merge), serviceDesk.case.merged event — all in one transaction]
+    idempotency: none; an already-merged or closed/cancelled source is refused with VALIDATION_FAILED
+  - method: POST
+    path: /api/v1/ServiceDesk/action/case/:id/csat/invite
+    auth: authenticated
+    permissions: "record ACL on the Case record (edit); only Resolved/Closed cases may be invited"
+    request: none
+    response: "200 CsatInvitation { surveyId, token, expiresAt } — the raw token is returned once; only its sha256 hash is stored"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CsatSurvey row created (cycle incremented, tokenHash, 7-day expiry, status Pending)]
+    idempotency: none; each call creates a new survey cycle
+  - method: POST
+    path: /api/v1/ServiceDesk/action/csat/submit
+    auth: public
+    permissions: "single-use survey token (sha256-compared against the stored hash, unexpired)"
+    request: "body: { token, rating (integer 1-5), feedback? (max 4000) }"
+    response: "200 { submitted: true }"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CsatSurvey row marked used with rating/feedback/submittedAt and status Submitted; an expired token flips the row to Expired]
+    idempotency: "a used token is refused, so a repeat cannot overwrite the first response"
+  - method: GET
+    path: /api/v1/ServiceDesk/action/case/:id/csat
+    auth: authenticated
+    permissions: "record ACL on the Case record (read); portal principals are denied — staff-only"
+    request: none
+    response: "200 CsatResult { caseId, count, average, ratings } — submitted survey ratings for the case"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

@@ -1,0 +1,342 @@
+# PLAN §58 — CRM Chat: the conversational AI surface (Phase 19-CHAT).
+# Source: apps/api/src/crm-chat/crm-chat.controller.ts plus the services it calls
+# (conversations, turns via crm-chat-ai-agents-client, streaming, query, help,
+# citations, actions, prompts, feedback, cross-module, observability, settings,
+# permission and policy). The machine-readable route table is
+# crm-chat-contract.ts (27 implemented routes); docs/architecture/crm-chat-contract.md is the prose.
+#
+# Auth: the controller has no @Public() route and the global auth guard requires a
+# session on every path, so every endpoint is `authenticated`. Authorization is a
+# two-step gate: a synthetic ACL capability (CRMChatPermissionService over
+# AclApiService) and then, on most routes, a deployment feature flag
+# (CRMChatPolicyService). Owner-scoped rows answer 404 for another user's id,
+# never 403. Chat stores no credentials and performs no writes to CRM records
+# itself; a confirmed action proposal is executed by the AIAgents runtime.
+# Format and required fields: api-spec/README.md §2.
+group: crm-chat
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/CRMChat/action/capabilities
+    auth: authenticated
+    permissions: "CRM Chat capability use (CRMChatConversation:read); answers while the workspace flag is off so the shell can explain the state"
+    request: none
+    response: "200 CRMChatCapabilitiesView { module{id,name,version,contractVersion,apiPrefix,frontendRoute,implementedPhases}, workspace{enabled,permitted}, capabilities[], features[], assistant{state,reason,...}, limits{...}, actions{canStartTurn,canConfirmWrite,reason} }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CRMChat/action/health
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag (FEATURE_DISABLED when off)"
+    request: none
+    response: "200 CRMChatModuleHealthView { module, ok, workspace{enabled}, assistant, dependencies[], optionalIntegrations[], features[], structures[], settings{version,updatedAt,warnings}, checks[] } — names structures and states only, no credentials"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CRMChat/action/conversations
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag"
+    request: "query: status? (active|archived|all, default active), offset? (0–100000, default 0), maxSize? (1–50, default 25), q? (1–200 chars; requires the conversationSearch feature)"
+    response: "200 { list: CRMChatConversationView[], total, offset, count } — own non-deleted threads only"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 25, max 50); total is the filtered count"
+    sorting: "fixed: last_activity_at desc, id desc"
+    filtering: "status filter; q is a case-insensitive substring over the thread title and message bodies, owner-scoped in SQL"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CRMChat/action/conversations/:id
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; the conversation must be owned by the caller"
+    request: none
+    response: "200 { conversation: CRMChatConversationView, messages: CRMChatMessagePage } — newest page of history"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: messages by seq ascending inside the page"
+    filtering: none
+    sideEffects: [crm_chat_citations rows materialised on first read of an answer's references]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CRMChat/action/conversations/:id/messages
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; owner-scoped"
+    request: "query: before? (positive message seq cursor), maxSize? (1–100, default 30)"
+    response: "200 CRMChatMessagePage { list: CRMChatMessageView[], nextBefore, hasMore } — keyset pagination, stable under concurrent inserts"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: "keyset: before = oldest seq already shown; nextBefore is the next cursor, null at the oldest page"
+    sorting: "fixed: seq ascending in the returned page (queried desc)"
+    filtering: "before only"
+    sideEffects: [crm_chat_citations rows materialised on first read]
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/CRMChat/action/conversations/:id
+    auth: authenticated
+    permissions: "CRM Chat capability manage (CRMChatConversation:edit) plus the workspace feature flag; owner-scoped"
+    request: "CRMChatConversationPatchSchema { title? (1–200 chars), status? (active|archived) } — strict object; an empty patch is a read"
+    response: "200 CRMChatConversationView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_conversations row title/status/modified_at updated]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/CRMChat/action/conversations/:id
+    auth: authenticated
+    permissions: "CRM Chat capability delete (CRMChatConversation:delete) plus the workspace feature flag; owner-scoped"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_conversations.status set to 'deleted' (a marker; the AIAgents retention sweep removes the rows later)]
+    idempotency: a second delete answers 404 because deleted threads are filtered out
+  - method: POST
+    path: /api/v1/CRMChat/action/turns
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace and readTools feature flags; the assistant agent must be ready"
+    request: "CRMChatTurnCreateSchema { prompt (1–20000 chars; enforced bound is limits.maxMessageChars), conversationId?, idempotencyKey? (8–120 chars), contextRefs? (max 10 {entity,id} pairs; count bounded by limits.maxContextRefs) } — strict object"
+    response: "201 CrmChatTurnResult { turnId, runId, status, conversationId } — turnId equals the AIAgents run id"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND, RATE_LIMITED, CHAT_TURN_LIMITED, CHAT_CONVERSATION_LIMIT, CHAT_CONTEXT_TOO_LARGE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_runs row and run events, ai_agent_conversations/ai_agent_messages via memory, BullMQ job or inline execution depending on settings.execution.mode, provider calls under the caller's ACL, per-user turn/conversation/rate budgets enforced]
+    idempotency: "client-supplied idempotencyKey or a server-generated one; AIAgents returns the existing run for a repeated key"
+  - method: GET
+    path: /api/v1/CRMChat/action/turns/:turnId
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; the run must be visible to the caller (AIAgents visibility rule)"
+    request: none
+    response: "200 CrmChatTurnStatus { turnId, runId, status, conversationId, result (sources re-authorized under current ACL), failureMessage, cancelRequested }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CRMChat/action/turns/:turnId/cancel
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; run visibility as above"
+    request: "body must be an empty strict object {}"
+    response: "200 CrmChatTurnStatus — the state the server actually reached after the cancel request"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [run cancel flag/state on ai_agent_runs; the run may complete a step before stopping]
+    idempotency: safe to repeat; cancelling a finished run returns its current state
+  - method: GET
+    path: /api/v1/CRMChat/action/turns/:turnId/events
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; the run must be visible to the caller"
+    request: "header Last-Event-ID? (resume cursor; numeric run-event seq)"
+    response: "200 text/event-stream — SSE frames turn.started, tool.started, tool.completed, action.proposed, approval.required, assistant.message, usage.summary, turn.completed, turn.failed, turn.cancelled, heartbeat; user-safe data only"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [run cancellation requested when limits.turnTimeoutSeconds elapses]
+    idempotency: resumable with Last-Event-ID; heartbeat and error frames carry non-numeric ids so they are never mistaken for a resume point
+  - method: GET
+    path: /api/v1/CRMChat/action/help/search
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the helpRetrieval feature flag"
+    request: "query: q (required, non-blank)"
+    response: "200 HelpSearchResult { query, sources: HelpSource[] (max 5; kinds module_doc|knowledge_article), hasResults, message? } — handbook pages and ACL-checked knowledge articles; retrieved content is untrusted data"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
+    pagination: none
+    sorting: "relevance order inside each corpus; docs hits first, then knowledge articles"
+    filtering: "q keyword search; knowledge-base corpus bounded at 500 newest eligible articles"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CRMChat/action/query/execute
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace and readTools feature flags; record ACL enforced per entity through the Entity Engine"
+    request: "strict object { entity, fields?, filters?, sort? {field, direction asc|desc}, limit? (1–50 schema; clamped to limits.maxQueryResults), offset? } — filters map field to a primitive, an array (in) or {operator,value} from a fixed operator allowlist"
+    response: "200 QueryResult { records[], total, hasMore, queryTime } — read-only; never raw SQL"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND, RATE_LIMITED]
+    pagination: "limit (default 25, hard max min(50, limits.maxQueryResults)) and offset"
+    sorting: "one sort field with direction asc|desc"
+    filtering: "filters map; equals/notEquals/greaterThan/lessThan/isNull/isNotNull/in/notIn/between/equalsExact families; an unsupported operator is refused, never dropped"
+    sideEffects: none
+    idempotency: safe to repeat; bounded by limits.maxConcurrentQueries per user (429 RATE_LIMITED beyond it)
+  - method: POST
+    path: /api/v1/CRMChat/action/citations/reauthorize
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag"
+    request: "strict object { citations: array (max 20) of { sourceType (crm_record|query_result|report|help_document|approved_external_source), entity?, recordId?, label, route } }"
+    response: "200 { citations: [{ accessible, label, route, reason }] } — labels and routes are the server's, re-read under the caller's current rights"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/CRMChat/action/settings
+    auth: authenticated
+    permissions: "CRM Chat capability admin (CRMChatAdmin:edit); deliberately not gated on the workspace flag so a disabled module can be re-enabled"
+    request: none
+    response: "200 CRMChatSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings[], features, effectiveFeatures } — never a credential"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CRMChat/action/settings
+    auth: authenticated
+    permissions: "CRM Chat capability admin (CRMChatAdmin:edit), re-asserted inside the service; not gated on the workspace flag"
+    request: "CRMChatSettingsPatchSchema { features?, assistant?, execution?, limits?, retention?, safety? } — strict nested patches keeping the full schema's ranges; deep-merged over the stored row"
+    response: "200 CRMChatSettingsView — the new versioned view"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row 'crmChat' rewritten with version+1, updatedAt, updatedBy; per-user navigation menu cache invalidated]
+    idempotency: none; every accepted patch bumps the version even when values are unchanged
+  - method: GET
+    path: /api/v1/CRMChat/action/actions/:approvalId
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; the proposal must belong to the caller's run or conversation (unknown and foreign ids both answer 404)"
+    request: none
+    response: "200 CRMChatActionView { id, runId, agentName, agentVersion, toolKey, actionClass, riskLevel, summary, proposal, targets, status, decidedByUserId, decidedAt, decisionNote, actionable, expiresAt, createdAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CRMChat/action/actions/:approvalId/confirm
+    auth: authenticated
+    permissions: "CRM Chat capability use plus actionProposals feature flag AND safety.allowWrites; ownership as above"
+    request: "strict object { note? (1–1000 chars) }"
+    response: "200 { action: CRMChatActionView, resumed } — the decision and whether the paused run resumed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, NOT_FOUND, CONCURRENCY_CONFLICT, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_approvals decision row; AIAgents revalidates ACL, field rights, record state, proposal hash and expiry, then executes the tool's real side effects and resumes the run]
+    idempotency: none; a decided, stale or expired proposal is refused by the runtime's revalidation
+  - method: POST
+    path: /api/v1/CRMChat/action/actions/:approvalId/reject
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; ownership as above; does not need the write switch"
+    request: "strict object { note? (1–1000 chars) }"
+    response: "200 { action: CRMChatActionView, resumed }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, NOT_FOUND, CONCURRENCY_CONFLICT, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_approvals rejection recorded; the run resumes without executing the proposal]
+    idempotency: none; a decided proposal is refused on a second decision
+  - method: GET
+    path: /api/v1/CRMChat/action/prompts
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; own templates only"
+    request: none
+    response: "200 { list: CRMChatPromptView[], count } — data only, never executed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CRMChat/action/prompts
+    auth: authenticated
+    permissions: "CRM Chat capability prompts (CRMChatPrompt:edit) plus the workspace feature flag; owner is the caller"
+    request: "CRMChatPromptCreateSchema { name (1–120), promptTemplate (1–8000), description? (1–500) } — strict object"
+    response: "201 CRMChatPromptView { id, name, promptTemplate, description, enabled, createdAt, modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [crm_chat_prompts row; a duplicate (owner,name) answers VALIDATION_FAILED]
+    idempotency: none; each call creates a row
+  - method: PATCH
+    path: /api/v1/CRMChat/action/prompts/:id
+    auth: authenticated
+    permissions: "CRM Chat capability prompts plus the workspace feature flag; owner-scoped (foreign id is 404)"
+    request: "CRMChatPromptPatchSchema { name?, promptTemplate?, description? (nullable), enabled? } — strict object; empty patch is a read"
+    response: "200 CRMChatPromptView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [crm_chat_prompts row updated; duplicate name answers VALIDATION_FAILED]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/CRMChat/action/prompts/:id
+    auth: authenticated
+    permissions: "CRM Chat capability prompts plus the workspace feature flag; owner-scoped"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [crm_chat_prompts row hard-deleted]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/CRMChat/action/turns/:turnId/feedback
+    auth: authenticated
+    permissions: "CRM Chat capability feedback (CRMChatFeedback:edit) plus the feedback feature flag; the turn must have produced an assistant answer in a conversation the caller owns"
+    request: "CRMChatFeedbackCreateSchema { rating (up|down), category? (1–60), comment? (1–2000) } — strict object"
+    response: "200 { status: true, feedback: CRMChatFeedbackView }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [crm_chat_feedback row inserted, or the caller's existing rating on that answer updated — one rating per user per answer]
+    idempotency: a repeat updates the same row instead of adding a second vote
+  - method: GET
+    path: /api/v1/CRMChat/action/cross-module/scenarios
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag"
+    request: none
+    response: "200 { list: CRMChatCrossModuleScenario[] } — the curated server-owned paths (account-360, opportunity-commercial, project-delivery, contact-service)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/CRMChat/action/cross-module/analyze
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; every hop goes through the Entity Engine so record ACL applies per target"
+    request: "strict object { scenario (1–80), rootId (1–120) }"
+    response: "200 CRMChatCrossModuleResult { scenario, label, rootEntity, rootId, steps[] (records, count, reason), partial, warnings[], computedAt } — partial results are first-class"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; bounded by MAX_STEPS=8 hops and a ~10s time budget
+  - method: GET
+    path: /api/v1/CRMChat/action/turns/:turnId/usage
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace feature flag; the run must be visible to the caller"
+    request: none
+    response: "200 CRMChatUsageSummary { turnId, runId, status, steps, modelCalls, toolCalls, inputTokens, outputTokens, estimatedCostUsd, costLabel (estimate|none) } — read from the AIAgents run and provider ledger"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

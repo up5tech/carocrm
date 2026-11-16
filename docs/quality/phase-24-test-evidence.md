@@ -397,3 +397,68 @@ their evidence sections above; no production-ready or parity claim was added.
   a real mailbox (the honesty clause of `providers.md`); provider-side facts remain implementation
   pins; the final Phase 24 go/no-go (24.12) is still open (release decision **NO-GO**).
 
+
+---
+
+## Phase 24.4 — Canonical API Contract and Typed Client (P0) — registry complete 2026-11-16
+
+### 24.4.1 Delivered changes
+
+- **Registry complete.** `api-spec/` grew from 5 files / 80 endpoints to **29 files / 920 endpoints** —
+  every `/api` route documented (auth, metadata, users, entities, email, admin, jobs, attachments,
+  documents, stream/calendar, search/saved-filter/dashboard/import-export, reports, workflows, BPM
+  processes, extensions/domain events, portal, service desk, projects, lead-score, omnichannel,
+  crm-chat, esignature, sales, marketing-automation, ai-agents, advanced-integrations,
+  voice-communications, customer-success, platform misc). Each entry records auth, server-side
+  permissions, request/response shape, error codes, pagination/sorting/filtering, side effects and
+  idempotency, read from the controllers and services — not inferred from the SPA.
+- **Strict gate enabled.** `package.json` `ci:api-spec` now runs
+  `node scripts/check-api-spec.mjs --strict`; it sits inside `pnpm ci:gate`, so the nightly lane fails
+  on any undocumented or phantom route. `check-api-spec.mjs --print` now also emits the schema-backed
+  fields (`operationId`, `requestSchema`, `responseSchema`).
+- **Schema-backed contract (bounded set).** `api-spec/schemas/*.v1.json` — versioned JSON Schema
+  documents (draft 2020-12 subset) for the five session operations: `authentication.login`,
+  `authentication.challenge`, `session.refresh`, `session.logout`, `session.me`. The yaml entries
+  carry `operationId` + schema references; `api-spec/README.md` §2.1 documents the convention.
+- **Typed client.** `scripts/generate-api-client.mjs` emits
+  `packages/api-client/src/generated.ts` (types + `API_OPERATIONS` + `createApiClient` transport) and
+  refuses missing/unresolvable schemas, path params, unsupported keywords and operationId collisions —
+  never `any`. `pnpm ci:api-client` (`--check`) runs inside `ci:gate` for stale-output detection.
+  `packages/api-client/src/index.ts` re-exports the generated surface.
+- **Consumer.** `apps/web/src/api/types.ts` re-exports the generated `LoginResult` /
+  `LoginChallengeResult`, so the SPA's session calls consume the schema-backed contract; the
+  hand-written `apps/web/src/api/client.ts` stays the compatibility surface.
+- **Controller schemas exported** for verification: `apps/api/src/auth/auth.schemas.ts` now holds
+  `LoginSchema`, `RefreshSchema`, `LogoutSchema`, `ChallengeSchema` (moved out of
+  `auth.controller.ts`, which imports them).
+
+### 24.4.2 Tests added
+
+- `apps/api/test/api-spec-registry.test.ts` (2, DB-free, in `vitest.ci.config.ts`): drops a probe
+  controller into `apps/api/src`, proves `--strict` exits 1 naming the route while the lenient mode
+  only reports it, and proves the committed registry passes strict.
+- `apps/api/test/api-spec-client-contract.test.ts` (5, DB-free, in `vitest.ci.config.ts`): a fixture
+  corpus run through both the JSON Schema documents (mini validator for the documented subset) and
+  the controller Zod schemas must agree on every verdict; response-schema sanity; generated client
+  surface smoke.
+
+### 24.4.3 Test evidence
+
+- `pnpm ci:api-spec` → **exit 0** — 29 files, 920 documented, 920 matched, 0 problems, 0 undocumented.
+- `pnpm ci:api-spec --strict` (via the new script default) → same, exit 0.
+- `node scripts/generate-api-client.mjs --check` → 5 operations, generated.ts up to date.
+- `npx vitest run --config vitest.ci.config.ts apps/api/test/api-spec-*.test.ts` → 7/7 passed.
+- `pnpm --filter @carocrm/api-client build` → clean; `npx tsc --noEmit -p apps/web/tsconfig.json` → clean.
+
+### 24.4.4 Acceptance and outstanding work
+
+- **Met:** every `/api` route documented and matched; strict checking runs in the existing nightly
+  gate; a new undocumented route fails it (regression test); the bounded client set has validated
+  machine-readable request/response schemas verified against the Zod contract; generation is
+  deterministic with stale-output detection; one real consumer (the SPA session types) uses the
+  client; no GraphQL, no second registry, no `any` fallback.
+- **Outstanding:** D3/G1 owner sign-off is still pending (G1 stays `Partial` in `known-gaps.md`);
+  G90 (anonymous `/OpenApi` inventory) is an undecided owner question; schema-backed coverage beyond
+  the five session operations is future work — the yaml prose contract covers all 920 routes but only
+  the bounded set has JSON Schema + generated types; `apps/web/src/api/client.ts` migration to the
+  generated client is staged, not done.

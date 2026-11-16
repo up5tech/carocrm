@@ -1,0 +1,93 @@
+# PLAN §58 — small platform routes: locale pack, audit log reads, formula tools,
+# hook introspection and the first-run setup checklist.
+# Source: apps/api/src/i18n/i18n.controller.ts, apps/api/src/audit/audit.controller.ts,
+# apps/api/src/logic/formula.controller.ts, apps/api/src/hooks/hook.controller.ts,
+# apps/api/src/setup-checklist/setup-checklist.controller.ts and their services.
+# Format and required fields: api-spec/README.md §2.
+group: platform
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/I18n
+    auth: public
+    permissions: none
+    request: "query: locale? (must be one of the instance enabledLocales), clientCache? (content hash; returns unchanged:true on match)"
+    response: "200 { locale, instance: { defaultLocale, enabledLocales, defaultTimezone }, hash, catalog: Record<string, string> } — locale falls back to the authenticated user's locale, then Accept-Language, then the instance default"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: "locale selects the catalog; clientCache is a sha256 content-hash short-circuit"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AuditLog
+    auth: authenticated
+    permissions: "administrator for a full listing; non-admins must pass entityId and the underlying record ACL is enforced through the entity read"
+    request: "query: entityId?, entityType?, action? (create|update|delete), usernameFrom? (exact username), createdFrom?, createdTo? (ISO 8601), offset? (default 0), limit? (default 30, max 200)"
+    response: "200 { list: AuditLogEntryDto[], total, offset, count } — ordered by created_at desc, id desc"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND]
+    pagination: "offset (default 0) and limit (default 30, max 200); total is the filtered count"
+    sorting: "fixed: created_at descending, id descending"
+    filtering: "entityId/entityType/action/usernameFrom equality plus createdFrom/createdTo inclusive bounds; a non-admin without entityId is refused"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AuditLog/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 AuditLogEntryDto { id, entityType, entityId, username, userId, action, order, data, archived, createdAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Formula/validate
+    auth: authenticated
+    permissions: administrator
+    request: "body { expression: string } — sandboxed formula expression checked without running it"
+    response: "200 FormulaValidationResult { valid, error?, position?, nodeCount? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Formula/evaluate
+    auth: authenticated
+    permissions: administrator
+    request: "body { expression: string, attrs?: Record<string, unknown>, timezone?: string } — runs the expression against the caller-supplied attribute object"
+    response: "200 { value } or 200 { error: string } — evaluation failures are reported in the body, not as an error status"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; the expression is compiled in an in-memory cache only
+  - method: GET
+    path: /api/v1/Hook
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { phases: string[], recommended: string[], handlers: [{ name, phase, entity }] } — entity is '*' for hooks not bound to one entity"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "handlers ordered by phase then name"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/SetupChecklist
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { items: [{ id, labelKey, descriptionKey, route, completed, order }], progress: { done, total } } — eight fixed items, completion derived from existing resources"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "items ordered by order ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

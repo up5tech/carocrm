@@ -1,0 +1,990 @@
+# PLAN §58 — marketing automation command surface (Phase 19-MA).
+# Source: apps/api/src/marketing-automation/marketing-automation.controller.ts and the services it calls
+# (campaign, send, delivery batch, audience, consent, suppression, public tokens, journeys, forms,
+# integration, attribution, retention, operations, event ingestion, template, test send).
+# Entity CRUD for Campaign/TargetList/MarketingSend-adjacent records stays on the generic /api/v1/:entity
+# API; these routes are the module commands that a single record cannot express.
+# Auth: routes without @Public() require a session, API key or portal principal (cookie unsafe methods
+# also need the CSRF double-submit). requireAdmin() routes are administrator-only. @Public() routes are
+# authorised by a token, an HMAC signature or the x-worker-secret capability instead of a principal.
+# Format and required fields: api-spec/README.md §2.
+group: marketing-automation
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/health
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ModuleHealthView { module, ok, dependencies[], optionalIntegrations[], features[], provider { configuredKey, resolvedKey, mode, live, testSend }, settings { version, warnings[] }, checks[] } — read live from metadata registry, information_schema, hook registry and provider registry"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/settings
+    auth: authenticated
+    permissions: authenticated — any signed-in principal may read the settings document
+    request: none
+    response: "200 MarketingAutomationSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings[] } — validated defaults when no row is stored"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/settings
+    auth: authenticated
+    permissions: administrator
+    request: "SettingsPatchSchema — a record of partial settings merged over the stored row; unknown keys and schema violations are refused; provider.key must name a registered adapter"
+    response: "200 MarketingAutomationSettingsView (version incremented)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row upserted under name marketingAutomation, version bump, updatedBy recorded]
+    idempotency: a repeat with the same patch re-merges and bumps the version again; no dedupe key
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/nav
+    auth: authenticated
+    permissions: authenticated — a visibility report, never a gate; every hidden route is refused server-side anyway
+    request: none
+    response: "200 { visible, readableEntities, entities[] } — the Marketing Automation entities this caller may read, in module order"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: "fixed: module entity order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/globalSendPause
+    auth: authenticated
+    permissions: administrator
+    request: "GlobalSendPauseSchema { paused: boolean, reason?: string (required when pausing is implied; resuming takes none) }"
+    response: "200 MarketingAutomationSettingsView — the emergency stop (§13) applied to safety.globalSendPaused"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row upserted, safety.globalSendPaused and reason written, version bump; while paused every send-readiness and delivery gate refuses]
+    idempotency: a repeat with the same body is a no-op settings write that still bumps the version
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/capabilities
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read; mayEdit and allowedCommands are computed from the caller's edit grant"
+    request: none
+    response: "200 CampaignCapabilities { campaignId, status, mayEdit, allowedCommands[], lastValidatedAt, validationHash, report: CampaignValidationReport }"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/history
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read"
+    request: none
+    response: "200 { list: CampaignTransitionView[] } — command, from/to status, actor, reason, validationHash, idempotencyKey, occurredAt; oldest first"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: occurredAt ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/log
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read; recipient identity on unreadable records is nulled and counted in hidden"
+    request: "query: type? (normalized event type), limit? (default 50, max 500), offset? (default 0)"
+    response: "200 { records: CampaignLogEntry[], total, hidden } — marketing_events rows newest first"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: "limit (default 50, max 500) and offset (default 0); total is the filtered count"
+    sorting: "fixed: received_at descending"
+    filtering: "type filters on normalized_type only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/stats
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read"
+    request: none
+    response: "200 CampaignStats { campaignId, asOf, events { total, byType[] }, delivery { sent, delivered, bounced, complained, unsubscribed, opened, clicked }, uniqueRecipients }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/validate
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read to compute; the stored report is written only with edit"
+    request: "query: as? (target CampaignStatus — validates as though the campaign were about to become it)"
+    response: "200 CampaignValidationReport { campaignId, status, valid, blockers[], warnings[], checkedAt, validationHash }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED, INVALID_QUERY, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.validationReport, validationHash and lastValidatedAt updated when the caller may edit]
+    idempotency: safe to repeat; each call recomputes and re-stamps
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/transition
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignTransitionSchema { command?, to?, reason?, idempotencyKey?, version? } — command or to required; ambiguous targets (Running, Archived) must name the command"
+    response: "200 CampaignTransitionResult { campaignId, from, to, command, changed, idempotent, transitionId, blockers? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign status and lifecycle stamps, CampaignTransition history row, domain event marketingAutomation.campaign.* — all in one transaction; schedule/start/resume are gated on the send-readiness report; cancel requires a reason]
+    idempotency: "idempotencyKey replays return the original transition (changed=false, idempotent=true); version enables optimistic concurrency"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/schedule
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to schedule"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status=Scheduled with scheduledAt (and default timezone when unset), CampaignTransition row, domain event; refused when the send-readiness report has blockers or the global send pause is active]
+    idempotency: same as transition — idempotencyKey replay is a no-op
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/unschedule
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to unschedule"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status back to Draft, scheduledAt cleared, CampaignTransition row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/start
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to start"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status=Running with startedAt, CampaignTransition row, domain event; gated on the send-readiness report]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/pause
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to pause"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status=Paused with pausedAt, CampaignTransition row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/resume
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to resume"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status=Running with resumedAt, CampaignTransition row, domain event; gated on the send-readiness report]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/complete
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to complete"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status=Completed with completedAt, CampaignTransition row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/cancel
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason (required — §10.2), idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to cancel"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.status=Cancelled, cancelledAt and archivedAt set, CampaignTransition row, domain event; stops the campaign's remaining messages]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/archive
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "CampaignCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 CampaignTransitionResult — command fixed to archive"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Campaign.archivedAt set, CampaignTransition row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/duplicateAsDraft
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read on the source; the copy is created through the entity engine"
+    request: "CampaignDuplicateSchema { name?, code?, includeAudience? (default true), includeContent? (default true), idempotencyKey? } — delivery history, recipient state, enrollments and provider ids are never copied"
+    response: "200 Campaign record — a fresh Draft"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, FEATURE_DISABLED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new Campaign row, CampaignTransition row (command duplicate), included/excluded target-list links copied when includeAudience, domain event marketingAutomation.campaign.duplicated — one transaction]
+    idempotency: idempotencyKey is stored on the transition row; a replay is not deduped by the service, so a repeated call creates another draft
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/previewContent
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read; the linked template and a named sample recipient must also be readable"
+    request: "ContentPreviewSchema { recipientType? (Contact|Lead), recipientId? } — recipientId requires recipientType; empty body renders without a recipient"
+    response: "200 ContentPreview { subject, plainText, bodyHtml, findings[], templateContentHash, systemLinks, campaignId, templateId, recipient, recipientResolved, latestRevision, generatedAt }"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/contentRevision
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit"
+    request: "EmptyCommandBodySchema — strict empty object"
+    response: "200 SealedRevisionSummary { revisionId, revisionNumber, contentHash, templateId, campaignId, sealedAt, reused } — reused=true when identical content was already sealed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingTemplateRevision row (immutable), domain event marketingAutomation.template.revisionSealed — only when the content hash is new]
+    idempotency: "sealing identical content returns the existing revision (reused=true); no second row"
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/contentRevisions
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read via entities.get"
+    request: none
+    response: "200 { campaignId, templateId, revisions: RevisionHeader[] } — newest first; empty list when the campaign has no template"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: newest revision first"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/sendTest
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit; recipients must additionally be on the administrator-configured provider.testSend allowlist"
+    request: "TestSendSchema { recipients: string[] (1–20 explicit addresses), confirm: boolean (required true when configured), recipientType?, recipientId?, idempotencyKey? }"
+    response: "200 TestSendView { testSend: true, campaignId, provider, subject, recipients: receipts[], accepted, errorKind?, error?, contentHash, findings[], markers, duplicate, sentAt } — never a credential or raw provider body"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [synchronous provider call to the configured live adapter under the provider limiter (verify + send), subject/banner/test header marking; suppression checked per recipient; NO campaign state, snapshot, ledger row or marketing event is written]
+    idempotency: "idempotencyKey (or a derived content+actor fingerprint) returns the recorded answer with duplicate=true within a 10-minute in-process window"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/sends
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit; only Email/Newsletter/Informational campaigns may hold sends"
+    request: "SendCreateSchema { slot? (1–100, default 1), name?, idempotencyKey? }"
+    response: "200 MarketingSendView — the new send in status Draft with empty counts and no approval"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend row created as Draft]
+    idempotency: none for creation; a taken slot answers VALIDATION_FAILED (SEND_SLOT_TAKEN); idempotencyKey is accepted but not deduped on create
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/sends
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read"
+    request: none
+    response: "200 { campaignId, list: MarketingSendView[] } — newest first, each with decision state, ledger totals and allowedCommands"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: createdAt descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/send/:id
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read, enforced through the send's parent campaign"
+    request: none
+    response: "200 MarketingSendView { id, name, campaignId, slot, status, purpose, providerKey, templateRevisionId, contentHash, snapshotId, counts, approval, validation { hash, report }, lifecycle, deliveries, allowedCommands, mayEdit, stale, createdAt }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/send/:id/history
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read, enforced through the send's parent campaign"
+    request: none
+    response: "200 { list: SendTransitionView[] } — command, from/to status, reason, actor, validationHash, approvalHash, snapshotId, occurredAt; oldest first"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: occurredAt ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/dryRun
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read, enforced through the send's parent campaign; refused for callers who cannot read the campaign"
+    request: "EmptyCommandBodySchema — strict empty object"
+    response: "200 SendDryRunReport — resolved audience counts per category with reasons, campaign findings and approval state; writes nothing"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/validate
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "EmptyCommandBodySchema — strict empty object"
+    response: "200 MarketingSendView — status Validated with the frozen decision"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: content revision sealed, final audience snapshot created (send-bound, superseding earlier ones), delivery ledger materialised per resolved recipient, validationHash and report stored, previous approval cleared, history row, domain event marketingAutomation.send.validated; a blocked report is recorded on lastErrorCode and refused with VALIDATION_FAILED]
+    idempotency: re-validating is safe — the ledger decides what may be replaced and already-messaged recipients are never re-derived
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/approve
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign; requires status Validated and an unchanged material hash"
+    request: "SendApprovalSchema { note?, idempotencyKey?, version? }"
+    response: "200 MarketingSendView — approvalHash bound to the validated facts"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend approval fields (approvedById/approvedAt/approvalHash/note), history row, domain event marketingAutomation.send.approved; a stale validation invalidates the send back to Draft and refuses]
+    idempotency: a repeat re-stamps the approval for the same hash; idempotencyKey is recorded on the history row
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/revokeApproval
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendRevokeApprovalSchema { reason (required), idempotencyKey? }"
+    response: "200 MarketingSendView — status Draft with approval cleared"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend approval cleared and status Draft, lastErrorCode SEND_APPROVAL_REVOKED, history row, domain event marketingAutomation.send.approvalRevoked]
+    idempotency: a second revoke answers VALIDATION_FAILED (SEND_APPROVAL_ABSENT)
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/transition
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendTransitionSchema { command? (schedule|queue|pause|resume|cancel|complete — fail is system-only and refused), to?, reason?, idempotencyKey?, version? } — command or to required"
+    response: "200 SendTransitionResult { sendId, from, to, command, changed, idempotent, transitionId, cancelledDeliveries?, deliveryJobId?, deliveryQueueNote? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, INVALID_QUERY, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend status and lifecycle stamps, open delivery rows cancelled on cancel, history row, domain event; queue/resume enqueue the marketing.deliveryBatch job after commit (a queue outage is reported, not thrown, and the scheduled sweep recovers)]
+    idempotency: idempotencyKey replay returns the original transition; version enables optimistic concurrency
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/schedule
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 SendTransitionResult — command fixed to schedule"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend.status=Scheduled with scheduledAt, history row, domain event; requires a live approval for the current material hash and a Scheduled/Running campaign]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/queue
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 SendTransitionResult — command fixed to queue; hands the send to the delivery runtime"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend.status=Queued with queuedAt, history row, domain event, marketing.deliveryBatch job enqueued (deliveryJobId or deliveryQueueNote); requires a bound live provider, lifted global send pause and current approval — nothing is handed to a provider by this route itself]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/pause
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 SendTransitionResult — command fixed to pause"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend.status=Paused with pausedAt, history row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/resume
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 SendTransitionResult — command fixed to resume"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend.status=Queued with resumedAt, history row, domain event, marketing.deliveryBatch job enqueued; same gates as queue]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/cancel
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendCommandBodySchema { reason (required — §10.2), idempotencyKey?, version? }"
+    response: "200 SendTransitionResult — command fixed to cancel; cancelledDeliveries counts the open ledger rows stopped"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend.status=Cancelled with cancelledAt/cancelReason, open recipient delivery rows cancelled (SEND_CANCELLED), history row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/send/:id/complete
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit, enforced through the send's parent campaign"
+    request: "SendCommandBodySchema { reason?, idempotencyKey?, version? }"
+    response: "200 SendTransitionResult — command fixed to complete"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSend.status=Completed with completedAt, history row, domain event]
+    idempotency: same as transition
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/delivery/run-scheduled-batch
+    auth: authenticated
+    permissions: administrator
+    request: "RunScheduledBatchSchema { sendId?, slot? (1–100), limit? (1–500) } — empty body sweeps every Queued/Sending send, bounded by delivery.chunkSize"
+    response: "200 DeliveryBatchResult { ranAt, paused, sends: SendBatchOutcome[], skipped[], totals { sends, claimed, sent, blocked, failed, retried, released } }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [runs the delivery runtime as the documented service identity: stale-claim recovery, bounded recipient claims, per-recipient consent/suppression/frequency re-check, provider verify + submissions through the limiter, ledger state transitions, send status advances (Sending/Sent/Failed) with history rows and domain events; the emergency stop or a non-live provider skips every send with a stated reason]
+    idempotency: "claims are atomic (FOR UPDATE SKIP LOCKED) and submissions carry stable per-recipient idempotency keys; a repeated sweep finds no open work or re-queues under the same keys"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/delivery/run-worker-batch
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal REPORT_WORKER_SECRET (constant-time compare); @Public route, no user principal; an unconfigured secret refuses every call"
+    request: "RunScheduledBatchSchema { sendId?, slot?, limit? } + header x-worker-secret"
+    response: "200 DeliveryBatchResult — same shape as the administrator door"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same delivery runtime effects as run-scheduled-batch, executed under the marketing system service identity]
+    idempotency: same as run-scheduled-batch
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/send/:id/recipients
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read, enforced through the send's parent campaign; recipients on records the caller cannot read are counted in hidden, never named"
+    request: "query: state? (recipient delivery status), limit? (default 100, max 200), offset? (default 0)"
+    response: "200 { sendId, summary: DeliverySummary, total, hidden, list: SendRecipientView[] { entityType, entityId, name, slot, state, category, reasons[], sentAt } }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "limit (default 100, max 200) and offset (default 0); total is the filtered ledger count"
+    sorting: "service-defined ledger order"
+    filtering: "state filters on the delivery state only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/segment/:id/members
+    auth: authenticated
+    permissions: "record ACL (TargetList) — read; each member record is loaded through the engine and unreadable ones are counted in hidden"
+    request: "query: maxSize? (default 50, max 200), offset? (default 0)"
+    response: "200 { list: MemberView[] { entryId, entityType, entityId, name, source, addedAt }, hidden, total }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "maxSize (default 50, max 200) and offset (default 0); total counts readable members only"
+    sorting: "service-defined entry order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/segment/:id/members
+    auth: authenticated
+    permissions: "record ACL (TargetList) — edit; static audiences only (dynamic answers VALIDATION_FAILED); each named record must exist and be readable by the caller"
+    request: "AudienceMembersSchema { members: [{ entityType (Contact|Lead), entityId }] (1–500), source? }"
+    response: "200 { added, alreadyPresent, rejected[] } — per-record refusals are reported, not thrown"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [TargetListEntry rows created under the service identity with addedById/addedAt/source, list resolvedCount metadata refreshed]
+    idempotency: "existing live members are counted as alreadyPresent; re-adding is a no-op per record"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/segment/:id/members/remove
+    auth: authenticated
+    permissions: "record ACL (TargetList) — edit"
+    request: "AudienceMemberRemoveSchema { entityType, entityId, reason? }"
+    response: "200 { removed: boolean } — false when no live membership exists"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [TargetListEntry.removedAt/removedById/removalReason stamped — the row is kept as evidence, never deleted]
+    idempotency: safe to repeat; a second remove answers removed=false
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/segment/:id/refresh
+    auth: authenticated
+    permissions: "record ACL (TargetList) — edit"
+    request: none
+    response: "200 { resolvedCount, criteriaHash } — recomputed audience summary fields"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [TargetList resolvedCount/criteria metadata updated; resolution is bounded by settings.limits.maxResolveRecords and reports truncation]
+    idempotency: safe to repeat; recomputes the same counts
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/audiencePreview
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read; counts come from the ACL-filtered candidate set"
+    request: none
+    response: "200 AudiencePreview { campaignId, purpose, status, resolved, eligible, categories[], compositionHash, samples[] (max 10 readable), notes[], truncated, limit, generatedAt }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/campaign/:id/audienceSnapshot
+    auth: authenticated
+    permissions: "record ACL (Campaign) — edit; requires at least one included target list"
+    request: "SnapshotModeSchema { mode?: preview|final (default preview) }"
+    response: "200 { snapshotId, compositionHash, resolved, eligible, entryCount, categories[], truncated, previousSnapshotId, sendId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingAudienceSnapshot header row plus marketing_audience_snapshot_entries rows (addresses stored only as digests) in one transaction; earlier snapshots for the same sendId are stamped Invalidated, never edited]
+    idempotency: none — each call mints a new snapshot linked to the previous one
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/snapshot/:id/entries
+    auth: authenticated
+    permissions: "record ACL (MarketingAudienceSnapshot) — read; entries carry digests, never addresses"
+    request: "query: category? (audience category), limit? (default 200, max 500)"
+    response: "200 { snapshotId, categories: [{ category, count }], entries[] { entity_type, entity_id, email_hash, category, reasons, sources } }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "limit (default 200, max 500); no offset"
+    sorting: "fixed: category, entity_type, entity_id ascending"
+    filtering: "category filters on the snapshot entry category"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/consent
+    auth: authenticated
+    permissions: "record ACL (MarketingConsent) — create for a new identity+purpose+channel, edit for an existing one"
+    request: "ConsentRecordSchema { emailAddress? xor emailHash? (64-hex digest), channel? (Email only), purpose (required), to (required), basis?, source (required), reason?, policyVersion?, locale?, captureContext?, campaignId?, targetListId?, contactId?, leadId?, idempotencyKey? }"
+    response: "200 { consent: ConsentView, changed, idempotent }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingConsent row created/updated, MarketingConsentEvent history row appended, domain event marketingAutomation.consent.changed — one transaction]
+    idempotency: "idempotencyKey returns the original result; a transition that changes nothing is a no-op (changed=false)"
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/consent/:id
+    auth: authenticated
+    permissions: "record ACL (MarketingConsent) — read"
+    request: none
+    response: "200 ConsentView { consentId, emailHash, channel, purpose, status, basis, source, consentedAt, confirmedAt, withdrawnAt, policyVersion, locale }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/consent/:id/history
+    auth: authenticated
+    permissions: "record ACL (MarketingConsent) — read"
+    request: none
+    response: "200 { list: ConsentEventView[] } — from/to status, source, basis, reason, actor, occurredAt; oldest first"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: occurredAt ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/suppression
+    auth: authenticated
+    permissions: "record ACL (MarketingSuppression) — create"
+    request: "SuppressionAddSchema { emailAddress? xor emailHash?, channel? (Email), scope (Global|Purpose|TargetList), purpose? (required for Purpose), targetListId? (required for TargetList), reason (required), source?, note? } — Global must not carry purpose or targetListId"
+    response: "200 SuppressionView { id, emailHash, channel, scope, purpose, targetListId, reason, source, effectiveAt, lastSeenAt, revokedAt, overridable }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSuppression row created, or the live row for the same identity+scope refreshed (lastSeenAt/evidence) — never a duplicate]
+    idempotency: "a repeat of the same identity+scope updates the existing row instead of adding a second"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/suppression/:id/revoke
+    auth: authenticated
+    permissions: "record ACL (MarketingSuppression) — edit; non-overridable reasons (provider complaint, hard bounce) refuse"
+    request: "SuppressionRevokeSchema { reason (required) }"
+    response: "200 SuppressionView with revokedAt/revokedById/revokedReason set"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingSuppression.revokedAt stamped — the row is kept, not deleted]
+    idempotency: safe to repeat; re-revoking restamps the same row
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/suppression
+    auth: authenticated
+    permissions: "record ACL (MarketingSuppression) — read"
+    request: "query: emailAddress? (raw address, hashed server-side — a client never supplies a digest)"
+    response: "200 { list: SuppressionView[] } — live (non-revoked) suppressions, at most 200"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "none; bounded at 200 rows by the service"
+    sorting: "service-defined order"
+    filtering: "emailAddress filters on the derived identity hash"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/publicLink
+    auth: authenticated
+    permissions: "record ACL (MarketingConsent) — create; a public link is a credential for one address"
+    request: "PublicLinkIssueSchema { scope (unsubscribe|preferences|opt-in confirmation), emailAddress? xor emailHash?, channel? (Email), purpose?, campaignId?, targetListId? }"
+    response: "200 IssuedLink { tokenId, token, expiresAt, path } — the raw token is returned only here; only its digest is stored"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingPublicToken row created (256-bit token, digest stored, TTL by scope), prior Active tokens of the same scope+identity revoked]
+    idempotency: none — each call mints a new token and revokes the outstanding ones for that scope
+  - method: GET
+    path: /api/v1/MarketingAutomation/public/preferences/:token
+    auth: public
+    permissions: "public token — the :token path parameter is the credential (256-bit, digest-stored, scope-checked, expiry-checked); every failure answers the same generic VALIDATION_FAILED so existence cannot be probed"
+    request: "path: token"
+    response: "200 PreferenceView { categories: [{ purpose, status }] (Newsletter, ProductMarketing, EventUpdate, ServiceNotice), globallySuppressed, expiresAt } — never the address itself"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: "fixed: fixed purpose order"
+    filtering: none
+    # a GET changes nothing: link-preview crawlers fetch URLs, so the deliberate act is the POST pair
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/public/unsubscribe/:token
+    auth: public
+    permissions: "public token — same credential rules as preferences; accepts Unsubscribe or Preferences scope tokens"
+    request: "path: token"
+    response: "200 PreferenceView — the confirmation page; performs nothing"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    # the confirmation page performs nothing; the POST pair is the deliberate act
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/public/unsubscribe/:token
+    auth: public
+    permissions: "public token — same credential rules; a token with no purpose becomes a global block, a purpose-bearing token withdraws only that purpose"
+    request: "path: token; body PublicUnsubscribeSchema { all?: boolean (default false) }"
+    response: "200 UnsubscribeResult { unsubscribed: true, scope: global|purpose, purpose, applied } — applied=false on a replay"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Global scope: MarketingSuppression row (GlobalOptOut, source UnsubscribeLink); purpose scope: MarketingConsent row to OptedOut with idempotency key; token attempts incremented and token marked Used — all under the service identity, one-way (a public endpoint can never re-subscribe)]
+    idempotency: "pressing twice is one unsubscribe; the replay answers the same result with applied=false"
+  - method: POST
+    path: /api/v1/MarketingAutomation/public/confirm/:token
+    auth: public
+    permissions: "public token — OptInConfirmation scope only; an unsubscribe link can never grant consent"
+    request: "path: token"
+    response: "200 { confirmed: true, purpose }"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingConsent row to Consented with basis DoubleOptIn and the token id as evidence, consent history row, token marked Used]
+    idempotency: "idempotencyKey optin:<tokenId> makes a replay a no-op returning the same answer"
+  - method: POST
+    path: /api/v1/MarketingAutomation/webhook/:providerKey
+    auth: public
+    permissions: "provider signature — HMAC-SHA256 over timestamp.rawBody verified against MARKETING_WEBHOOK_SECRET (x-webhook-signature, x-webhook-timestamp headers); fails closed when no secret is configured; a timestamp outside the 5-minute replay window is refused"
+    request: "body: provider event payload { eventId|id, type|eventType, providerMessageId|messageId, campaignId?, sendId?, slot?, recipientEntityType?, recipientEntityId?, emailHash?, occurredAt?, url? } + signature/timestamp headers"
+    response: "200 WebhookIngestResult { inboxId, duplicate, normalizedType, processingStatus } — processingStatus is processed or processed_with_errors; invalid signatures answer 200 with processingStatus rejected (recorded as evidence)"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [marketing_provider_webhook_inbox row (dedup by provider+key; rejections recorded under a rejected: namespace), marketing_events row, recipient delivery state updated for delivered/bounced/complained/unsubscribed, suppression rows added on hard_bounce/complaint/unsubscribed — all under the service identity]
+    idempotency: "provider event id dedup makes a replayed delivery answer duplicate=true with no second effect"
+  - method: POST
+    path: /api/v1/MarketingAutomation/webhooks/:providerKey
+    auth: public
+    permissions: "provider signature — identical to webhook/:providerKey; this is a plural alias that delegates to the same handler"
+    request: "same as webhook/:providerKey"
+    response: "200 WebhookIngestResult — same shape"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as webhook/:providerKey — one dedup namespace shared with the singular route]
+    idempotency: same as webhook/:providerKey
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/journey/:id/validate
+    auth: authenticated
+    permissions: authenticated — pure graph validation; the :id path parameter is accepted but not used (the body carries the graph)
+    request: "body { graph } or the graph itself { start, nodes[] } — nodes are start|end|action|condition|wait|split|join with ports next/then/otherwise, action, params, seconds, formula"
+    response: "200 JourneyValidationResult { valid, errors[], warnings[] } — checks node types, ports, reachability, cycles, terminal node and sendEmail node configuration"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/journey/:id/publish
+    auth: authenticated
+    permissions: "record ACL (MarketingJourney) — read enforced on load; the version row and journey update run under the module service identity"
+    request: "body { graph, releaseNotes? } or the graph itself — must pass journey validation"
+    response: "200 { journeyId, versionId, version, graphHash } — new immutable MarketingJourneyVersion, journey marked Published"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingJourneyVersion row (graph JSON + sha256 hash), MarketingJourney status=Published with publishedVersionId and currentVersion incremented]
+    idempotency: none — every valid publish mints the next version number
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/journey/:id/enroll
+    auth: authenticated
+    permissions: authenticated — no record ACL check in the service; enrollment rows are written directly under the runtime
+    request: "body { versionId? (string, default empty), version? (default 1), graph (required — the journey graph), personType?, personId?, emailHash?, source? (default Manual), dedupeKey? (default a fresh UUID) }"
+    response: "200 { enrollmentId, duplicate } — duplicate=true when the dedupe key already enrolled"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingJourneyEnrollment row (state Active, currentNode=start node, nextRunAt=now) when the dedupe key is new]
+    idempotency: "dedupeKey + unique index make concurrent or repeated enrollments return the existing row (duplicate=true)"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/journey/run-batch
+    auth: authenticated
+    permissions: administrator
+    request: "body { limit? (default 25) } — due Active/Waiting enrollments claimed and stepped"
+    response: "200 { ran, results[] } — per-enrollment StepRunResult { enrollmentId, nodeId, outcome, nextState?, nextRunAt?, reason?, trace? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [enrollment claims (lease), node execution including journey actions (e.g. sendEmail through the delivery pipeline), MarketingJourneyStepExecution rows, enrollment state/nextRunAt/branchTrace updates; suppression exits the enrollment before any action runs]
+    idempotency: "claims are leased and steps run under per-enrollment dedupe keys; a duplicate tick changes nothing"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/journey/run-worker-batch
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal REPORT_WORKER_SECRET; @Public route running under the marketing system service identity"
+    request: "body { limit? } + header x-worker-secret"
+    response: "200 { ran, results[] } — same as the administrator door"
+    errors: [AUTHENTICATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same journey engine effects as run-batch, attributed to the system identity]
+    idempotency: same as run-batch
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/enrollment/:id/suspend
+    auth: authenticated
+    permissions: authenticated — no record ACL check; any authenticated caller may suspend an enrollment by id
+    request: "body { reason? (default OperatorSuspend) }"
+    response: "200 { id, state: Suspended, reason }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingJourneyEnrollment state=Suspended, exitReason set, nextRunAt cleared]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/enrollment/:id/resume
+    auth: authenticated
+    permissions: authenticated — no record ACL check
+    request: none
+    response: "200 { id, state: Active }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingJourneyEnrollment state=Active, nextRunAt=now]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/enrollment/:id/exit
+    auth: authenticated
+    permissions: authenticated — no record ACL check
+    request: "body { reason? (default OperatorExit) }"
+    response: "200 { id, state: Exited, reason }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingJourneyEnrollment state=Exited, exitReason and exitedAt set, nextRunAt cleared]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/journey/:id/trigger
+    auth: authenticated
+    permissions: "administrator — the route is not @Public so a session/API key principal is always required first; an x-worker-secret header swaps the in-handler check for the worker capability"
+    request: "body { eventType (required — whitelist: entity.created, entity.updated, serviceDesk.case.statusChanged, customerSuccess.health.statusChanged, sales.opportunity.stageChanged), entityType?, entityId?, depth?, correlationId? } + optional x-worker-secret"
+    response: "200 JourneyTriggerResult { accepted, reason?, enrolled } — enrolled is always 0 today; the service only reports whether the journey is published and the event whitelisted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, AUTHENTICATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    # no enrollment is created by this route
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/public/form/submit
+    auth: public
+    permissions: "public intake — honeypot field, per-IP rate limit (10/minute) and idempotencyKey; the response is a static acknowledgement that discloses nothing about CRM record existence"
+    request: "body { firstName?, lastName? (a name is required), email (required, validated), company?, consent? (boolean), campaignId?, journeyId?, journeyVersionId?, source?, utmSource?, utmMedium?, utmCampaign?, idempotencyKey?, website? (honeypot) }"
+    response: "200 { accepted: true } — identical for a new Lead, a reused one and a honeypot hit"
+    errors: [VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Lead row created or reused by email (under the service identity, formIntakeKey stored), consent row to Consented when consent=true, journey enrollment when consent and journey ids are given and the version graph loads; a submitted campaignId that is not a live Campaign is dropped]
+    idempotency: "idempotencyKey dedupes on Lead.formIntakeKey; email dedupe reuses an existing Lead"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/attribution
+    auth: authenticated
+    permissions: administrator
+    request: "body { campaignId?, sendId?, journeyId?, outcome? (default converted), referenceType?, referenceId?, correlationId? }"
+    response: "200 { id, duplicate } — a normalized marketing_events conversion row"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [marketing_events row (provider internal, normalized_type conversion) with outcome and reference in properties]
+    idempotency: "correlationId dedupes via uq_marketing_events_internal_attribution; a repeat answers the existing id with duplicate=true"
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/portal/preferences
+    auth: authenticated
+    permissions: "authenticated portal principal — scope.principal.contactId is required; a principal without contactId fails"
+    request: "body { consent: boolean (required), purpose? (default ProductMarketing) }"
+    response: "200 { status } — the resulting consent status for the contact's own address"
+    errors: [AUTHENTICATION_REQUIRED, INTERNAL_ERROR, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [MarketingConsent row for the contact's email to Consented or OptedOut plus history row; the contact record itself is not modified]
+    idempotency: a repeat with the same consent value is a no-op consent write (changed=false internally)
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/crossModuleEvent
+    auth: authenticated
+    permissions: administrator
+    request: "body { eventType (required — same whitelist as journey trigger), sourceModule? (default unknown), entityType?, entityId?, emailHash?, payload?, causationDepth? (max 3), correlationId? }"
+    response: "200 { accepted, reason? } — EVENT_NOT_WHITELISTED or CAUSATION_DEPTH_EXCEEDED refusals are answers, not errors"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [marketing_events row (provider = sourceModule, normalized_type provider_event) for audit/trace only — never an enrollment]
+    idempotency: none — each accepted call inserts an event row
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/attribution
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read"
+    request: "query: model? (first_touch|last_touch|influenced — default influenced)"
+    response: "200 AttributionReport { campaignId, model, asOf, touches, uniqueRecipients, conversions, conversionRate, influencedRevenue, note }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: "model selects the attribution label; the aggregate itself is model-agnostic today"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/campaign/:id/funnel
+    auth: authenticated
+    permissions: "record ACL (Campaign) — read"
+    request: none
+    response: "200 FunnelReport { campaignId, asOf, stages: [{ stage, count }] ordered by first receipt, dropOff: [{ from, to, rate }] }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: stages ordered by earliest received_at"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/MarketingAutomation/action/retention/dryRun
+    auth: authenticated
+    permissions: administrator
+    request: "body { olderThanDays? (default 365) }"
+    response: "200 RetentionDryRun { cutoff, marketingEvents, recipientDeliveriesSent, note } — counts only; suppression records are never deleted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    # dry run writes nothing
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/action/diagnostics
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 MarketingDiagnostics { generatedAt, deliveryStates { state: count }, deadLetters, stuckSending } — counts only, no PII or secrets"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/public/click
+    auth: public
+    permissions: "public redirect — the to query must be a rooted path (never //host or /\\host) or an absolute URL on the configured delivery.publicBaseUrl origin; anything else answers INVALID_QUERY so the endpoint cannot be an open redirect"
+    request: "query: to (required — redirect target)"
+    response: "302 redirect to the validated same-origin target"
+    errors: [INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    # engagement events arrive via the provider webhook, never this route
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/MarketingAutomation/public/open
+    auth: public
+    permissions: public
+    request: none
+    response: "200 image/gif — a fixed 43-byte transparent 1×1 GIF with no-store cache headers; records no event and carries no per-recipient identifier"
+    errors: []
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

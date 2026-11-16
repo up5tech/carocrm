@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.challenge.request.v1",
+  "title": "LoginChallengeRequest",
+  "description": "POST /api/v1/Authentication/challenge body. Mirrors ChallengeSchema in apps/api/src/auth/auth.controller.ts.",
+  "type": "object",
+  "required": ["challengeId", "code"],
+  "properties": {
+    "challengeId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "code": { "type": "string", "minLength": 4, "maxLength": 64 }
+  }
+}

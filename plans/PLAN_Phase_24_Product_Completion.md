@@ -1,7 +1,10 @@
 # PLAN — Phase 24: Single-Tenant Product Completion (P0 / P1 / P2)
 
 > **Status:** Delivered — 24.0, 24.1, 24.2, 24.3, 24.5, 24.6 and **24.7** delivered (2026-11-14 →
-> 2026-11-16); 24.4 (API contract) in flight; 24.8–24.12 not started. The Phase 24 release decision
+> 2026-11-16); 24.4 in flight — the `api-spec/` registry is **complete at `--strict`** (29 files, 920/920
+> routes, gate-enabled) with a bounded schema-backed typed client delivered for the five session
+> operations (2026-11-16); G1/D3 sign-off, G90 and full client coverage remain open; 24.8–24.12 not
+> started. The Phase 24 release decision
 > remains **NO-GO for production** (Phase 23 review; final Phase 24 go/no-go in 24.12 pending).
 > **Date:** 2026-11-13
 > **Workstream type:** Product completion, release closure, platform DX and UX — the P0/P1/P2 recommendations from the system review, sequenced after the security workstream. Not a new business module and not a rewrite of the Entity Engine.

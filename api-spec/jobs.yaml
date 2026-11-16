@@ -1,0 +1,168 @@
+# PLAN §58 — background jobs and cron schedules.
+# Source: apps/api/src/jobs/job.controller.ts, apps/api/src/jobs/scheduled-job.controller.ts,
+# apps/api/src/jobs/jobs.service.ts, apps/api/src/jobs/job-queue.service.ts, apps/api/src/jobs/job.views.ts
+# Neither controller has @Public(), so the global AuthGuard requires a session; every handler then
+# calls requireAdmin() on RequestScope, so the permission is administrator on every route.
+# Postgres (`jobs`, `job_logs`, `scheduled_jobs`) is the durable record; Redis (BullMQ) only carries
+# the queue. Job and schedule `data`/`result` are redacted in API views for keys matching
+# password|secret|token|api_key|authorization|cookie|credential (depth-capped).
+# Format and required fields: api-spec/README.md §2.
+group: jobs
+basePath: /api/v1
+endpoints:
+  - method: POST
+    path: /api/v1/Job
+    auth: authenticated
+    permissions: administrator
+    request: "body { jobName (or legacy \"job\"), data? (object, JSON <= 32000 chars), id? (16-64 hex/dash chars, caller-chosen for dedupe) }"
+    response: "201 JobView { id, job, status, schedulingType, attempt, maxAttempts, progress, message, lastError, cancelRequested, queueJobId, createdAt, startedAt, finishedAt, data, result }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [jobs row pending, BullMQ queue entry on queue crm-jobs, jobs.queue_job_id updated]
+    idempotency: caller-supplied id dedupes; a repeat id answers 409, otherwise each call creates a job
+  - method: GET
+    path: /api/v1/Job
+    auth: authenticated
+    permissions: administrator
+    request: "query: status? (pending|running|completed|failed|cancelled), job? (exact job name), offset?, limit?"
+    response: "200 { list: JobView[], total, offset, count, queue: { <bullmq state>: <count> } } — ordered by createdAt descending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "offset (default 0, max 100000) and limit (default 25, max 100); total is the filtered count"
+    sorting: "fixed: created_at descending"
+    filtering: "exact match on status (allowlisted values only) and job name"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Job/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 JobView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Job/:id/log
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { jobId, lines: [{ seq, level, message, createdAt }] } — newest-first ordering is by seq ascending, capped at 500 lines"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: job_logs.seq ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Job/:id/action/cancel
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 JobView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [waiting BullMQ entry removed when possible; pending jobs flipped to cancelled; running jobs only get cancel_requested and stop cooperatively; terminal jobs are returned untouched]
+    idempotency: safe to repeat; a terminal job answers 200 unchanged
+  - method: POST
+    path: /api/v1/Job/:id/action/retry
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "201 JobView — a NEW jobs row and queue entry; the failed row is kept as history"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new jobs row pending, new BullMQ queue entry, new job id (the old id is not reused)]
+    idempotency: none; every call enqueues another attempt
+  - method: POST
+    path: /api/v1/Job/:id/action/discard
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, discarded: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [jobs row deleted; job_logs rows cascade-delete; only completed/failed/cancelled rows qualify — pending or running jobs must be cancelled first]
+    idempotency: a second discard answers 404
+  - method: GET
+    path: /api/v1/ScheduledJob
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: ScheduleView[] } — ordered by id ascending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: scheduled_jobs.id ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ScheduledJob
+    auth: authenticated
+    permissions: administrator
+    request: "body { id (schedule id, letters/digits/_/- up to 64), job (\"<module>.<action>\" name), scheduling (5-field cron expression), data? (object), enabled? (boolean, default true) } — upsert keyed by id"
+    response: "200 ScheduleView { id, job, scheduling, enabled, lastRunAt, createdAt, modifiedAt, data }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [scheduled_jobs row inserted or updated; enabled defaults true when omitted]
+    idempotency: upsert by id — a repeat with the same body is a no-op update
+  - method: POST
+    path: /api/v1/ScheduledJob/action/preview
+    auth: authenticated
+    permissions: administrator
+    request: "body { scheduling (cron expression string) }"
+    response: "200 { valid: boolean, next: string[] } — up to 3 upcoming ISO run times; valid is false for an unparseable expression"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; depends on current time so `next` drifts
+  - method: POST
+    path: /api/v1/ScheduledJob/:id/enable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ScheduleView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [scheduled_jobs.enabled set true, modified_at bumped]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ScheduledJob/:id/disable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ScheduleView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [scheduled_jobs.enabled set false, modified_at bumped; the worker stops firing it on its next tick]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ScheduledJob/:id/action/runNow
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 JobView — the newly created jobs row for the immediate run"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new jobs row pending with scheduling_type cron, new BullMQ queue entry, scheduled_jobs.last_run_at and modified_at bumped]
+    idempotency: none; every call enqueues another run

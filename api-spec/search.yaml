@@ -1,0 +1,290 @@
+# PLAN §58 — search, saved filters, dashboards and CSV import/export.
+# Source: apps/api/src/search/search.controller.ts, saved-filter.controller.ts,
+# dashboard.controller.ts, import-export.controller.ts and their services.
+#
+# None of these controllers is @Public(), so the global AuthGuard requires a principal
+# (Bearer token, API key, or CRM-SESSION cookie; unsafe methods via cookie also need the
+# CSRF double-submit token). Record authority is enforced inside the services:
+# PortalSearchService and ImportExportService delegate reads/writes to EntityCrudService,
+# which applies entity ACL, the record-scope predicate and field permissions; SavedFilter
+# and Dashboard rows carry their own owner/shared visibility rules.
+# Format and required fields: api-spec/README.md §2.
+group: search
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Search
+    auth: authenticated
+    permissions: "authenticated; each entity is searched only when the caller has read ACL on it — unreadable entities are skipped silently so the answer does not leak which entities exist"
+    request: "query: q (required, 1–200 chars), entities? (comma-separated entity names), limit? (default 5, clamped 1–50), offset? (default 0)"
+    response: "200 { query, total, offset, count, list: [{ entityType, record }] } — hits grouped by entity in metadata order, at most 25 entities and about 2×limit hits per page"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: "offset (default 0, clamped 0–100000); limit caps the per-entity fetch and the returned slice is hits[offset .. offset+2*limit]"
+    sorting: "fixed: entity metadata order; records inside an entity keep list order"
+    filtering: "q is ORed as exact id match plus substring 'like' on name and the trigram-indexed contact keys (firstName, lastName, emailAddress, phoneNumber) per entity"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Search/:entity
+    auth: authenticated
+    permissions: "read on :entity plus the record-scope predicate, enforced by EntityCrudService.list — :entity is a metadata entity name, unknown names answer 404"
+    request: "query: q?, where? (JSON), select?, orderBy? (or order?), offset?, maxSize? (or limit?), total? — same grammar as the generic entity list"
+    response: "200 { list: Record[], offset, count, total? } — when q is present it is ANDed with where as an OR group of exact-id and substring matches"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: "offset default 0; maxSize default 20, clamped to 500; total=false skips the count"
+    sorting: "orderBy=field,asc|desc as on the entity list"
+    filtering: "where JSON grammar plus the q text OR; every field/operator is validated against metadata"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Search/:entity
+    auth: authenticated
+    permissions: "read on :entity plus the record-scope predicate, same as GET — the body only changes how the query is carried, not the authority"
+    request: "body { q?, where?, orderBy?, maxSize?, offset? } — an object; non-object bodies are treated as empty"
+    response: "200 { list: Record[], offset, count, total? } — identical to GET /Search/:entity"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: "offset default 0; maxSize default 20, clamped to 500"
+    sorting: "orderBy as on the entity list"
+    filtering: "where JSON grammar plus the q text OR, same as GET"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/SavedFilter
+    auth: authenticated
+    permissions: "authenticated; the list is filtered to rows the caller may see — own rows always, shared rows (visibility=shared or is_shared) for internal users, only own rows for portal users; capped at 200"
+    request: "query: entityType? (exact match)"
+    response: "200 SavedFilterView[] — [{ id, name, entityType, userId, criteria, visibility, isShared, createdAt, modifiedAt }] ordered by name"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: "none; the server caps the answer at 200 rows"
+    sorting: "fixed: name ascending"
+    filtering: "entityType exact match only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/SavedFilter/:id
+    auth: authenticated
+    permissions: "authenticated; the row must be visible to the caller (owner, shared, or admin) — an invisible row answers 404, not 403"
+    request: none
+    response: "200 SavedFilterView"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/SavedFilter
+    auth: authenticated
+    permissions: "authenticated AND read ACL on the named entityType — creating a filter for an entity the caller cannot read is refused"
+    request: "SavedFilterInputSchema { name (1–190), entityType, criteria? (arbitrary JSON stored verbatim), visibility? (private|shared, default private) }"
+    response: "201 SavedFilterView — userId is the caller, isShared mirrors visibility=shared"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [saved_filters row]
+    idempotency: none; each call creates a filter with a fresh id
+  - method: PATCH
+    path: /api/v1/SavedFilter/:id
+    auth: authenticated
+    permissions: "filter owner or administrator only — a non-owner non-admin answers 403"
+    request: "partial SavedFilterInputSchema { name?, entityType?, criteria?, visibility? } — omitted keys unchanged"
+    response: "200 SavedFilterView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [saved_filters row, modified_at; setting visibility=shared flips is_shared]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/SavedFilter/:id
+    auth: authenticated
+    permissions: "filter owner or administrator only"
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [saved_filters row hard-deleted]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/SavedFilter/:id/action/run
+    auth: authenticated
+    permissions: "authenticated; the filter must be visible to the caller and the entity list underneath enforces read ACL and the record-scope predicate"
+    request: "body { where?, maxSize?, offset? } and/or the same keys as query params — body wins; where is ANDed with the stored criteria"
+    response: "200 { filter: SavedFilterView, result: { list, offset, count, total? } } — the entity list for the filter's entityType"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, INVALID_QUERY]
+    pagination: "offset default 0; maxSize default 20, clamped to 500"
+    sorting: "the entity list's orderBy grammar applies if supplied through where/query"
+    filtering: "stored criteria AND caller-supplied where"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Dashboard
+    auth: authenticated
+    permissions: "authenticated; the list is filtered to dashboards the caller may see — own dashboards, shared dashboards for internal users, only own for portal users; capped at 200"
+    request: none
+    response: "200 DashboardView[] — each includes its dashlets ordered by position"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: "none; the server caps the answer at 200 rows"
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Dashboard/:id
+    auth: authenticated
+    permissions: "authenticated; the dashboard must be visible to the caller — an invisible dashboard answers 404"
+    request: none
+    response: "200 DashboardView { id, name, userId, config, layout, isShared, dashlets[{ id, name, kind, position, config }], createdAt, modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: "dashlets ordered by position ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Dashboard
+    auth: authenticated
+    permissions: authenticated
+    request: "DashboardInputSchema { name (1–190), layout? (array, default []), config? (object, default {}), isShared? (default false) }"
+    response: "201 DashboardView"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [dashboards row owned by the caller]
+    idempotency: none; each call creates a dashboard with a fresh id
+  - method: PATCH
+    path: /api/v1/Dashboard/:id
+    auth: authenticated
+    permissions: "dashboard owner or administrator only"
+    request: "partial DashboardInputSchema { name?, layout?, config?, isShared? } — omitted keys unchanged"
+    response: "200 DashboardView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [dashboards row, modified_at]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/Dashboard/:id
+    auth: authenticated
+    permissions: "dashboard owner or administrator only"
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [dashlets rows for the dashboard deleted, dashboards row hard-deleted]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Dashboard/:id/dashlets
+    auth: authenticated
+    permissions: "dashboard owner or administrator; the dashboard must be visible to the caller first"
+    request: "DashletInputSchema { name (1–190), kind (list|chart|kpi|projectTasks|esignature|leadScore|customerSuccess), position? (int 0–10000, default 0), config? (object) } — config is validated per kind at write time"
+    response: "201 { id, dashboardId, name, kind, position, config }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [dashlets row]
+    idempotency: none; each call creates a dashlet with a fresh id
+  - method: PATCH
+    path: /api/v1/Dashboard/:id/dashlets/:dashletId
+    auth: authenticated
+    permissions: "dashboard owner or administrator; the dashlet must belong to the dashboard"
+    request: "partial DashletInputSchema { name?, kind?, position?, config? } — a supplied config is re-validated against the (possibly new) kind"
+    response: "200 { id, dashboardId, name, kind, position, config }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [dashlets row, modified_at]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/Dashboard/:id/dashlets/:dashletId
+    auth: authenticated
+    permissions: "dashboard owner or administrator; the dashlet must belong to the dashboard"
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [dashlets row hard-deleted]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Dashboard/:id/dashlets/:dashletId/action/run
+    auth: authenticated
+    permissions: "authenticated; the dashboard must be visible to the caller and the dashlet's entity must pass read ACL — aggregates run under the reader's own record scope, never the dashboard owner's"
+    request: none
+    response: "200 { dashletId, kind, ... } — list kind returns records, chart/kpi return groups or counts with scanned/truncated, projectTasks/esignature/leadScore/customerSuccess return their module's section; a saved filterId in config is ANDed into the where"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: "none; list kind honors config.maxSize (default 10, max 200), aggregates scan at most 2000 rows"
+    sorting: none
+    filtering: "config.where plus optional saved filterId criteria"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Dashboard/:id/dashlets/:dashletId/action/run
+    auth: authenticated
+    permissions: "same as the POST alias — identical handler"
+    request: none
+    response: "200 { dashletId, kind, ... } — identical to POST"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: "same as POST"
+    sorting: none
+    filtering: "same as POST"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/:entity/action/exportColumns
+    auth: authenticated
+    permissions: "authenticated only — the route returns field metadata and performs no per-entity ACL check; :entity is a metadata entity name, unknown names answer 404"
+    request: none
+    response: "200 { entity, columns: [{ name, type }] } — exportable fields only (password and id/audit columns excluded)"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/:entity/action/import
+    auth: authenticated
+    permissions: "create ACL on :entity asserted up front; each row then goes through the normal entity create/update path, so record scope and field write permissions apply per record and failures become per-row errors"
+    request: "body { csv: string (required), updateOnName? (boolean) } plus optional query updateOnName=true|1 — CSV text with a header row, at most 5 MiB and 2000 rows"
+    response: "200 ImportResult { entity, created, updated, skipped, errors: [{ row, message }], ids: string[] } — an id column updates-or-creates by id; updateOnName matches an existing record by name; at most 50 row errors are collected"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: "CSV columns must be metadata fields of importable types; an 'id' column is allowed"
+    sideEffects: [entity_records rows created or updated per row, formulas/automation/audit side effects per record; partially applied — rows that fail are reported, not rolled back]
+    idempotency: "not idempotent by default — a repeat inserts duplicates; with updateOnName or an id column, matching rows update instead of duplicating"
+  - method: POST
+    path: /api/v1/:entity/action/export
+    auth: authenticated
+    permissions: "read ACL on :entity asserted up front; the entity list underneath applies the record-scope predicate and field permissions to every page"
+    request: "body { where?, select?, orderBy? } — same grammar as the entity list; select is ignored in favour of the exportable column set"
+    response: "200 text/csv attachment — Content-Disposition filename <entity>-<YYYY-MM-DD>.csv; up to 10000 rows paged 500 at a time"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, INVALID_QUERY]
+    pagination: "server-side paging of 500 rows per query up to a 10000-row cap"
+    sorting: "orderBy as on the entity list"
+    filtering: "where JSON grammar as on the entity list"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/:entity/action/export
+    auth: authenticated
+    permissions: "read ACL on :entity asserted up front; same record-scope and field-permission filtering as POST"
+    request: "query: where?, orderBy? (or order?) — same grammar as the entity list"
+    response: "200 text/csv attachment — identical file to the POST variant"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, INVALID_QUERY]
+    pagination: "server-side paging of 500 rows per query up to a 10000-row cap"
+    sorting: "orderBy as on the entity list"
+    filtering: "where JSON grammar as on the entity list"
+    sideEffects: none
+    idempotency: safe to repeat

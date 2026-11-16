@@ -1,0 +1,164 @@
+# PLAN §58 — workflows and workflow runs: definition CRUD, publish/enable lifecycle and run history.
+# Source: apps/api/src/workflows/workflow.controller.ts, apps/api/src/workflows/workflow.service.ts
+# Every route calls WorkflowService.requireAdmin(): a workflow is automation that executes with
+# system authority once enabled, so the permission is administrator across the board.
+# Format and required fields: api-spec/README.md §2.
+group: workflows
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Workflow
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: WorkflowView[], total } — WorkflowView { id, name, entityType, eventType, isActive, currentVersion, currentVersionStatus, publishedVersion, versions[], createdAt, modifiedAt, issues[] }; soft-deleted rows excluded"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; every non-deleted workflow is returned"
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Workflow/action/catalog
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { events: string[], actions: [{ name, label, description, mutatesRecords }] } — the trigger events and action catalog the editor may offer"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Workflow/action/validate
+    auth: authenticated
+    permissions: administrator
+    request: "body is either a WorkflowDefinition or { definition: WorkflowDefinition } — validated without saving"
+    response: "200 { valid: boolean, issues: [{ code, message, path? }] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Workflow/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 WorkflowView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Workflow
+    auth: authenticated
+    permissions: administrator
+    request: "{ name (non-empty after trim), definition: WorkflowDefinition } — definition is validated; the workflow starts inactive with version 1 as draft"
+    response: "201 WorkflowView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [workflows row, workflow_versions row (version 1, status draft), audit log entry]
+    idempotency: none; each call creates a new workflow id
+  - method: PUT
+    path: /api/v1/Workflow/:id
+    auth: authenticated
+    permissions: administrator
+    request: "{ name?, definition? } — name-only updates touch just the row; a definition update reuses the current draft version or writes a new draft version when the head is published (published versions are never mutated)"
+    response: "200 WorkflowView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [workflows row, optionally a workflow_versions row or in-place draft update, audit fields modifiedById/modifiedAt]
+    idempotency: a repeat with the same body is a no-op on the draft
+  - method: POST
+    path: /api/v1/Workflow/:id/action/publish
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 WorkflowView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [transaction: current draft becomes published, previously published version archived, workflows.publishedVersionId set, audit log entry; publishing does not enable the workflow]
+    idempotency: none; publishing an already-published head answers VALIDATION_FAILED
+  - method: POST
+    path: /api/v1/Workflow/:id/action/enable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 WorkflowView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [workflows.isActive = true — the published definition starts executing on matching entity events with system authority]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Workflow/:id/action/disable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 WorkflowView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [workflows.isActive = false — new runs stop; in-flight runs are not cancelled by this call]
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/Workflow/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [workflows row soft-deleted (isDeleted = true, isActive = false); versions and run history are retained; audit log entry]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/Workflow/:id/runs
+    auth: authenticated
+    permissions: administrator
+    request: "query: offset?, limit?, status? (running|waiting|completed|failed|cancelled)"
+    response: "200 { list: WorkflowRunView[], total, offset, count } — WorkflowRunView { id, workflowId, workflowName, version, entityType, entityId, status, userId, error, attempt, startedAt, finishedAt, steps[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: "offset (default 0) and limit (default 20, clamped 1-200)"
+    sorting: "fixed: workflow_runs.createdAt descending"
+    filtering: "status enum only; an unknown status answers VALIDATION_FAILED"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/WorkflowRun
+    auth: authenticated
+    permissions: administrator
+    request: "query: workflowId?, status? (running|waiting|completed|failed|cancelled), offset?, limit?"
+    response: "200 { list: WorkflowRunView[], total, offset, count } — same shape as the per-workflow runs list"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "offset (default 0) and limit (default 20, clamped 1-200)"
+    sorting: "fixed: workflow_runs.createdAt descending"
+    filtering: "workflowId equality plus status enum; an unknown status answers VALIDATION_FAILED"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/WorkflowRun/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 WorkflowRunView with steps[] — each step { nodeId, nodeType, name, status, attempt, output, error, startedAt, finishedAt }, ordered by startedAt ascending"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: "fixed: steps ordered by startedAt ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

@@ -10,24 +10,11 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { I18nService } from '../i18n/i18n.service.js';
 import { Public } from './auth.guard.js';
+import { ChallengeSchema, LoginSchema, LogoutSchema, RefreshSchema } from './auth.schemas.js';
 import type { AuthTokens, PrincipalRecord } from './auth.service.js';
 import { AuthService } from './auth.service.js';
 import { PasswordResetService } from './password-reset.service.js';
 import { applySessionCookies } from './session-cookies.js';
-
-const LoginSchema = z.object({
-  userName: z.string().min(1),
-  password: z.string().min(1),
-  rememberMe: z.boolean().optional(),
-});
-
-const RefreshSchema = z.object({
-  refreshToken: z.string().min(1),
-});
-
-const LogoutSchema = z.object({
-  refreshToken: z.string().optional(),
-});
 
 /** Phase 23.2 (PLAN §8 task 2): self-service reset — identifier may be a user name or an email. */
 const PasswordResetRequestSchema = z.object({
@@ -37,12 +24,6 @@ const PasswordResetRequestSchema = z.object({
 const PasswordResetConfirmSchema = z.object({
   token: z.string().min(1).max(128),
   newPassword: z.string().min(8).max(256),
-});
-
-/** §4.9: the second factor that finishes a sign-in the password started. */
-const ChallengeSchema = z.object({
-  challengeId: z.string().min(1).max(64),
-  code: z.string().min(4).max(64),
 });
 
 const TotpCodeSchema = z.object({

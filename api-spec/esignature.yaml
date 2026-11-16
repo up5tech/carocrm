@@ -1,0 +1,761 @@
+# PLAN §58 — e-signature module: control plane, connections, OAuth callback,
+# signature requests, template mappings, worker-authorized operations.
+# Source: apps/api/src/esignature/esignature.controller.ts,
+# esignature-request.controller.ts, esignature-template.controller.ts,
+# esignature-oauth-callback.controller.ts and the services they call.
+# Capabilities are the module's synthetic ACL rights (use, manageDraft, send,
+# approve, void, correct, downloadCompleted, connectionRead, connectionManage,
+# templateMappingManage, auditRead) evaluated by ESignaturePermissionService.
+# Format and required fields: api-spec/README.md §2.
+group: esignature
+basePath: /api/v1
+endpoints:
+  # -------------------------------------------------------------------------
+  # ESignatureController — module health, capabilities, settings, connections,
+  # gate probe, record entry, reports, operations workbench, worker commands.
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/ESignature/action/health
+    auth: authenticated
+    permissions: "ESignature capability \"use\""
+    request: none
+    response: "200 ESignatureHealthView { module, ok, dependencies[], optionalIntegrations[], features[], providerCapabilities, providerAdapters[], providerCatalog[], structures[], settings, gate, checks[] } — reads metadata registry, information_schema and settings; no secrets"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/capabilities
+    auth: authenticated
+    permissions: "ESignature capability \"use\""
+    request: none
+    response: "200 { capabilities: [{ key, label, description, granted }], provider: GateAssessment { ready, moduleEnabled, connectionsEnabled, encryptionConfigured, enabledConnections, reason, detail } }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/nav
+    auth: authenticated
+    permissions: "ESignature capability \"use\""
+    request: none
+    response: "200 { visible, admin, enabled, ready, reason } — a report for the sidebar, not a gate"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/provider-catalog
+    auth: authenticated
+    permissions: "ESignature capability \"connectionRead\""
+    request: none
+    response: "200 { providers: SignatureProviderDescriptor[] } — catalog entries carry no credential"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/settings
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\""
+    request: none
+    response: "200 ESignatureSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings[], pendingFeatures[], effective, integrationKeyEnvVars[] } — the security policy document; no field can be a secret"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/action/settings
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\""
+    request: "ESignatureSettings patch object (deep-merged into the stored document; unknown keys and secret-shaped values refused)"
+    response: "200 ESignatureSettingsView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row rewritten with version+1, navigation menu cache invalidated]
+    idempotency: a repeat with the same patch is a no-op merge but still bumps the version
+  - method: GET
+    path: /api/v1/ESignature/connections
+    auth: authenticated
+    permissions: "ESignature capability \"connectionRead\""
+    request: none
+    response: "200 SignatureConnectionView[] — redacted: credential presence flags only, never a secret"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/connections/:id
+    auth: authenticated
+    permissions: "ESignature capability \"connectionRead\""
+    request: none
+    response: "200 SignatureConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/connections
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: "ConnectionCreateSchema { providerKey?, name, environment (demo|production), clientSecret?, apiKey?, oauthClientId?, redirectUri?, connectReference? } (strict; one credential required)"
+    response: "201 SignatureConnectionView — the just-written secret is not in the answer"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature_connections row, credential vault write, audit row; an api_key provider is verified against the provider account before the key is stored]
+    idempotency: none; each call creates a connection
+  - method: PATCH
+    path: /api/v1/ESignature/connections/:id
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: "ConnectionUpdateSchema { name?, redirectUri?, connectReference? } (strict, at least one field)"
+    response: "200 SignatureConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature_connections row, audit row]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/secret
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: "ConnectionSecretSchema { kind: api_key|client_secret|webhook_secret, value } (strict; access/refresh tokens are refused)"
+    response: "200 SignatureConnectionView — write-only; the value is never returned"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [credential vault write, audit row; an api_key replacement is re-verified against the provider and re-binds the account]
+    idempotency: none; each call replaces the stored credential
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/authorize
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: "ConnectionAuthorizeSchema { scopes? } (strict; scopes may narrow, never widen the allowlist)"
+    response: "200 { connectionId, environment, authorizationUrl, expiresAt, scopes } — the browser is sent to authorizationUrl"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, PROVIDER_NOT_CONNECTED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [hashed single-use OAuth state row with PKCE verifier, connection status moves to reauthorization_required when it was connected, audit row; no provider call]
+    idempotency: none; each call starts a new flow and replaces the pending state
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/re-authorize
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: "ConnectionAuthorizeSchema { scopes? } (strict)"
+    response: "200 { connectionId, environment, authorizationUrl, expiresAt, scopes }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, PROVIDER_NOT_CONNECTED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as authorize; the audit action records re-authorization]
+    idempotency: none; each call starts a new flow
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/test
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" (gate operation testConnection)"
+    request: none
+    response: "200 SignatureConnectionTest { connectionId, environment, reachable, checkedAt, detailCode, adapterMode } — performs no write at the provider"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider connectionStatus call, lastSuccessfulApiAt/lastErrorAt stamps, possible token refresh and status move to reauthorization_required, audit row]
+    idempotency: safe to repeat; each call probes the provider again
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/enable
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: none
+    response: "200 SignatureConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature_connections.is_active set, audit row connection.enabled]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/disable
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: none
+    response: "200 SignatureConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature_connections.is_active cleared, audit row connection.disabled; history is kept]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/connections/:id/disconnect
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + connections feature + ENCRYPTION_KEY"
+    request: none
+    response: "200 { connectionId, credentialsRemoved, statesDiscarded, hadRequests }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [credential vault emptied first, pending OAuth states discarded, connection soft-deleted, audit row; request/event/artifact history is retained]
+    idempotency: a repeat answers RECORD_NOT_FOUND-free refusal via require(); already-disconnected rows are gone
+  - method: POST
+    path: /api/v1/ESignature/action/gate/check
+    auth: authenticated
+    permissions: "the probed operation's own capability (use|manageDraft|send|approve|void|correct|downloadCompleted|connectionManage|templateMappingManage)"
+    request: "OperationProbeSchema { operation: testConnection|listTemplates|templateDetails|prepareEnvelope|sendEnvelope|envelopeStatus|listRecipients|recipientView|resendNotifications|voidEnvelope|correctEnvelope|downloadCompletedDocuments|downloadCompletionEvidence|reconcile, providerKey? } (strict)"
+    response: "200 { operation, providerKey, admitted: true } — performs no provider call"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/gate/operations
+    auth: authenticated
+    permissions: "ESignature capability \"use\""
+    request: none
+    response: "200 { operations: ESignatureOperation[], provider: caller userType }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/record-entry
+    auth: authenticated
+    permissions: "authenticated — record ACL read on the named entity decides availability; ESignature \"use\" and \"manageDraft\" shape the answer"
+    request: "query: entityType (metadata entity id), recordId"
+    response: "200 RecordEntryView { available, reason (available|module_disabled|no_permission|unsupported_entity|record_missing|record_restricted), entityType, recordId, canPrepare, requests[] (max 5) } — unavailability is a 200, never a 403"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: "none; the embedded request list is bounded at 5"
+    sorting: "fixed: requests ordered modified_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/reports
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record scope (all|team|own)"
+    request: "query: days? (0=all time, default 30, max 3650), recipient? (narrow the waiting report)"
+    response: "200 ESignatureReportOverview { generatedAt, window, sections[] } — seven curated aggregates, counts only, no record detail"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: "days window plus optional recipient name/email on the waiting section"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/reports/:key
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record scope"
+    request: "query: days?, recipient?; key is one of status|rates|approvals|waiting|completionTime|exceptions|volume"
+    response: "200 ESignatureReportSection { key, label, description, generatedAt, window, data }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: "days window plus optional recipient name/email"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/action/operations
+    auth: authenticated
+    permissions: "ESignature capability \"connectionRead\"; request worklists additionally obey the caller's SignatureRequest record scope"
+    request: "query: staleAfterHours? (default 24, max 720), limit? (default 25, max 100)"
+    response: "200 OperationsOverview { generatedAt, moduleEnabled, webhooksEnabled, requestAccess, connections[], webhook, worklists{failed,stuck,sendUnknown,reconciliation}, failedJobs, checks[], actions } — redacted credential metadata only, no provider call"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "limit bounds every list (default 25, max 100); counters cover the whole population"
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/action/operations/webhooks/:id/retry
+    auth: authenticated
+    permissions: "ESignature capability \"connectionManage\" + webhooks feature effective"
+    request: none
+    response: "200 WebhookProcessResult & { previousState } — re-applies one verified retryable/dead-letter delivery; never a resend"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [inbox row reset for retry, inline reprocessing under the dedup key, audit row webhook.retryRequested; unverified deliveries are refused]
+    idempotency: safe to repeat; the delivery's dedup key and monotonic projection make a repeat harmless
+  - method: POST
+    path: /api/v1/ESignature/action/process-provider-webhook
+    auth: public
+    permissions: "worker capability: x-worker-secret header compared in constant time to the configured worker secret"
+    request: "WebhookProcessSchema { inboxId } (strict)"
+    response: "200 WebhookProcessResult { status: processed|ignored|duplicate|retryable|dead_letter|already_processed, outcome, requestId }"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider event row, request/recipient state transitions, audit rows, domain events, possible artifact-retrieval job enqueue; runs under the module's system authority]
+    idempotency: the inbox row is the idempotency key; a retried job answers already_processed
+  - method: POST
+    path: /api/v1/ESignature/action/retrieve-artifacts
+    auth: public
+    permissions: "worker capability: x-worker-secret header compared in constant time"
+    request: "ArtifactRetrieveSchema { requestId } (strict)"
+    response: "200 { artifacts: SignatureRequestDocumentView[], created } — signed documents and completion certificate"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED, SIGNATURE_MODULE_DISABLED, SIGNATURE_REQUEST_INVALID_STATE, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider download calls, derived snapshot rows and storage objects, audit row, esignature.completedArtifactAvailable event when something was created; idempotent by providerDocumentId and content hash]
+    idempotency: safe to repeat; already-stored artifacts are returned, nothing is duplicated
+  # -------------------------------------------------------------------------
+  # ESignatureRequestController — drafts, preview, approval, envelope, send,
+  # reconciliation, embedded view, artifacts, lifecycle, recipients, documents.
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/ESignature/requests
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record scope (all|team|own from the role level)"
+    request: "query: status? (comma-separated REQUEST_STATUSES), sourceEntityType?, sourceRecordId?, connectionId?, assignedUserId?, needsAttention? (true|false), approvalStatus? (not_required|pending|approved|rejected), q?, recipient?, createdFrom?, createdTo?, sentFrom?, sentTo?, completedFrom?, completedTo? (ISO instants), limit? (default 50, max 200), offset? (default 0)"
+    response: "200 { list: SignatureRequestListRow[], total } — rows carry resolved source label only when the caller may read that record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, SIGNATURE_MODULE_DISABLED]
+    pagination: "limit (default 50, max 200) and offset (default 0); total is the scoped count"
+    sorting: "fixed: modified_at desc, id asc"
+    filtering: "status list plus source/connection/assignee/attention/approval filters, q on request subject data, recipient on signer snapshot, six ISO date bounds; an unknown status is a 400, not an empty page"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/requests
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + read ACL on a linked source record when sourceEntityType/sourceRecordId are set"
+    request: "RequestCreateSchema { providerKey?, name, description?, subject?, message?, emailBlurb?, expiresAt?, connectionId?, templateMappingId?, sourceEntityType?, sourceRecordId?, approvalRequired? } (strict)"
+    response: "201 SignatureRequestView — a draft owned by the creator and their teams"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature_requests draft row, audit row request.created, esignature.requestCreated event]
+    idempotency: none; each call creates a draft
+  - method: GET
+    path: /api/v1/ESignature/requests/:id
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL"
+    request: none
+    response: "200 SignatureRequestView { id, name, status, providerKey, connectionId, approval fields, sentAt/completedAt/…, version, editable, recipients[], documents[], source }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/ESignature/requests/:id
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + draft status"
+    request: "RequestUpdateSchema { version, name?, description?, subject?, message?, emailBlurb?, expiresAt?, connectionId?, templateMappingId?, sourceEntityType?, sourceRecordId?, assignedUserId?, teamIds? } (strict, at least one field besides version)"
+    response: "200 SignatureRequestView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature_requests row, stale stored preparation dropped, audit row request.updated]
+    idempotency: a stale version answers 409 CONCURRENCY_CONFLICT; a repeat with the current version and same body is a no-op
+  - method: GET
+    path: /api/v1/ESignature/requests/:id/preview
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL"
+    request: none
+    response: "200 SignaturePreview — exactly what a send would carry plus blocking problems; read-only, no provider contact"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/prepare
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + draft status"
+    request: "RequestPrepareSchema { version, confirm } — confirm must be literally true"
+    response: "200 { request: SignatureRequestView, preview: SignaturePreview } — status moves to ready_to_send or pending_approval"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [immutable outgoing snapshot and digest stored, audit row request.prepared, esignature.requestPrepared event, approval.requested audit+event when the policy requires a decision]
+    idempotency: a stale version or changed content answers 409/422; re-preparing identical content reuses the recorded approval
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/request-approval
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + approvals feature"
+    request: "RequestApprovalRequestSchema { version } (strict)"
+    response: "200 SignatureRequestView — status pending_approval"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [approval queue entry, audit row approval.requested, esignature.requestApprovalRequested event]
+    idempotency: the reviewed snapshot/digest are untouched, so the decision still binds to the same bytes
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/approve
+    auth: authenticated
+    permissions: "ESignature capability \"approve\" + SignatureRequest record ACL + approvals feature + separation of duties (creator/preparer cannot self-approve)"
+    request: "RequestApprovalDecisionSchema { version, reason? } (strict)"
+    response: "200 { request: SignatureRequestView, decision: approved, reviewedVersion } — status ready_to_send"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_APPROVAL_SEPARATION_REQUIRED, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [approval decision bound to the stored digest and reviewed version, status transition, audit row approval.granted, esignature.requestApproved event]
+    idempotency: a repeat with the same version after the transition answers SIGNATURE_REQUEST_INVALID_STATE
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/reject
+    auth: authenticated
+    permissions: "ESignature capability \"approve\" + SignatureRequest record ACL + approvals feature + separation of duties"
+    request: "RequestRejectionSchema { version, reason } (strict; reason required, min 3 chars enforced in service)"
+    response: "200 { request: SignatureRequestView, decision: rejected, reviewedVersion } — stays pending_approval with approval_status rejected"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_APPROVAL_SEPARATION_REQUIRED, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [rejection decision with reason, audit row approval.rejected, esignature.requestRejected event; the request cannot be sent as it stands]
+    idempotency: same as approve
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/envelope
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + gate prepareEnvelope (feature send, provider capability, enabled connection)"
+    request: "RequestEnvelopeSchema { version } (strict)"
+    response: "200 { request: SignatureRequestView, envelope: { providerEnvelopeId, status, createdAt, created } } — creates the provider-side draft only; nothing is sent"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider draft envelope created, providerEnvelopeId recorded on the request, audit row request.prepared]
+    idempotency: an existing envelope is returned without a provider call; a per-request advisory lock plus a digest-derived idempotency key make a retry safe
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/envelope/abandon
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + ready_to_send|pending_approval status"
+    request: none
+    response: "200 { request: SignatureRequestView, deleted } — the provider draft is deleted and the envelope id cleared"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, PROVIDER_NOT_CONNECTED, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider draft envelope deleted, providerEnvelopeId released locally, audit row request.updated]
+    idempotency: a second call answers SIGNATURE_REQUEST_INVALID_STATE once the envelope id is cleared
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/send
+    auth: authenticated
+    permissions: "ESignature capability \"send\" + SignatureRequest record ACL + gate sendEnvelope/sendNewEnvelope + approval for the current digest when required"
+    request: "RequestSendSchema { version, confirm } — confirm must be literally true"
+    response: "200 { request: SignatureRequestView, providerStatusRaw, sentAt } — or a stable refusal; an ambiguous outcome holds the request in send_unknown"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_APPROVAL_REQUIRED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, PROVIDER_OUTCOME_UNKNOWN, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider envelope sent (signer invitation emails), single send-attempt token claimed, status transition to sent|provider_error|send_unknown, provider recipient ids attached, audit row send.completed|send.outcome_unknown, esignature.requestSent|requestNeedsReconciliation event]
+    idempotency: one deliberate action is claimed once under a unique attempt token; a repeat answers SIGNATURE_REQUEST_INVALID_STATE, and an unknown outcome is reconciled, never blindly resent
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/send/recover
+    auth: authenticated
+    permissions: "ESignature capability \"send\" + SignatureRequest record ACL + provider_error status"
+    request: none
+    response: "200 { request: SignatureRequestView } — status back to ready_to_send and the refused attempt token released"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [status transition provider_error→ready_to_send, send attempt released, audit row request.updated]
+    idempotency: safe to repeat only from provider_error; any other state answers SIGNATURE_REQUEST_INVALID_STATE
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/reconcile
+    auth: authenticated
+    permissions: "ESignature capability \"send\" + SignatureRequest record ACL + reconcilable status"
+    request: none
+    response: "200 { request: SignatureRequestView, providerStatus, reconciled } — the provider's answer applied monotonically"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, PROVIDER_NOT_CONNECTED, SIGNATURE_CONNECTION_NOT_AVAILABLE, PROVIDER_OUTCOME_UNKNOWN]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider envelopeStatus and listRecipients reads, recipient status projection, request status transition, audit row reconciliation.completed, domain event when the status changed]
+    idempotency: safe to repeat; the projection never moves backwards and an unknown provider answer writes nothing
+  - method: GET
+    path: /api/v1/ESignature/requests/:id/events
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL"
+    request: "query: limit? (default 100, max 200)"
+    response: "200 { list: SignatureTimelineEntry[] } — normalized provider events plus redacted lifecycle audit entries, newest first; raw provider types only for auditRead holders"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: "limit only (default 100, max 200)"
+    sorting: "fixed: newest first"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/embedded-view
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL + caller's user email must equal the named embedded recipient + return/cancel hosts on the installation allowlist"
+    request: "RequestEmbeddedViewSchema { recipientId, returnUrl, cancelUrl? } (strict)"
+    response: "200 { url, expiresAt } — a short-lived bearer signing URL returned once and never stored"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_ACTION_NOT_AVAILABLE, RECIPIENT_NOT_AUTHORIZED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider recipientView call, audit row embedded_view.created (the URL itself is never audited or logged), providerRecipientId attached when unknown]
+    idempotency: each call mints a fresh signing URL; opening it completes nothing
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/artifacts/retrieve
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL + gate downloadCompletedDocuments (capability downloadCompleted)"
+    request: none
+    response: "200 { artifacts: SignatureRequestDocumentView[], created } — signed documents and completion certificate; only for a completed request"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_ACTION_NOT_AVAILABLE, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider download calls, derived snapshot rows and storage objects, audit row artifact.downloaded, esignature.completedArtifactAvailable event when created > 0]
+    idempotency: safe to repeat; providerDocumentId plus content hash make a retried call store nothing new
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/resend-notification
+    auth: authenticated
+    permissions: "ESignature capability \"send\" + SignatureRequest record ACL + gate resendNotifications + remindersEnabled + cooldown"
+    request: "RequestResendSchema { recipientId? } (strict; omitted means every outstanding recipient)"
+    response: "200 { request: SignatureRequestView, resentAt, recipientId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_ACTION_NOT_AVAILABLE, SIGNATURE_RESEND_RATE_LIMITED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider reminder (signer emails), audit row reminder.sent which starts the cooldown window]
+    idempotency: the configured cooldown refuses a repeat inside the window; a transport retry keeps one idempotency key
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/void
+    auth: authenticated
+    permissions: "ESignature capability \"send\" + gate voidEnvelope (capability void) + SignatureRequest record ACL + open envelope status"
+    request: "RequestVoidSchema { version, confirm, reason } — confirm must be literally true, reason 3–500 chars"
+    response: "200 { request: SignatureRequestView, voidedAt, reason } — status voided after the provider confirms"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider void call with the recorded reason, status transition to voided, audit rows void.requested/void.completed, esignature.requestVoided event]
+    idempotency: a voided request answers SIGNATURE_REQUEST_INVALID_STATE on repeat; the provider idempotency key is fixed per envelope
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/correct
+    auth: authenticated
+    permissions: "ESignature capability \"send\" + capability \"correct\" + SignatureRequest record ACL + open envelope status"
+    request: "RequestCorrectSchema { confirm, reason } (strict; confirm must be literally true)"
+    response: "never succeeds in this release — always a stable refusal"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_ACTION_NOT_AVAILABLE, NOT_SUPPORTED_BY_PROVIDER, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [audit row correct.requested with outcome refused; the provider is never called because no adapter declares correctEnvelope]
+    idempotency: safe to repeat; every call is refused the same way
+  - method: GET
+    path: /api/v1/ESignature/requests/:id/recipients
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL"
+    request: none
+    response: "200 SignatureRequestRecipientView[] — signer snapshot rows with status, never a signing URL"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PUT
+    path: /api/v1/ESignature/requests/:id/recipients
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + draft status"
+    request: "RequestRecipientsSchema { recipients: [{ name, email, recipientType? (signer|carbon_copy), crmContactId?, roleName?, routingOrder (1–100), authenticationMethod? }] } — the whole set is replaced, 1–50 entries"
+    response: "200 SignatureRequestRecipientView[]"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [recipient rows replaced for the draft, stale preparation dropped, audit row recipients.changed]
+    idempotency: a repeat with the same set is a no-op replacement
+  - method: GET
+    path: /api/v1/ESignature/requests/:id/documents
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL"
+    request: none
+    response: "200 SignatureRequestDocumentView[] — snapshot metadata (name, mime, order, hash, size, artifact kind)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/requests/:id/documents
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + documents feature + read ACL on the source attachment"
+    request: "RequestDocumentAttachSchema { attachmentId, documentOrder? (1–100) } (strict)"
+    response: "201 SignatureRequestDocumentView — a snapshotted copy, not a reference"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_DOCUMENT_NOT_READABLE, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [snapshot row, stored immutable byte copy, audit row documents.changed, stale preparation dropped; type/size/count policy enforced before storage]
+    idempotency: attaching the same attachment again creates a new snapshot unless the service dedupes on checksum
+  - method: PUT
+    path: /api/v1/ESignature/requests/:id/documents/order/:order
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + documents feature + draft status"
+    request: "RequestDocumentReplaceSchema { attachmentId } (strict); :order is an integer 1–100"
+    response: "200 SignatureRequestDocumentView — the numbered slot's snapshot is retired and replaced"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_DOCUMENT_NOT_READABLE, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new snapshot row and stored copy, previous snapshot retired, audit row documents.changed, stale preparation dropped]
+    idempotency: none; each call replaces the slot's file again
+  - method: DELETE
+    path: /api/v1/ESignature/requests/:id/documents/:documentId
+    auth: authenticated
+    permissions: "ESignature capability \"manageDraft\" + SignatureRequest record ACL + documents feature + draft status"
+    request: none
+    response: "200 { detached } — the snapshot id removed from the request"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_REQUEST_INVALID_STATE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [snapshot detached from the request, stale preparation dropped, audit row documents.changed]
+    idempotency: a second delete answers RECORD_NOT_FOUND/VALIDATION_FAILED for the unknown snapshot
+  - method: GET
+    path: /api/v1/ESignature/requests/:id/documents/:documentId/content
+    auth: authenticated
+    permissions: "ESignature capability \"use\" + SignatureRequest record ACL; provider_signed_document and completion_evidence snapshots additionally require capability \"downloadCompleted\""
+    request: none
+    response: "200 raw bytes with content-type, content-disposition attachment, content-length, x-checksum-sha256, cache-control private no-store; bytes are re-hashed against the recorded digest before return"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, SIGNATURE_DOCUMENT_NOT_READABLE, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # ESignatureTemplateController — provider template catalog and role/field
+  # mappings. Every route requires templateMappingManage and the templates
+  # feature; catalog reads and mapping writes also pass the connection gate.
+  # -------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/ESignature/templates/catalog/refresh
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature + gate listTemplates (enabled connection on that provider)"
+    request: "TemplateCatalogRefreshSchema { connectionId } (strict)"
+    response: "200 TemplateCatalogResult { connectionId, environment, refreshedAt, templates[], mappings[] } — live provider catalog plus how stored mappings line up with it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider listTemplates call; nothing is written locally — mappings are only reported against the catalog]
+    idempotency: safe to repeat; each call re-reads the live catalog
+  - method: GET
+    path: /api/v1/ESignature/templates/catalog/:connectionId/:templateId
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature + gate templateDetails"
+    request: none
+    response: "200 TemplateDetailView — one template's roles and tabs from the account that owns the connection"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider templateDetails call]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ESignature/templates/mappings
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature"
+    request: "query: connectionId (required — there is deliberately no all-connections list)"
+    response: "200 SignatureTemplateMapping[] for that connection"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: "connectionId query parameter only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ESignature/templates/mappings
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature + gate templateDetails (the named template is validated live before the write)"
+    request: "TemplateMappingCreateSchema { name, mappingType? (workflow|document_type|process), connectionId, providerTemplateId, supportedSourceEntities[], roleMappings[] (roleName, recipientType, routingOrder, source crmField|manual, crmField?), fieldMappings[] (tabName, crmField, required, roleName?), defaultSubject?, defaultMessage?, isActive? } (strict)"
+    response: "201 SignatureTemplateMapping"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, ENCRYPTION_KEY_MISSING, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [signature template mapping row, audit row templateMapping.changed; role/field references are validated against the live template and the metadata registry first]
+    idempotency: none; each call creates a mapping after re-validating the live template
+  - method: GET
+    path: /api/v1/ESignature/templates/mappings/:id
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature"
+    request: none
+    response: "200 SignatureTemplateMapping"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/ESignature/templates/mappings/:id
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature; a changed providerTemplateId is re-validated against the live template"
+    request: "TemplateMappingUpdateSchema { version, name?, mappingType?, providerTemplateId?, supportedSourceEntities?, roleMappings?, fieldMappings?, defaultSubject?, defaultMessage?, isActive? } (strict, at least one field besides version)"
+    response: "200 SignatureTemplateMapping"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, SIGNATURE_MODULE_DISABLED, PROVIDER_NOT_CONNECTED, NOT_SUPPORTED_BY_PROVIDER, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [mapping row updated, audit row templateMapping.changed]
+    idempotency: a stale version answers 409 CONCURRENCY_CONFLICT; a repeat with the current version and same body is a no-op
+  - method: POST
+    path: /api/v1/ESignature/templates/mappings/:id/active
+    auth: authenticated
+    permissions: "ESignature capability \"templateMappingManage\" + templates feature"
+    request: "TemplateMappingActiveSchema { active } (strict)"
+    response: "200 SignatureTemplateMapping — deactivation is how a mapping is retired; nothing deletes it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, RECORD_NOT_FOUND, SIGNATURE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [mapping is_active flag, audit row templateMapping.changed]
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # ESignatureOAuthCallbackController — the module's only unauthenticated
+  # browser route; the single-use hashed OAuth state is the verification.
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/ESignature/oauth/callback
+    auth: public
+    permissions: "single-use hashed OAuth state (consumed atomically, environment-bound); the connection is derived from the state, never from the request"
+    request: "query: state (required), code?, error?, error_description? (strict; provider words are never echoed)"
+    response: "302 redirect to /esignature?connection=<id>&authorization=<status> — no credential ever appears in the URL"
+    errors: [BAD_REQUEST, AUTHENTICATION_FAILED, VALIDATION_FAILED, PROVIDER_NOT_CONNECTED, SIGNATURE_CONNECTION_NOT_AVAILABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [OAuth state consumed, token exchange with the provider, tokens and account binding written to the credential vault, connection status/consent recorded, audit row connection.authorized|reauthorized or a refused outcome]
+    idempotency: the state is single-use; a replay or forged state answers AUTHENTICATION_FAILED and is audited as a probe

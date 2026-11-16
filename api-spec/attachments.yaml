@@ -1,0 +1,144 @@
+# PLAN §58 — file attachments and chunked uploads.
+# Source: apps/api/src/attachment/attachment.controller.ts, attachment.service.ts,
+# chunked-upload.controller.ts, chunked-upload.service.ts.
+# Every route sits behind the global AuthGuard (no @Public); cookie-driven unsafe
+# methods additionally need the double-submit CSRF token, which is not a separate auth value.
+# Read access is decided per row: admin, the uploader, or read ACL on the parent record
+# (parentType/parentId); an `internal` attachment never crosses the portal boundary and
+# an API key always resolves through the parent record's ACL.
+# Format and required fields: api-spec/README.md §2.
+group: attachments
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Attachment/action/info
+    auth: authenticated
+    permissions: authenticated — storage capabilities only, no record involved
+    request: none
+    response: "200 StorageInfo { driver, supportsSignedUrls, maxUploadBytes, scanProvider }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Attachment/upload
+    auth: authenticated
+    permissions: "authenticated; when parentId/parentType are supplied the caller must have read ACL on the parent record; an API key may only upload to a record it can read (orphan uploads are refused for keys)"
+    request: "multipart/form-data: file part named `file` (required), plus text fields parentId, parentType, field, role and optional declared size — also accepted as query parameters; the body streams into storage and is never buffered whole"
+    response: "201 AttachmentDto { id, name, type, size, mimeType, checksum, parentId, parentType, field, role, visibility, createdById, createdAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, FILE_TOO_LARGE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [storage object write under {parentType|attachment}/{id}.ext, malware scan before the row is visible, attachments row, storage object deleted when the scan rejects or the upload fails or is empty]
+    idempotency: none; every call stores a new file and row
+  - method: GET
+    path: /api/v1/Attachment/:id/file
+    auth: authenticated
+    permissions: "record ACL on the attachment row: admin, the uploader, or read access on the parent record; portal principals never see `internal` attachments; an API key needs read scope and parent-record read ACL"
+    request: none
+    response: "200 binary stream of the stored bytes with content-type, content-disposition attachment filename, content-length, cache-control private/no-store, x-content-type-options nosniff and x-checksum-sha256 when a checksum exists"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [storage object read; no writes]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Attachment/:id/url
+    auth: authenticated
+    permissions: "same row ACL as the download — the signed URL is only minted after the access check"
+    request: "query: expires? (positive seconds; defaults to the configured signed-URL TTL)"
+    response: "200 SignedDownload { url, expiresAt, driver } — only when the storage driver supports signed URLs"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; each call mints a fresh URL and signing writes no row or storage object
+  - method: GET
+    path: /api/v1/Attachment/:id
+    auth: authenticated
+    permissions: "same row ACL as the download — metadata is refused for records the caller cannot read"
+    request: none
+    response: "200 AttachmentDto (same shape as the upload response)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/Attachment/:id
+    auth: authenticated
+    permissions: "the uploader or an administrator; an API key additionally needs the write scope"
+    request: none
+    response: "200 { status: true, id }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [storage object deleted, attachments row deleted]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/AttachmentUpload/init
+    auth: authenticated
+    permissions: "authenticated; when parentId/parentType are supplied the caller must have read ACL on the parent record; the upload is owned by the creator — only the uploader or an admin may use it afterwards"
+    request: "JSON { name, mimeType, totalSize (bytes, required), chunkSize?, parentId?, parentType?, field?, role? } — name and mimeType go through the same filename/extension/MIME allowlists as a direct upload"
+    response: "200 ChunkedUploadDto { id, name, mimeType, totalSize, received, partCount, parts, status, chunkMaxSize, expiresAt, parentId, parentType }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, FILE_TOO_LARGE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [file_uploads row with status=open and an expiry window; part files are only written by /part]
+    idempotency: none; every call reserves a new upload id
+  - method: POST
+    path: /api/v1/AttachmentUpload/:id/part
+    auth: authenticated
+    permissions: "the upload's creator or an administrator"
+    request: "multipart/form-data: file part `file` plus `index` (multipart field or ?index= query) — a non-negative integer under the upload's chunkMaxSize; parts may arrive in any order"
+    response: "200 ChunkedUploadDto with updated received bytes and parts list"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, FILE_TOO_LARGE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [part file written under uploads/{id}/part-NNNNNN, file_uploads row updated with the part index and received byte count; an oversized or empty part deletes its storage object]
+    idempotency: re-sending the same index overwrites that part and recomputes received bytes
+  - method: GET
+    path: /api/v1/AttachmentUpload/:id
+    auth: authenticated
+    permissions: "the upload's creator or an administrator"
+    request: none
+    response: "200 ChunkedUploadDto (progress: received bytes, accepted chunk indexes, status, expiry)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AttachmentUpload/:id/complete
+    auth: authenticated
+    permissions: "the upload's creator or an administrator; the parent ACL was checked at init and is not re-checked here"
+    request: none
+    response: "201 AttachmentDto — the assembled file goes through the normal attachment path (probe, size limit, malware scan, attachments row)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, FILE_TOO_LARGE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [part files replayed in index order into one storage object, malware scan, attachments row, part files deleted, file_uploads status=completed; a rejected scan deletes the assembled object]
+    idempotency: a second complete answers 422 (status is no longer open); chunk indexes must be contiguous from 0 and received bytes must equal totalSize
+  - method: POST
+    path: /api/v1/AttachmentUpload/:id/abort
+    auth: authenticated
+    permissions: "the upload's creator or an administrator"
+    request: none
+    response: "200 ChunkedUploadDto with status=aborted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [all uploaded part files deleted, file_uploads status=aborted]
+    idempotency: safe to repeat; aborting again deletes nothing and leaves status=aborted

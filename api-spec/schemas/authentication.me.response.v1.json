@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.me.response.v1",
+  "title": "PrincipalProfile",
+  "description": "GET /api/v1/AppUser/me success body: the caller's principal plus own profile fields (profileResponse in auth.controller.ts). Profile columns absent for an API-key session stay optional; additional profile keys may appear.",
+  "type": "object",
+  "required": ["id", "userName", "type", "roles", "teams", "locale", "timezone", "mfaPending", "sessionId"],
+  "properties": {
+    "id": { "type": "string" },
+    "userName": { "type": "string" },
+    "type": { "type": "string" },
+    "roles": { "type": "array", "items": { "type": "string" } },
+    "teams": { "type": "array", "items": { "type": "string" } },
+    "locale": { "type": ["string", "null"] },
+    "timezone": { "type": ["string", "null"] },
+    "mfaPending": { "type": "boolean" },
+    "sessionId": { "type": ["string", "null"] },
+    "firstName": { "type": ["string", "null"] },
+    "lastName": { "type": ["string", "null"] },
+    "emailAddress": { "type": ["string", "null"] },
+    "phoneNumber": { "type": ["string", "null"] },
+    "title": { "type": ["string", "null"] },
+    "avatarId": { "type": ["string", "null"] }
+  }
+}

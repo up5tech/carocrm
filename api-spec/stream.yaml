@@ -1,0 +1,162 @@
+# PLAN §58 — stream / activity surface: timeline posts and notes, record subscriptions,
+# the caller's notification inbox and its live SSE feed.
+# Source: apps/api/src/stream/stream.controller.ts, apps/api/src/stream/stream.service.ts,
+#         apps/api/src/stream/notification-events.service.ts, apps/api/src/stream/stream-hooks.ts
+#         and apps/api/src/calendar/calendar.controller.ts + calendar.service.ts
+#         (the single /Calendar route lives in the calendar module but belongs to this group).
+#
+# Auth is the global AuthGuard: every route here needs a principal (bearer token, CRM-SESSION
+# cookie, or API key); unsafe methods over the cookie additionally need the CSRF double-submit.
+# There are no @Public() routes in this group. Record authority is enforced in StreamService
+# against the PARENT record: a stream read needs the parent's read ACL, posting needs read AND
+# the `stream` action, and portal principals only ever see `public` items (PLAN §5.4, §10.3).
+# Format and required fields: api-spec/README.md §2.
+group: stream
+basePath: /api/v1
+endpoints:
+  - method: POST
+    path: /api/v1/Note
+    auth: authenticated
+    permissions: "record ACL on the parent: read AND the `stream` action on parentType/parentId; portal principals may only post visibility=public"
+    request: "NoteBodySchema { type? ('Post'|'Note', default 'Post' — 'Update' is refused), parentId, parentType, post?, notes?, data?, attachmentsIds?, idList? (explicit mention user ids), visibility? ('public'|'internal', default internal) }"
+    response: "201 StreamItemDto { id, entityType, entityId, type, visibility, data, post, createdById, createdBy, createdAt, mentions[], attachmentIds[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [stream_items row, stream_mentions rows plus a Mention notification row per mentioned internal user (pg_notify crm_notifications via trigger), stream_attachments rows, attachments.visibility set to the item's visibility; mention tokens are @[Name] or @userName]
+    idempotency: "none at the HTTP layer; callers inside domain commands may pass data.idempotencyKey which is stored but not enforced here"
+  - method: DELETE
+    path: /api/v1/Note/:id
+    auth: authenticated
+    permissions: "authenticated; only the author or an admin may remove the item, plus read ACL on the parent record"
+    request: none
+    response: "200 { status: true, id }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [stream_items.is_deleted soft delete; mentions and attachment links are kept]
+    idempotency: "safe to repeat — the row is fetched including deleted ones and re-flagged, so a second delete still answers 200"
+  - method: GET
+    path: /api/v1/Stream
+    auth: authenticated
+    permissions: "record ACL (read) on every parent record; items on unreadable records are dropped in memory, portal principals see public items only"
+    request: "query: maxSize?, offset?, order? ('asc'|'desc', default 'desc'), type? (string or array/comma list), view? ('all'|'followed'|'own', default 'followed'), entityType?"
+    response: "200 { list: StreamItemDto[], offset, count } — deliberately no total because ACL filtering happens after the query"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 30, max 200)"
+    sorting: "created_at, direction from order (default desc)"
+    filtering: "view scopes to followed records / own items / both; entityType and type (Note|Post|Update) narrow the result"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/:entityType/:entityId/stream
+    auth: authenticated
+    permissions: "record ACL (read) on :entityType/:entityId; portal principals see public items only"
+    request: "query: maxSize?, offset?, order? ('asc'|'desc', default 'desc'), type? (string or array/comma list)"
+    response: "200 { list: StreamItemDto[], total, offset, count } — total honours the type filter and the portal visibility rule"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 30, max 200)"
+    sorting: "created_at, direction from order (default desc)"
+    filtering: "type (Note|Post|Update)"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PUT
+    path: /api/v1/:entityType/:entityId/subscription
+    auth: authenticated
+    permissions: "record ACL (read) on :entityType/:entityId"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [stream_followers row for the caller; the insert is ON CONFLICT DO NOTHING]
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/:entityType/:entityId/subscription
+    auth: authenticated
+    permissions: "authenticated — removes only the caller's own subscription row; no record ACL is checked"
+    request: none
+    response: "200 { status: true }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [stream_followers row deleted for the caller]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/:entityType/:entityId/subscription
+    auth: authenticated
+    permissions: "authenticated — reads only the caller's own subscription row; no record ACL is checked (SPA hint, not a gate)"
+    request: none
+    response: "200 { followed: boolean }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Notification
+    auth: authenticated
+    permissions: "authenticated — rows are scoped to the caller's user id; there is no cross-user read"
+    request: "query: maxSize?, offset?, unreadOnly? ('true'|'1'|boolean)"
+    response: "200 { list: [{ id, type, data, isRead, createdAt }], total, offset, count } — total honours unreadOnly so it matches the badge count"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: "offset (default 0) and maxSize (default 30, max 200)"
+    sorting: "fixed: created_at descending"
+    filtering: "unreadOnly keeps only is_read=false rows"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Notification/stream
+    auth: authenticated
+    permissions: "authenticated — the subscription is keyed to the caller's user id, so only their notifications are delivered"
+    request: none
+    response: "200 text/event-stream — SSE; `event: notification` frames carry { userId, id, type } and a comment frame every 25s; the client re-reads GET /Notification on each event"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [long-lived connection; a per-user in-memory subscription fed by the shared pg LISTEN on channel crm_notifications]
+    idempotency: "each connection is independent; reconnect to resume — events are not replayed"
+  - method: POST
+    path: /api/v1/Notification/Read-all
+    auth: authenticated
+    permissions: "authenticated — updates only the caller's own rows"
+    request: none
+    response: "200 { status: true, updated: number }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [notifications.is_read set for every unread row of the caller]
+    idempotency: safe to repeat; updated is 0 once everything is read
+  - method: POST
+    path: /api/v1/Notification/:id/Read
+    auth: authenticated
+    permissions: "authenticated — the update is scoped by user_id, so another user's notification id answers 404"
+    request: none
+    response: "200 { status: true, id }"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [notifications.is_read set for the caller's row]
+    idempotency: safe to repeat; an already-read row still answers 200
+  - method: GET
+    path: /api/v1/Calendar
+    # Route lives in apps/api/src/calendar/calendar.controller.ts; documented here because it is
+    # the activity read model over the same records the stream describes (PLAN §27).
+    auth: authenticated
+    permissions: "authenticated; each requested entity needs the read capability and record-level ACL through the generic entity list — entities the caller cannot read are silently omitted"
+    request: "query: from (ISO-8601, required), to (ISO-8601, required, after from, window ≤184 days), timeZone? (IANA, default 'UTC'), userId? (assigned-user filter), maxSize? (default 300, max 1000), entities? (string or array/comma list; default Task,Call,Meeting,ProjectTask)"
+    response: "200 { list: CalendarEventDto[], from, to, timeZone, count } — CalendarEventDto { activityType, activityId, name, status, start, end, day, allDay, assignedUserId, recurring, base, duration }; recurring records are expanded into occurrences"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: "maxSize (default 300, max 1000) per entity; no offset"
+    sorting: "fixed: occurrence start ascending"
+    filtering: "entities allowlist, userId assigned-user filter, from/to window, timeZone day bucketing"
+    sideEffects: none
+    idempotency: safe to repeat

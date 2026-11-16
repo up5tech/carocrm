@@ -1,0 +1,1046 @@
+# PLAN §58 — the Sales module surface: /api/v1/Sales/* domain commands (Phase 19-S).
+# Source: apps/api/src/sales/sales.controller.ts plus the services it calls
+# (document/, payments/, pricing/, inventory/, subscriptions/, integrations/, tax/).
+# Entity CRUD for Product, Quote, Invoice and friends stays on the generic /api/v1/:entity API
+# (see entities.yaml); these routes are the commands a single record cannot express.
+# Permissions are enforced server-side: requireAdmin() in the controller, AclApiService
+# assertAccess/canUser in the services, and the report subsystem's own ACL for report runs.
+# The three @Public() routes are the scheduled-job doors: session auth is skipped and the
+# shared worker capability in `x-worker-secret` (REPORT_WORKER_SECRET, constant-time compare)
+# is the authorisation.
+# Format and required fields: api-spec/README.md §2.
+group: sales
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Sales/action/health
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ModuleHealthView { module, ok, dependencies[], optionalIntegrations[], features[], settings{version,warnings}, checks[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/action/nav
+    auth: authenticated
+    permissions: authenticated — a report, not a gate; answers which Sales entities the caller may read
+    request: none
+    response: "200 { visible, readableEntities, entities[] } — visible is true when the caller can read at least one Sales entity"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/action/settings
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 SalesSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings[] }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/action/settings
+    auth: authenticated
+    permissions: administrator
+    request: "SalesSettingsPatchSchema — a partial settings object; unknown keys are refused, the merged result is re-validated"
+    response: "200 SalesSettingsView with the bumped version"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row \"sales\" upserted, settings version incremented, updatedAt/updatedBy stamped; a stored snapshot on a document names the version it was produced under]
+    idempotency: a repeat with the same body bumps the version again
+  - method: GET
+    path: /api/v1/Sales/action/numbering
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: number series with the next unallocated number per series }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; allocation itself happens at document issuance, not here
+  - method: POST
+    path: /api/v1/Sales/action/resolvePrice
+    auth: authenticated
+    permissions: "record ACL (Product read; PriceBook read when a price book is consulted)"
+    request: "ResolvePriceSchema { productId, quantity?, currency?, accountId?, priceBookId?, date?, explicitPrice? } — canonical decimal strings"
+    response: "200 ResolvedPrice | UnresolvedPrice { price?, source, reason, trace[] } — a missing price is never silently zero"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/action/resolveSupplierPrice
+    auth: authenticated
+    permissions: "record ACL (SupplierProductPrice read)"
+    request: "ResolveSupplierPriceSchema { supplierId, productId, quantity?, currency?, date? } — the buying price only; it can never return a sales price"
+    response: "200 SupplierPriceResolution { price?, reason, winning supplier price }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/action/bulkPriceUpdate
+    auth: authenticated
+    permissions: "record ACL (PriceBookEntry read for preview, edit for apply)"
+    request: "BulkPriceUpdateSchema { mode: preview|apply, priceBookId, adjustment{type: percent|fixed|set, value}, productIds?, categoryIds?, limit? }"
+    response: "200 BulkPriceResult { mode, changes[], skipped[], changedCount, applied, truncated, auditId }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: "limit bounds the entries scanned (default service-clamped, max 500); truncated reports a cut scan"
+    sorting: none
+    filtering: "productIds/categoryIds narrow the entries considered"
+    sideEffects: [mode=apply writes the new PriceBookEntry prices plus an audit row, mode=preview writes nothing]
+    idempotency: "preview is safe to repeat; apply re-prices from the stored values each call"
+  - method: POST
+    path: /api/v1/Sales/action/previewTotals
+    auth: authenticated
+    permissions: "authenticated; record ACL (Product read) when any line names a productId"
+    request: "PreviewTotalsSchema { currency?, date?, taxInclusive?, accountId?, jurisdiction?, lines[1..500]{quantity, unitPrice, productId?, ...}, shipping?, documentDiscountAmount?, exchangeRate? }"
+    response: "200 TotalsResult { lines[], subtotal, discountTotal, shippingAmount, shippingTaxAmount, taxTotal, netTotal, grossTotal, taxBreakdown[], currency } — every number recomputed server-side"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/document
+    auth: authenticated
+    permissions: "record ACL (create on the kind's entity: Quote|SalesOrder|Invoice|CreditNote|DeliveryOrder|ReturnOrder|PurchaseOrder|ReceiptOrder|Bill|BillCredit)"
+    request: "CreateDocumentSchema { kind, data?, items[0..500] (DocumentLineSchema), exchangeRate?, correlationId? } — server-owned fields (number, status, totals, lock fields) are refused"
+    response: "201 DocumentView { id, descriptor, document, items, totals, allowedActions } — a draft"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [document entity row, item entity rows, totals recomputed on save]
+    idempotency: none; correlationId is stored for conversion idempotency, not dedup on create
+  - method: GET
+    path: /api/v1/Sales/document/:kind/:id
+    auth: authenticated
+    permissions: "record ACL (read on the kind's entity)"
+    request: "path: kind (quote|salesOrder|invoice|creditNote|deliveryOrder|returnOrder|purchaseOrder|receiptOrder|bill|billCredit), id"
+    response: "200 DocumentView { document, items, totals, allowedActions, fromSnapshot }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/Sales/document/:kind/:id
+    auth: authenticated
+    permissions: "record ACL (edit on the kind's entity)"
+    request: "UpdateDocumentSchema { data?, items?, exchangeRate?, correlationId? } — omitted keys unchanged; a locked/issued document refuses changes to protected fields by name"
+    response: "200 DocumentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [document and item rows rewritten, totals recomputed, outbox event]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/Sales/document/:kind/:id/transition
+    auth: authenticated
+    permissions: "record ACL (edit on the kind's entity)"
+    request: "DocumentTransitionSchema { action, reason?, correlationId? } — action names come from the descriptor's transition table"
+    response: "200 DocumentView after the transition"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [issuing transition allocates the official number, immutable snapshot frozen, issuedAt/issuedBy stamped, lock policy applied, outbox event — all in one transaction, stock-moving kinds (salesOrder deliveryOrder returnOrder receiptOrder) also write inventory movements when features.inventory is on, void/cancel actions require a reason]
+    idempotency: "a transition refused from the current state answers 422; replaying the same action is not silently repeated"
+  - method: POST
+    path: /api/v1/Sales/document/:kind/:id/unlock
+    auth: authenticated
+    permissions: "record ACL (edit on the kind's entity) plus administrator or the dedicated unlock-issued-documents permission"
+    request: "DocumentUnlockSchema { reason } — mandatory, kept in the audit trail"
+    response: "200 DocumentView — stays issued; unlockedAt/unlockedBy record the exception"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [unlockedAt/unlockedBy stamped on the document, outbox \"unlocked\" event with the reason]
+    idempotency: a second unlock answers 422 (document is not locked)
+  - method: POST
+    path: /api/v1/Sales/document/:kind/:id/convert
+    auth: authenticated
+    permissions: "record ACL (read on the source entity and create on the target entity)"
+    request: "DocumentConvertSchema { action, correlationId?, overrides? } — action names the conversion (e.g. quote accept → salesOrder)"
+    response: "201 DocumentView of the new draft — values copied by value, never re-resolved from the catalog"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [new document and item rows with sourceEntity/sourceId provenance]
+    idempotency: "safe to repeat with the same correlationId — it returns the document the first call created instead of a second one"
+  - method: POST
+    path: /api/v1/Sales/document/fromOpportunity
+    auth: authenticated
+    permissions: "record ACL (create on the target kind's entity; the Opportunity is read through the Entity Engine under the caller's own record access)"
+    request: "CreateFromOpportunitySchema { opportunityId, kind (quote|salesOrder|invoice|creditNote), items[0..500], overrides?, correlationId? }"
+    response: "201 DocumentView — a draft raised from the deal, with provenance written by the command"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [document and item rows; double-billing guards refuse a second billable document for the same opportunity lines]
+    idempotency: "correlationId is stored; a genuinely repeated conversion is refused by the duplicate guard rather than merged"
+  - method: POST
+    path: /api/v1/Sales/document/:kind/:id/render
+    auth: authenticated
+    permissions: "record ACL (read on the kind's entity)"
+    request: "RenderDocumentSchema { templateCode? } — the entity type's default template, or the built-in block layout when none is configured"
+    response: "200 DocumentRenderResult { kind, number, status, fromSnapshot, templateCode, format, subject, body, text, blocks[], warnings[], pdf{available,reason} } — an issued document renders from its frozen snapshot"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/document/:kind/:id/recalculate
+    auth: authenticated
+    permissions: "record ACL (read on the kind's entity)"
+    request: none
+    response: "200 TotalsResult recomputed from the server's own numbers"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [totals fields rewritten on a draft, an issued document is never rewritten by this command]
+    idempotency: safe to repeat — recalculation is deterministic
+  - method: DELETE
+    path: /api/v1/Sales/document/:kind/:id
+    auth: authenticated
+    permissions: "record ACL (delete on the kind's entity)"
+    request: none
+    response: "204 no content"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [document and item rows removed — drafts only; an issued document answers 422 and must be voided or credited instead]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Sales/quote/:id/render
+    auth: authenticated
+    permissions: "record ACL (Quote read; DocumentTemplate read when a named/default template renders)"
+    request: "RenderQuoteSchema { templateCode? }"
+    response: "200 QuoteRenderResult { quoteId, number, status, fromSnapshot, templateCode, format, subject, body, text, blocks[], warnings[], pdf }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/quote/:id/send
+    auth: authenticated
+    permissions: "record ACL (Quote read via the document view, plus Email create and edit)"
+    request: "SendQuoteSchema { to?, cc?, bcc?, templateCode?, subject?, message?, emailAccountId?, correlationId?, attachPdf? } — recipients default to the contact's then the account's address"
+    response: "200 SendQuoteResult { quote, email, rendered, transport, job, issued, pdfAttachment }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, FEATURE_DISABLED, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [a draft is issued first — number allocated, snapshot frozen, locked — via the send transition, an Email record is created and queued through EmailService (system.sendEmail job for the worker), attachPdf stores a PDF attachment on the email, a missing recipient, disabled mail transport or missing pdfkit is refused before issuance, a queue failure after issuance leaves the email Draft and the error says so]
+    idempotency: "re-sending an already-sent quote re-renders from the snapshot and records a new email without re-issuing"
+  - method: POST
+    path: /api/v1/Sales/document/:kind/:id/send
+    auth: authenticated
+    permissions: "record ACL (read on the kind's entity via the document view, plus Email create and edit)"
+    request: "SendDocumentSchema (= SendQuoteSchema) { to?, cc?, bcc?, templateCode?, subject?, message?, emailAccountId?, correlationId?, attachPdf? } — kind=quote is refused here (use the quote route); recipients default to supplier for purchasing kinds, else contact then account"
+    response: "200 SendDocumentResult { kind, document, email, rendered, transport, job, issued, pdfAttachment }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND, FEATURE_DISABLED, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [a draft is issued through its own issuing transition — number, snapshot, lock, outbox event, an Email record is created and queued for the worker, a draft of a stock-moving kind is refused — confirm it first so stock moves deliberately]
+    idempotency: "re-sending an issued document records another email without touching the document"
+  - method: POST
+    path: /api/v1/Sales/payment
+    auth: authenticated
+    permissions: "record ACL (Payment create)"
+    request: "CreatePaymentSchema { amount, currency?, direction: incoming|outgoing, date?, paymentMethodId?, paymentChannelId?, accountId?, contactId?, supplierId?, reference?, memo?, exchangeRate? } — balances are derived, never supplied"
+    response: "201 PaymentView { id, status: draft, direction, amount, currency, base*, balance, payment }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Payment row with derived allocated/unallocated amounts and frozen exchange-rate snapshot]
+    idempotency: none; each call records a new payment
+  - method: GET
+    path: /api/v1/Sales/payment/:id
+    auth: authenticated
+    permissions: "record ACL (Payment read)"
+    request: none
+    response: "200 PaymentView — balance recomputed live from the allocation rows"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/Sales/payment/:id
+    auth: authenticated
+    permissions: "record ACL (Payment edit)"
+    request: "UpdatePaymentSchema { amount?, paymentDate?, paymentMethodId?, paymentChannelId?, accountId?, contactId?, supplierId?, reference?, memo?, exchangeRate? } — amount/currency/direction/exchangeRate are refused once anything is allocated"
+    response: "200 PaymentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Payment row updated, base-currency figures re-derived from the frozen snapshot]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/Sales/payment/:id/transition
+    auth: authenticated
+    permissions: "record ACL (Payment edit)"
+    request: "PaymentTransitionSchema { action, reason? } — confirm makes a payment allocatable; cancel requires a reason and is refused while allocations exist"
+    response: "200 PaymentView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Payment.status updated, outbox event payment.<action>]
+    idempotency: "an action not allowed from the current state answers 422"
+  - method: GET
+    path: /api/v1/Sales/payment/:id/allocations
+    auth: authenticated
+    permissions: "record ACL (Payment read)"
+    request: none
+    response: "200 { list: AllocationView[] } — newest first, capped at 500 rows"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; bounded at 500 allocation rows per payment"
+    sorting: "allocatedAt descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/payment/:id/allocate
+    auth: authenticated
+    permissions: "record ACL (Payment edit and edit on the target document entity — Invoice or Bill)"
+    request: "AllocatePaymentSchema { documentId, documentEntity?, amount, correlationId? } — documentEntity defaults to Invoice; an incoming payment settles invoices, an outgoing one bills"
+    response: "201 AllocationResult { allocation, payment{allocated,unallocated,status}, document{amountDue,paymentStatus} }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction locking payment then document: PaymentAllocation row created, both balances recomputed, outbox sales.payment.allocated, over-allocation/unconfirmed payment/non-issued document/cross-currency without snapshot are all refused]
+    idempotency: "row locks plus balance recompute make a concurrent double-allocation impossible; a literal retry would be refused as over-allocation"
+  - method: POST
+    path: /api/v1/Sales/payment/:id/transfer
+    auth: authenticated
+    permissions: "record ACL (Payment edit)"
+    request: "PaymentTransferSchema { toPaymentId, amount } — same currency required; a payment cannot transfer to itself"
+    response: "200 PaymentTransferAllocation record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [PaymentTransferAllocation row, outbox sales.payment.transferred]
+    idempotency: none; each call records a new transfer up to the unallocated remainder
+  - method: DELETE
+    path: /api/v1/Sales/allocation/:id
+    auth: authenticated
+    permissions: "record ACL (Payment edit)"
+    request: none
+    response: "204 no content"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [PaymentAllocation row removed inside a transaction that locks payment then document, both balances recomputed, outbox sales.payment.unallocated — the removal is evented, never silent]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/Sales/allocatableDocuments
+    auth: authenticated
+    permissions: "record ACL (Invoice read for direction=incoming, Bill read for direction=outgoing)"
+    request: "query: direction? (incoming|outgoing, default incoming), accountId?, supplierId?, limit?, offset?"
+    response: "200 { list: issued documents with outstanding amount, hasMore, limit, offset } — only documents that still owe money"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "limit (default 100, max 500) and offset over eligible documents; hasMore reports more pages"
+    sorting: "service-defined order (chronological scan)"
+    filtering: "direction plus accountId (invoices) or supplierId (bills)"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/creditNote/:id/allocate
+    auth: authenticated
+    permissions: "record ACL (CreditNote edit and Invoice edit)"
+    request: "CreditNoteAllocateSchema { invoiceId, amount, correlationId? }"
+    response: "201 allocation result — the credit note's unallocatedAmount and the invoice's amountDue both recompute"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CreditNoteAllocation row, credit note and invoice balances recomputed under row locks, outbox event]
+    idempotency: "over-allocation is refused; a retry after success would be refused the same way"
+  - method: DELETE
+    path: /api/v1/Sales/creditNote/allocation/:id
+    auth: authenticated
+    permissions: "record ACL (CreditNote edit and Invoice edit)"
+    request: "CreditNoteUnallocateSchema { reason?, correlationId? } — body optional fields"
+    response: "200 reversal result — the allocation row is kept and marked reversed, never deleted"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [allocation marked reversed with audit fields, both balances recomputed, outbox event]
+    idempotency: "a second reversal of the same allocation answers 422/404 rather than double-restoring"
+  - method: GET
+    path: /api/v1/Sales/creditNote/allocatableInvoices
+    auth: authenticated
+    permissions: "record ACL (Invoice read)"
+    request: "query: creditNoteId?, accountId?, limit?, offset?"
+    response: "200 { list: issued invoices with outstanding amount, hasMore, limit, offset }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "limit (default 100, max 500) and offset; hasMore reports more pages"
+    sorting: "service-defined order"
+    filtering: "creditNoteId and accountId narrow the candidates"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/creditNote/:id/render
+    auth: authenticated
+    permissions: "record ACL (CreditNote read via the document view; DocumentTemplate read when a template renders)"
+    request: "RenderCreditNoteSchema { templateCode? }"
+    response: "200 CreditNoteRenderResult { creditNoteId, number, status, fromSnapshot, templateCode, format, subject, body, text, blocks[], warnings[], pdf }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/write-off
+    auth: authenticated
+    permissions: "record ACL (WriteOff create and Invoice edit)"
+    request: "WriteOffCreateSchema { invoiceId, amount, reason, correlationId? } — reason is mandatory and stays on the record"
+    response: "201 pending WriteOff — a request changes no balance"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [WriteOff row with status pending]
+    idempotency: none; each call files a new request
+  - method: POST
+    path: /api/v1/Sales/write-off/:id/approve
+    auth: authenticated
+    permissions: administrator
+    request: "WriteOffApproveSchema { correlationId? }"
+    response: "200 approved WriteOff — re-checked against the live invoice balance at decision time"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [WriteOff approved with approvedBy/approvedAt, invoice amountDue reduced, audit + outbox event]
+    idempotency: "approving a non-pending write-off answers 422"
+  - method: POST
+    path: /api/v1/Sales/write-off/:id/reject
+    auth: authenticated
+    permissions: administrator
+    request: "WriteOffRejectSchema { reason?, correlationId? }"
+    response: "200 rejected WriteOff — the request stays on record; the invoice is untouched"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [WriteOff status rejected with decision audit]
+    idempotency: "rejecting a non-pending write-off answers 422"
+  - method: POST
+    path: /api/v1/Sales/write-off/:id/reverse
+    auth: authenticated
+    permissions: administrator
+    request: "WriteOffReverseSchema { reason, correlationId? } — reason mandatory"
+    response: "200 reversed WriteOff — the invoice balance is restored; the record keeps both entries"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [WriteOff reversed with reversedBy/reversedAt/reversalReason, invoice amountDue restored, audit + outbox event]
+    idempotency: "reversing a non-approved write-off answers 422"
+  - method: POST
+    path: /api/v1/Sales/purchaseOrder/:id/refreshReceipt
+    auth: authenticated
+    permissions: "record ACL (PurchaseOrder edit)"
+    request: none
+    response: "200 recomputed receipt state derived from confirmed receipt orders"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [derived receipt-state fields on the purchase order rewritten]
+    idempotency: safe to repeat — the state is derived, not typed
+  - method: POST
+    path: /api/v1/Sales/billCredit/:id/allocate
+    auth: authenticated
+    permissions: "record ACL (BillCredit edit and Bill edit)"
+    request: "BillCreditAllocateSchema { billId, amount, correlationId? }"
+    response: "201 allocation result — bill credit remainder and bill amountDue recompute"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [BillCreditAllocation row, balances recomputed under row locks, outbox event]
+    idempotency: "over-allocation is refused"
+  - method: DELETE
+    path: /api/v1/Sales/billCredit/allocation/:id
+    auth: authenticated
+    permissions: "record ACL (BillCredit edit and Bill edit)"
+    request: "BillCreditUnallocateSchema { reason?, correlationId? }"
+    response: "200 reversal result — the row is kept and marked reversed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [allocation marked reversed, both balances recomputed, outbox event]
+    idempotency: "a second reversal answers an error rather than double-restoring"
+  - method: GET
+    path: /api/v1/Sales/bill/:id/creditAllocations
+    auth: authenticated
+    permissions: "record ACL (Bill read)"
+    request: none
+    response: "200 { list: BillCreditAllocationView[] } — live and reversed allocations both stay on record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; bounded service-side"
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/billCredit/allocatableBills
+    auth: authenticated
+    permissions: "record ACL (Bill read)"
+    request: "query: billCreditId?, supplierId?, limit?, offset?"
+    response: "200 { list: issued bills with outstanding amount, hasMore, limit, offset }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "limit (default 100, max 500) and offset; hasMore reports more pages"
+    sorting: "service-defined order"
+    filtering: "billCreditId and supplierId narrow the candidates"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/paymentRequest
+    auth: authenticated
+    permissions: "record ACL (PaymentRequest create)"
+    request: "CreatePaymentRequestSchema { amount, currency?, accountId, invoiceId?, salesOrderId?, expiresAt?, providerReference? } — amount must be positive"
+    response: "201 PaymentRequest record with status pending — no gateway call happens here"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [PaymentRequest row]
+    idempotency: none; each call creates a request
+  - method: POST
+    path: /api/v1/Sales/paymentRequest/:id/transition
+    auth: authenticated
+    permissions: "record ACL (PaymentRequest edit)"
+    request: "PaymentTransitionSchema { action, reason? } — named transitions of the request state machine"
+    response: "200 updated PaymentRequest"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [PaymentRequest.status updated, outbox paymentRequest.<action> event]
+    idempotency: "an action not allowed from the current state answers 422"
+  - method: POST
+    path: /api/v1/Sales/providerEvent
+    auth: authenticated
+    permissions: "record ACL (PaymentRequest edit)"
+    request: "ProviderEventSchema { provider, providerEventId, eventType, paymentRequestId?, payload? } — payload keys that look like card data, mandates or secrets are refused, never stored"
+    response: "200 { id, providerEventId, duplicate, processedStatus, paymentRequestStatus } — duplicate:true when the provider's event was already ingested"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [PaymentProviderEventLog row, the named PaymentRequest may move pending→paid|failed, outbox sales.payment.providerEvent, unique (provider providerEventId) plus a race-safe duplicate answer make redelivery a no-op]
+    idempotency: "safe to repeat — the provider event id is the key; a duplicate changes nothing and says so"
+  - method: POST
+    path: /api/v1/Sales/action/expireQuotes
+    auth: authenticated
+    permissions: administrator
+    request: "ExpireQuotesSchema { today? } — injectable day for testing"
+    response: "200 { expired count/list } — quotes past their validity date move to expired"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Quote rows transitioned to expired with outbox events]
+    idempotency: safe to repeat — an already-expired quote is not expired again
+  - method: POST
+    path: /api/v1/Sales/action/expire-quotes
+    auth: public
+    permissions: "worker capability — shared worker→API secret in the x-worker-secret header, constant-time compared; refused when no capability is configured"
+    request: "ExpireQuotesSchema { today? }; header x-worker-secret"
+    response: "200 same as the administrator route"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as the administrator route — Quote rows expired with outbox events]
+    idempotency: safe to repeat — retried job attempts change nothing
+  - method: POST
+    path: /api/v1/Sales/salesOrder/:id/refreshFulfilment
+    auth: authenticated
+    permissions: "record ACL (SalesOrder edit)"
+    request: none
+    response: "200 recomputed fulfilment state from confirmed delivery orders"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [derived fulfilment fields on the sales order rewritten]
+    idempotency: safe to repeat — the state is derived, not typed
+  - method: POST
+    path: /api/v1/Sales/action/markOverdueInvoices
+    auth: authenticated
+    permissions: administrator
+    request: "TodaySchema { today? }"
+    response: "200 { marked count/list } — issued invoices past their due date become overdue"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Invoice paymentStatus → overdue, one outbox event per invoice]
+    idempotency: safe to repeat — an already-overdue invoice is not re-marked
+  - method: POST
+    path: /api/v1/Sales/action/mark-overdue-invoices
+    auth: public
+    permissions: "worker capability — shared worker→API secret in the x-worker-secret header, constant-time compared"
+    request: "TodaySchema { today? }; header x-worker-secret"
+    response: "200 same as the administrator route"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as the administrator route — Invoice rows marked overdue with one event each]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/inventory/availability
+    auth: authenticated
+    permissions: "record ACL (InventoryTransaction read)"
+    request: "query: productId (required), warehouseId? — the configured default warehouse applies when omitted"
+    response: "200 { productId, warehouseId, onHand, reserved, available, incoming }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; refused with VALIDATION_FAILED while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/stock
+    auth: authenticated
+    permissions: "record ACL (InventoryTransaction read)"
+    request: "query: warehouseId?, productId?, limit?"
+    response: "200 { list: StockLevelRow[] } — on-hand/reserved plus incoming per product/warehouse"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit bounds the page (service default 200, scan ceiling 2000)"
+    sorting: "service-defined order"
+    filtering: "warehouseId and productId"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/valuation
+    auth: authenticated
+    permissions: "record ACL (Product read plus field-level visibility of Product.costPrice — a reader without it is refused, not given a derived total)"
+    request: "query: warehouseId?, productId?"
+    response: "200 { currency, value, onHand, unpricedOnHand, levels } — on-hand valued at cost in the installation's default currency"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: "warehouseId and productId"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/history
+    auth: authenticated
+    permissions: "record ACL (InventoryTransaction read)"
+    request: "query: productId?, warehouseId?, limit?, offset?, cursor?, total? — total=false skips the count"
+    response: "200 { list: movement rows newest first, offset, count, total?, hasMore, nextCursor? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: "limit (default 200, max scan ceiling), offset or cursor — a cursor wins over an offset and survives concurrent writes; total=false omits the count"
+    sorting: "fixed: recordedAt/id descending (newest first)"
+    filtering: "productId and warehouseId"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: POST
+    path: /api/v1/Sales/inventory/reconcile
+    auth: authenticated
+    permissions: "record ACL (InventoryTransaction read)"
+    request: "InventoryReconcileSchema { warehouseId?, productId? }"
+    response: "200 ReconcileResult { checked, mismatches[], ok, identityChecked, identityMismatches[], identityOk } — discrepancies are reported, never auto-corrected"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/batches
+    auth: authenticated
+    permissions: "record ACL (InventoryBatch read)"
+    request: "query: productId?, warehouseId?, limit?"
+    response: "200 { list: BatchStockRow[] } — lots holding stock with manufacturing/expiry dates"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit bounds the page (default 200, scan ceiling 2000)"
+    sorting: "productId, batchNumber ascending"
+    filtering: "productId and warehouseId; only lots with on_hand > 0"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/serials
+    auth: authenticated
+    permissions: "record ACL (InventorySerial read)"
+    request: "query: productId?, warehouseId?, status?, limit?"
+    response: "200 { list: serial records } — a unit's identity and where it last was"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit bounds the page (default 200, scan ceiling 2000)"
+    sorting: "service-defined order"
+    filtering: "productId, warehouseId and status"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/picking-suggestions
+    auth: authenticated
+    permissions: "record ACL (InventoryTransaction read)"
+    request: "query: productId (required), warehouseId?, quantity (required) — what the configured removal policy would pick right now"
+    response: "200 picking suggestion — lots/serials the confirmation would resolve, without moving stock"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: "the removal policy's deterministic order (fifo|fefo|lifo per settings)"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: GET
+    path: /api/v1/Sales/inventory/reservations
+    auth: authenticated
+    permissions: "record ACL (InventoryReservation read)"
+    request: "query: productId?, warehouseId?, status?, sourceId?, limit?"
+    response: "200 { list: active/released reservations }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit bounds the page (default 200, scan ceiling 2000)"
+    sorting: "service-defined order"
+    filtering: "productId, warehouseId, status and sourceId"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: POST
+    path: /api/v1/Sales/inventory/reserve
+    auth: authenticated
+    permissions: "record ACL (InventoryReservation create)"
+    request: "ReserveStockSchema { productId, quantity, warehouseId?, sourceEntity?, sourceId?, sourceNumber?, expiresAt? }"
+    response: "201 reservation view — under the default hard policy an over-reservation is refused"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [InventoryReservation row, reserved quantity on the stock projection adjusted]
+    idempotency: none; each call places a new reservation
+  - method: POST
+    path: /api/v1/Sales/inventory/reservation/:id/release
+    auth: authenticated
+    permissions: "record ACL (InventoryReservation edit)"
+    request: "ReleaseReservationSchema { reason? }"
+    response: "200 released reservation — the promised stock is freed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [reservation status released with releasedAt/releasedBy/releaseReason, reserved quantity on the projection restored]
+    idempotency: "releasing an already-released reservation is refused by the state machine"
+  - method: POST
+    path: /api/v1/Sales/inventory/adjustment
+    auth: authenticated
+    permissions: "record ACL (InventoryAdjustment create)"
+    request: "CreateAdjustmentSchema { productId, quantityDelta, reason (required), warehouseId?, batchNumber?, serialNumbers? } — non-zero delta on a stock-managed product"
+    response: "201 AdjustmentView — status pending when approval is required, applied otherwise with the ledger transactionId"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [InventoryAdjustment row, when adjustmentApprovalRequired is off (or auto-applied) an InventoryTransaction ledger movement moves the stock, lot/serial identity is normalised and validated]
+    idempotency: none; each call files a new correction
+  - method: POST
+    path: /api/v1/Sales/inventory/adjustment/:id/transition
+    auth: authenticated
+    permissions: "administrator plus record ACL (InventoryAdjustment edit)"
+    request: "AdjustmentTransitionSchema { action (approve|reject per the transition table), reason? }"
+    response: "200 AdjustmentView — approve applies the stock movement, reject leaves stock untouched"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [on approve: InventoryTransaction ledger rows plus projection update and decidedBy/decidedAt/decisionReason on the adjustment, on reject: status and decision audit only]
+    idempotency: "a transition not allowed from the current status answers 422"
+  - method: POST
+    path: /api/v1/Sales/inventory/transfer
+    auth: authenticated
+    permissions: "record ACL (TransferOrder create)"
+    request: "CreateTransferSchema { name?, sourceWarehouseId, destinationWarehouseId (must differ), transferDate?, reason?, trackingNumber?, items[1..500]{productId, quantity, name?, sku?, unit?, batchNumber?, serialNumbers?} }"
+    response: "201 TransferView — a draft TransferOrder with its TransferOrderItem rows"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [TransferOrder row plus one TransferOrderItem per line, in one transaction]
+    idempotency: none; each call creates a new transfer
+  - method: GET
+    path: /api/v1/Sales/inventory/transfer/:id
+    auth: authenticated
+    permissions: "record ACL (TransferOrder read)"
+    request: none
+    response: "200 TransferView { id, status, transfer, items[] ordered by position }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: "items by position"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/inventory/transfers/inTransit
+    auth: authenticated
+    permissions: "record ACL (TransferOrder read)"
+    request: "query: warehouseId? — filters on the destination warehouse"
+    response: "200 { list: TransferView[] } — dispatched but not yet received"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "none; bounded by the service scan limit"
+    sorting: "service-defined order"
+    filtering: "warehouseId (destination)"
+    sideEffects: none
+    idempotency: safe to repeat; refused while features.inventory is off
+  - method: POST
+    path: /api/v1/Sales/inventory/transfer/:id/transition
+    auth: authenticated
+    permissions: "record ACL (TransferOrder edit)"
+    request: "TransferTransitionSchema { action (confirm|receive|cancel), reason? } — cancel requires a reason and is draft-only"
+    response: "200 { transfer, movements } — confirm dispatches (source outflow → inTransit), receive completes (destination inflow → received)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [confirm writes transferOut ledger movements and sets inTransit, receive writes transferIn movements and sets received — each side is its own transaction with its own movement key so a retried half cannot double-move, batch/serial identity travels with the lines]
+    idempotency: "movement keys make each side idempotent; a repeated transition is refused by the state machine"
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/previewPeriods
+    auth: authenticated
+    permissions: "record ACL (Subscription read)"
+    request: "TodaySchema { today? } — injectable run day"
+    response: "200 preview of the periods this subscription would bill — writes nothing"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; refused with AUTHORIZATION_DENIED while features.subscriptions is off
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/preview-periods
+    auth: authenticated
+    permissions: "record ACL (Subscription read)"
+    request: "TodaySchema { today? } — kebab-case alias of previewPeriods"
+    response: "200 same as previewPeriods"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/generatePeriods
+    auth: authenticated
+    permissions: "record ACL (SubscriptionPeriod create and Subscription edit)"
+    request: "TodaySchema { today? }"
+    response: "200 { created/existing periods } — periods up to the configured horizon, bounded by maxPeriodsPerRun"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [SubscriptionPeriod rows created for missing windows; periodStart/periodEnd/plannedInvoiceDate/idempotencyKey are server-owned]
+    idempotency: "safe to repeat — an existing window is reported, never duplicated"
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/generate-periods
+    auth: authenticated
+    permissions: "record ACL (SubscriptionPeriod create and Subscription edit)"
+    request: "TodaySchema { today? } — kebab-case alias of generatePeriods"
+    response: "200 same as generatePeriods"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as generatePeriods]
+    idempotency: same as generatePeriods
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/pause
+    auth: authenticated
+    permissions: "record ACL (Subscription edit)"
+    request: none
+    response: "200 paused Subscription"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Subscription.status → paused, outbox event]
+    idempotency: "the lifecycle command is idempotent — replaying reports the periods it already owns"
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/resume
+    auth: authenticated
+    permissions: "record ACL (Subscription edit)"
+    request: none
+    response: "200 resumed Subscription"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Subscription.status → active, outbox event]
+    idempotency: same as pause
+  - method: POST
+    path: /api/v1/Sales/subscription/:id/cancel
+    auth: authenticated
+    permissions: "record ACL (Subscription edit)"
+    request: none
+    response: "200 cancelled Subscription — periods that would still bill are stopped"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Subscription.status → cancelled, unbilled periods stopped, outbox event]
+    idempotency: same as pause
+  - method: POST
+    path: /api/v1/Sales/subscriptionPeriod/:id/retry
+    auth: authenticated
+    permissions: "record ACL (SubscriptionPeriod edit)"
+    request: "TodaySchema { today? }"
+    response: "200 InvoicePeriodResult — re-runs one period's billing after a failure"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [on success an issued Invoice for the period plus period status/invoiceId/attempt trail updated, never re-bills a period that already has an invoice]
+    idempotency: "safe to repeat — a period with an invoice is reported, not billed twice"
+  - method: POST
+    path: /api/v1/Sales/subscription-period/:id/retry
+    auth: authenticated
+    permissions: "record ACL (SubscriptionPeriod edit)"
+    request: "TodaySchema { today? } — kebab-case alias of subscriptionPeriod/:id/retry"
+    response: "200 same as retry"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as retry]
+    idempotency: same as retry
+  - method: POST
+    path: /api/v1/Sales/action/generateSubscriptionInvoices
+    auth: authenticated
+    permissions: administrator
+    request: "TodaySchema { today? }"
+    response: "200 ProcessDueResult — periods generated then one invoice issued per due period; reports enabled:false rather than failing when features.subscriptions is off"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [SubscriptionPeriod rows, issued Invoice rows (number allocated, snapshot frozen), period invoiceId/attempt trail, bounded by subscriptions.horizonDays/maxPeriodsPerRun/maxInvoicesPerRun in settings]
+    idempotency: "safe to repeat — replaying a run bills nothing twice; per-period idempotency keys prevent duplicate invoices"
+  - method: POST
+    path: /api/v1/Sales/action/generate-subscription-invoices
+    auth: public
+    permissions: "worker capability — shared worker→API secret in the x-worker-secret header, constant-time compared"
+    request: "TodaySchema { today? }; header x-worker-secret"
+    response: "200 same as the administrator route"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as the administrator route — SubscriptionPeriod and Invoice rows]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/action/reportCatalog
+    auth: authenticated
+    permissions: authenticated — definitions only; running one is where ACL applies
+    request: none
+    response: "200 { list: curated Sales dataset definitions (§12) }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/report/:key/run
+    auth: authenticated
+    permissions: "record ACL enforced by the Report subsystem — entity read, field-level visibility, record-level predicate and cost limits on the dataset's target entity"
+    request: "path: key of a catalog dataset; no body"
+    response: "200 { key, definition, result } — the dataset run as the current user"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND, VALIDATION_FAILED]
+    pagination: "inherited from the report engine's result paging"
+    sorting: "inherited from the report definition"
+    filtering: "inherited from the report definition"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/action/customerSummary
+    auth: authenticated
+    permissions: "record ACL (read on Invoice, CreditNote, Payment and Subscription — all four are asserted before answering)"
+    request: "SalesCustomerSummarySchema { accountId }"
+    response: "200 customer commercial position { contractVersion, receivables{openInvoiceCount, outstandingByCurrency, oldestUnsettled, unappliedCreditByCurrency}, recentPayments[], activeSubscriptions[], truncated } — each amount paired with its currency"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "bounded: up to 200 invoices/credits, 20 payments, 100 subscriptions; truncated reports a cut"
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Sales/action/accountingExport
+    auth: authenticated
+    permissions: "record ACL (read on the document's entity via the document view; settlement rows are included only for entities the caller may read)"
+    request: "SalesAccountingExportSchema { kind, id } — kind is a document kind"
+    response: "200 { contractVersion, document{header, frozen totals, taxBreakdown, parties, calculated lines}, settledBy{allocations,credits,writeOffs}, externalSync } — issued documents answer from the frozen snapshot"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: "settlement rows bounded at 200 per kind"
+    sorting: "service-defined order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/action/dashletCatalog
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 { list: standard Sales dashlets in the shared dashboard shape }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Sales/action/jobMonitoring
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 job monitor overview — recent attempts, schedules and queue depth of the Sales background jobs"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

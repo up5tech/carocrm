@@ -1,0 +1,563 @@
+# PLAN §58 — Omnichannel: the agent workspace, public web chat and provider webhook ingress
+# (Phase 19-OM; plans/PLAN_Phase_19_Omnichannel.md).
+# Source: apps/api/src/omnichannel/omnichannel.controller.ts,
+# omnichannel-chat.controller.ts, omnichannel-webhook.controller.ts plus the services they call
+# (conversation facade over VoiceCommunications, identity, routing, snippets, drafts, calls,
+# handoff over ServiceDesk, AI over AIAgents, analytics, operations, settings, webchat).
+#
+# Auth: every route on OmnichannelController sits behind the global session guard and the
+# OmnichannelWorkspaceGuard module switch — a non-control-plane route answers 403
+# FEATURE_DISABLED while features.workspace is off. @ControlPlane() routes stay reachable so an
+# administrator can inspect and re-enable the module. Authorization is a synthetic ACL
+# capability (OmnichannelPermissionService over AclApiService): inboxView, reply, assign,
+# queueManage, identityLink, opsRead, opsReplay, connectionManage, settingsManage — often
+# combined with the CommunicationConversation record ACL or a Case read. The three chat routes
+# are @Public by design: the visitor holds an httpOnly session cookie (omni_visitor), not a CRM
+# login, and every guard (workspace+webChat switch, origin allowlist, consent, rate window,
+# honeypot) is enforced server-side in OmnichannelWebChatService. The webhook route is @Public:
+# authentication is the provider's own signature verified by the bound adapter inside
+# VoiceWebhookIngressService before any effect; {accountKey} is a routing id, never a secret.
+# Format and required fields: api-spec/README.md §2.
+group: omnichannel
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Omnichannel/action/channels
+    auth: authenticated
+    permissions: "inboxView capability"
+    request: none
+    response: "200 OmnichannelCapabilityCatalog { catalogVersion, channels[] } — per channel (sms, whatsapp, mms, web_chat, voice): supported, enabled, configured, inbound, outbound, deliveryStatuses, readReceipts, templates, media, accounts[{key,label}], notes[]; undeclared capabilities are reported absent, never assumed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: "fixed catalog order: sms, whatsapp, mms, web_chat, voice"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: "query: limit? (default 25, max 100), offset? (default 0), status?, channel?, assignee? (user id, team id, 'me' or 'unassigned'), priority?, language?, tag?, unread? (true|1), snoozed? (only|exclude), queueId?"
+    response: "200 { list: OmnichannelConversationView[], total } — the owner's ACL-filtered page enriched with the workspace projection (priority, tags, queue, snooze, version, customerAddress/customerName, threads[])"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "limit (default 25, clamped 1–100) and offset (default 0); total is the filtered count"
+    sorting: "fixed: last_activity_at desc nulls last, created_at desc"
+    filtering: "status/channel/priority/language/tag/queueId equality, assignee scoping, unreadCount>0, snoozed window — all in SQL under the caller's ACL"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations/:id/timeline
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: "query: limit? (default 25, max 100), offset? (default 0)"
+    response: "200 { entries: TimelineEntryView[] } — messages and history events merged chronologically; internal notes are included for the agent surface"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: "limit (default 25, clamped 1–100) and offset (default 0); messages and events are each paged, then merged"
+    sorting: "fixed: occurred_at/created_at ascending, id as tiebreak"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations/:id/threads
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: none
+    response: "200 { list: OmnichannelThreadView[] } — channel threads attached to the canonical conversation { id, channel, externalThreadId, address, providerIdentity, createdAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "none; bounded by the threads of one conversation"
+    sorting: "fixed: created_at ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/read
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation edit ACL (the owner's mark-read gate)"
+    request: none
+    response: "200 { unreadCount: 0 }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations.unread_count set to 0]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/status
+    auth: authenticated
+    permissions: "assign capability"
+    request: "StatusInputSchema { status } (non-empty, max 40 chars; must be a known conversation status)"
+    response: "200 OmnichannelConversationView — the enriched workspace projection"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations status, voice_conversation_events history row via the Voice owner]
+    idempotency: a repeat with the same status is a no-op transition recorded again by the owner
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/route
+    auth: authenticated
+    permissions: "queueManage and assign capabilities plus CommunicationConversation read ACL"
+    request: "RouteInputSchema { expectedVersion? } (optional int ≥ 0 for optimistic concurrency)"
+    response: "200 { decision: CaseAssignmentDecision, conversation: InboxConversationView } — the deterministic ServiceDesk routing decision and the applied result"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [assignment applied through VoiceInboxService.assign: queue/user/team columns, assignment event, version bump]
+    idempotency: expectedVersion makes a concurrent claim answer 409; without it the decision is recomputed and re-applied
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/assign
+    auth: authenticated
+    permissions: "assign capability"
+    request: "AssignInputSchema { userId?, teamId?, reason?, expectedVersion? } — ids nullable to unassign, strict object"
+    response: "200 OmnichannelConversationView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND, CONCURRENCY_CONFLICT]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [assignment columns and voice_conversation_events row via the Voice owner; unknown user/team/queue ids answer VALIDATION_FAILED]
+    idempotency: expectedVersion guards concurrent claims (409); a repeat with the same body re-applies the same assignment
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations/:id/identity
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: none
+    response: "200 OmnichannelIdentityReview { conversationId, channel, participants[] } — per customer participant: entityType/entityId/displayName, verificationState, linkConfidence, linkReason, sourceProvenance, resolution status, readable candidates[{entityType,id,name}], hiddenMatches, truncated"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED]
+    pagination: none
+    sorting: "fixed: participants by created_at ascending"
+    filtering: none
+    sideEffects: [voice_conversation_participants evidence columns rewritten from the resolver (verification_state, link_confidence, link_reason, entity link) — a manual staff link is never overwritten]
+    idempotency: safe to repeat; re-resolution converges on the same evidence
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/identity/link
+    auth: authenticated
+    permissions: "identityLink capability plus CommunicationConversation read ACL and read ACL on the target Contact/Lead"
+    request: "IdentityLinkSchema { participantId?, entityType (Contact|Lead), entityId, reason } (strict object)"
+    response: "200 OmnichannelIdentityReview — the refreshed review after the link"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [participant link columns set to verified/manual, audit_log row CommunicationIdentityLink with the reason]
+    idempotency: a repeat re-links the same target and audits again
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/identity/unlink
+    auth: authenticated
+    permissions: "identityLink capability plus CommunicationConversation read ACL"
+    request: "IdentityUnlinkSchema { participantId?, reason } (strict object)"
+    response: "200 OmnichannelIdentityReview — the refreshed review after the unlink"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [participant link columns cleared to unverified/none, audit_log row CommunicationIdentityUnlink with the reason]
+    idempotency: a repeat clears an already-clear link and audits again
+  - method: GET
+    path: /api/v1/Omnichannel/action/identities/conflicts
+    auth: authenticated
+    permissions: "identityLink capability plus CommunicationConversation read ACL"
+    request: "query: limit? (default 50, max 200), offset? (default 0)"
+    response: "200 { list: OmnichannelIdentityConflict[], total, limit, offset, hasMore } — disputed/heuristic customer participants awaiting staff review"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "limit (default 50, clamped 1–200) and offset (default 0); total and hasMore cover the whole result"
+    sorting: "fixed: last_seen_at desc nulls last"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations/:id/case
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL; the linked Case is read under its own ACL"
+    request: none
+    response: "200 { case: CaseContextView | null } — the Case linked to this conversation, or null"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/case/handoff
+    auth: authenticated
+    permissions: "assign capability plus CommunicationConversation read ACL; an explicitly linked Case must be readable by the caller"
+    request: "HandoffSchema { linkCaseId? } (strict object)"
+    response: "200 { case: CaseContextView, created: boolean, linked: boolean }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case created-or-found by ServiceDesk CaseHandoffService on externalId 'omnichannel:<conversationId>' with a CaseTransition trail, voice_conversations.case_id link via VoiceInboxService.linkCase, recordLink audit]
+    idempotency: "create-or-link is idempotent on externalId; a retry after a mid-command failure finds the existing Case and completes the link"
+  - method: GET
+    path: /api/v1/Omnichannel/action/cases/:caseId/conversations
+    auth: authenticated
+    permissions: "inboxView capability; the Case read ACL is the gate (enforced by reading the Case context first)"
+    request: none
+    response: "200 { list: [{ id, channel, status, lastActivityAt }] } — conversations linked to the Case, safe fields only, at most 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, RECORD_NOT_FOUND]
+    pagination: "none; hard-bounded at 50 rows by the service"
+    sorting: "fixed: last_activity_at desc nulls last"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/calls
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: "query: limit? (default 25, max 100), offset? (default 0)"
+    response: "200 { list: OmnichannelCallView[] } — recent call sessions the caller may see, each with conversationId of the customer's existing message conversation or null"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "limit (default 25, clamped 1–100) and offset (default 0)"
+    sorting: "owner-defined (VoiceCallService.list)"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/calls/:id/conversation
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: none
+    response: "200 { callId, conversationId | null } — resolves the customer's existing conversation by digit-equal participant address"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/snippets
+    auth: authenticated
+    permissions: "inboxView capability"
+    request: "query: channel? (sms|whatsapp|web_chat|...; web_chat and omitted list every text snippet)"
+    response: "200 { list: MessageTemplateView[] } — service snippets from VoiceCommunications, team/language-filtered, plain text only"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "none; the template list is not paged"
+    sorting: "owner-defined (VoiceMessageTemplateService.list)"
+    filtering: "channel maps to the owner's channel filter; unknown channels are passed through"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/snippets/:key/preview
+    auth: authenticated
+    permissions: "reply capability"
+    request: "SnippetPreviewSchema { conversationId?, variables? } — only approved keys customerName/agentName/companyName are substituted; strict object"
+    response: "200 { body, segments } — the rendered plain-text snippet with GSM-7 segment info"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/snippets/:key/used
+    auth: authenticated
+    permissions: "reply capability"
+    request: none
+    response: "200 MessageTemplateView — the snippet with its updated use count"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_message_templates use counter incremented — counts use, never content]
+    idempotency: none; each call increments the counter
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations/:id/draft
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: none
+    response: "200 { draft: DraftView | null } — the caller's own draft only { id, conversationId, body, isInternalNote, updatedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PUT
+    path: /api/v1/Omnichannel/action/conversations/:id/draft
+    auth: authenticated
+    permissions: "reply capability plus CommunicationConversation read ACL"
+    request: "DraftSchema { body (max 20,000 chars), isInternalNote? } — strict object; an empty body deletes the draft"
+    response: "200 { draft: DraftView | null }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [omnichannel_drafts upsert on (conversation_id, user_id); an empty body deletes the row]
+    idempotency: upsert on the unique (conversation, agent) key; a repeat with the same body is a no-op update
+  - method: DELETE
+    path: /api/v1/Omnichannel/action/conversations/:id/draft
+    auth: authenticated
+    permissions: "reply capability plus CommunicationConversation read ACL"
+    request: none
+    response: "200 { removed: boolean }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [omnichannel_drafts row deleted for the caller only]
+    idempotency: safe to repeat; removed=false when no draft exists
+  - method: POST
+    path: /api/v1/Omnichannel/action/conversations/:id/messages
+    auth: authenticated
+    permissions: "reply capability plus CommunicationConversation read ACL; the owner pipeline re-checks policy, consent, service window and channel capability"
+    request: "SendMessageSchema { body (max 20,000, default ''), idempotencyKey (8–200 chars, required), templateKey?, templateLanguage?, templateVariables?, mediaAttachmentIds? (max 10), isInternalNote? } — strict object"
+    response: "201 { message: MessageView, duplicate: boolean } — the recorded outbound message state"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_messages outbound row and provider submission through the Voice owner (policy/consent/window refusals answer named codes); isInternalNote=true records an agent artefact with no provider call; mediaAttachmentIds on a channel without media answers unsupported]
+    idempotency: "idempotencyKey is required; a repeat under the same key answers duplicate=true with no second send"
+  - method: POST
+    path: /api/v1/Omnichannel/action/messages/:id/reconcile
+    auth: authenticated
+    permissions: "opsReplay capability"
+    request: none
+    response: "200 { message: MessageView, changed: boolean, providerStatus: string | null } — asks the provider for the delivery outcome instead of repeating a send"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_messages state may be updated from the provider answer]
+    idempotency: safe to repeat; it is a status lookup, never a resend
+  - method: GET
+    path: /api/v1/Omnichannel/action/health
+    auth: authenticated
+    permissions: "inboxView capability; while the workspace switch is off, settingsManage is also required — the route is control plane and stays reachable"
+    request: none
+    response: "200 OmnichannelHealthView { module, ok, workspaceReady, dependencies[], optionalIntegrations[], features[], callerRights[], settings{version,updatedAt,warnings} } — facts read from the registry and information_schema, no secrets"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/capabilities
+    auth: authenticated
+    permissions: "authenticated — describes only the caller's own rights; no capability is required to ask"
+    request: none
+    response: "200 { capabilities: [{ key, label, description, granted }] } — one entry per Omnichannel capability (inboxView, reply, assign, queueManage, identityLink, connectionManage, opsRead, opsReplay, settingsManage)"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: "fixed: OMNICHANNEL_CAPABILITIES declaration order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/nav
+    auth: authenticated
+    permissions: "inboxView capability (control-plane route, but the service still asserts it)"
+    request: none
+    response: "200 { visible, admin, enabled, resource } — whether the workspace menu entry should render for this caller"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/analytics
+    auth: authenticated
+    permissions: "inboxView capability plus CommunicationConversation read ACL"
+    request: "query: days? (default 30, clamped 1–365)"
+    response: "200 OmnichannelAnalytics — aggregate counts/durations only (volume by channel, backlog, assignment, first-response and reply-delay minutes with honest null+sample, handoffs, reopen rate, delivery failures by category, provider health); no message bodies or addresses"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: "window = last N days"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/operations
+    auth: authenticated
+    permissions: "opsRead capability"
+    request: "query: days? (default 7, clamped 1–90)"
+    response: "200 OperationsOverview { window{days}, accounts[] (key, label, providerKey, enabled, hasCredential/hasWebhookSecret booleans, health, capabilities, lastEventAt, awaitingConfirmation), receipts[{status,count}], failures[{code,count}] } — never a secret or credential hint"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: none
+    sorting: "fixed: accounts by label; receipts/failures by status/count"
+    filtering: "window = last N days for receipts and failures"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/operations/accounts/:key/test
+    auth: authenticated
+    permissions: "connectionManage capability"
+    request: none
+    response: "200 { ok, checkedAt, detail } — the adapter health probe result"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider account last_health_status/detail/at persisted by the Voice owner]
+    idempotency: safe to repeat; each call probes again and overwrites the health stamp
+  - method: GET
+    path: /api/v1/Omnichannel/action/operations/events
+    auth: authenticated
+    permissions: "opsRead capability"
+    request: "query: status?, limit? (default 25, service clamps 1–100), offset? (default 0)"
+    response: "200 { list: ReceiptSummary[], total } — webhook receipt backlog, newest first; payloads are not included"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED]
+    pagination: "limit (default 25, clamped 1–100) and offset (default 0)"
+    sorting: "fixed: received_at desc (newest first)"
+    filtering: "status equals processing_status"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/operations/events/:id
+    auth: authenticated
+    permissions: "opsRead capability"
+    request: none
+    response: "200 ReceiptSummary & { payload } — one receipt with the redacted payload the ingress stored; never a secret or raw header"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/operations/events/:id/replay
+    auth: authenticated
+    permissions: "opsReplay capability"
+    request: none
+    response: "200 { eventId, queued, effects: { idempotent[], refused[] } } — states which effects reoccur and which are refused before queueing"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [receipt re-queued for processing through VoiceWebhookIngressService.replay]
+    idempotency: "normalized events and messages are unique-indexed per receipt/provider id, so a replay cannot duplicate records; a receipt that failed signature validation cannot be replayed (VALIDATION_FAILED)"
+  - method: POST
+    path: /api/v1/Omnichannel/action/operations/accounts/:key/enabled
+    auth: authenticated
+    permissions: "settingsManage capability"
+    request: "AccountEnabledSchema { enabled: boolean } — strict object"
+    response: "200 { account: { key, enabled }, impact: { outbound, inbound, history, awaitingConfirmation } } — the kill switch with its stated effects"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_provider_accounts.enabled toggled; while disabled outbound sends are refused account_disabled, inbound callbacks are still recorded but not applied, history is untouched]
+    idempotency: setting the same value again is a no-op state-wise
+  - method: POST
+    path: /api/v1/Omnichannel/action/ai/suggest
+    auth: authenticated
+    permissions: "reply capability plus CommunicationConversation read ACL; suggestions never act — the only send path is a human-approved AIAgents tool call"
+    request: "AiTaskSchema { task (summarize|classify|suggest_reply|suggest_queue|case_summary), conversationId, language?, requestKey? } — strict object"
+    response: "202 { runId, agentId, task } — the AIAgents run is queued, not awaited"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [AIAgents run row created with trigger 'integration' and a minimal customer-visible transcript (internal notes excluded in SQL, customer text neutralized); refuses ai_not_configured when no agent is set in settings]
+    idempotency: "requestKey becomes the AIAgents idempotency key; without it a random key is used so every call queues a new run"
+  - method: GET
+    path: /api/v1/Omnichannel/action/ai/runs/:runId
+    auth: authenticated
+    permissions: "reply capability plus CommunicationConversation read ACL; the run must be bound to the presented conversationId (anti-IDOR)"
+    request: "query: conversationId (required)"
+    response: "200 OmnichannelAiRunView { runId, status, agentName, result, failureCategory, failureMessage, aiGenerated: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Omnichannel/action/conversations/:id/export
+    auth: authenticated
+    permissions: "settingsManage capability plus CommunicationConversation read ACL; control-plane route for data-subject access requests"
+    request: none
+    response: "200 ConversationExport { generatedAt, conversation{...}, participants[], messages[] (customer-visible only, internal notes excluded in SQL, max 5000), excluded{internalNotes} }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none; messages capped at 5000 rows"
+    sorting: "fixed: participants and messages by created_at ascending"
+    filtering: "is_internal_note = false enforced in SQL"
+    sideEffects: [audit_log row CommunicationConversationExport with counts only, never content]
+    idempotency: safe to repeat; each export writes another audit row
+  - method: POST
+    path: /api/v1/Omnichannel/action/retention/purge
+    auth: authenticated
+    permissions: "settingsManage capability; control-plane route so it stays reachable while the workspace is off"
+    request: none
+    response: "200 { drafts, sessions, retention: { staleDraftDays, expiredSessionDays } } — counts of module-owned artefacts removed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [omnichannel_drafts rows older than staleDraftDays deleted; expired omnichannel_visitor_sessions past expiredSessionDays deleted; canonical Voice message/media/webhook retention stays with its owners]
+    idempotency: safe to repeat; a second run reports zero new deletions
+  - method: GET
+    path: /api/v1/Omnichannel/action/settings
+    auth: authenticated
+    permissions: "settingsManage capability; control-plane route"
+    request: none
+    response: "200 OmnichannelSettingsView { settings{features,webChat,retention,ai}, version, updatedAt, updatedBy, defaults, warnings[], features{} }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Omnichannel/action/settings
+    auth: authenticated
+    permissions: "settingsManage capability; control-plane route; the service re-asserts OmnichannelSettings edit ACL"
+    request: "partial Omnichannel settings object — deep-merged over the stored document; the strict schema refuses unknown keys"
+    response: "200 OmnichannelSettingsView — the validated document with warnings and defaults"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row 'omnichannel' rewritten with version+1, updatedAt/updatedBy stamped, per-user menu cache invalidated]
+    idempotency: "a repeat with the same patch still bumps the version; the document is a settings write, not a command"
+  - method: POST
+    path: /api/v1/Omnichannel/chat/session
+    auth: public
+    permissions: "none — the visitor session cookie (omni_visitor, httpOnly, SameSite=Lax, path-scoped) is the credential; the Origin header must be on the webChat allowedOrigins list for mutations"
+    request: "SessionBody { consent? } — strict object, optional"
+    response: "200 WebChatSessionView { status: new|resumed, expiresAt, consent{required,state,version,text}, messages[] } plus Set-Cookie omni_visitor"
+    errors: [AUTHORIZATION_DENIED, AUTHENTICATION_FAILED, VALIDATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [omnichannel_visitor_sessions row with only the key/ip hashes stored, Set-Cookie issued (secure in production), last_seen_at touched on resume]
+    idempotency: "resumed by cookie; each cookieless call mints a new session bounded by maxSessionsPerHour per address"
+  - method: POST
+    path: /api/v1/Omnichannel/chat/messages
+    auth: public
+    permissions: "none — visitor session cookie plus Origin allowlist, consent and per-session rate window enforced server-side"
+    request: "SendBody { clientMessageId (8–200 chars, required), body (1–20,000 chars; config maxBodyChars default 2,000), consent?, website? (honeypot — a filled value is silently discarded) } — strict object"
+    response: "200 { accepted: true, messageId, duplicate }"
+    errors: [AUTHENTICATION_FAILED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RATE_LIMITED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [consent recorded on the session when required and granted, inbound voice_messages row via VoiceMessagingService.ingestInbound (conversation created on first message), session message_count/last_seen_at/window counters updated]
+    idempotency: "clientMessageId namespaced per session is the provider message id; a retry answers duplicate=true with no second message"
+  - method: GET
+    path: /api/v1/Omnichannel/chat/messages
+    auth: public
+    permissions: "none — visitor session cookie; only the caller's own conversation's customer-visible messages are returned"
+    request: "query: after? (message id cursor)"
+    response: "200 { messages: WebChatMessageView[] } — at most 100, created_at ascending; internal notes can never appear"
+    errors: [AUTHENTICATION_FAILED, AUTHORIZATION_DENIED]
+    pagination: "cursor: after=<message id>; at most 100 rows per call"
+    sorting: "fixed: created_at asc, id asc"
+    filtering: "is_internal_note=false and channel=web_chat enforced in SQL"
+    sideEffects: [session last_seen_at touched]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/integrations/omnichannel/:providerKey/:accountKey/:kind
+    auth: public
+    permissions: "none — provider signature verified by the bound adapter (replay window, then adapter validateWebhook) before any effect; kind must be voice-events|message-events|status-events|media-events"
+    request: "provider-specific callback body (parsed object) plus the provider's signature headers; raw body preserved for byte-signing providers"
+    response: "202 { eventId, duplicate, accepted, processingStatus, reason? } — the durable receipt answer; processing happens asynchronously"
+    errors: [NOT_FOUND, VALIDATION_FAILED, AUTHENTICATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_webhook_events receipt persisted (deduplicated by account+dedup_key, redacted payload), security event on signature/replay rejection, VOICE_JOB_PROCESS_WEBHOOK enqueued which later creates/updates conversation and message records; a disabled account still records receipts but does not apply them; enqueue failure is stamped on the receipt for operator replay]
+    idempotency: "dedup key unique per account: a redelivery answers duplicate=true with no second job or record; a redelivery under a known key with a different body keeps the stored delivery and stamps DEDUP_BODY_MISMATCH"

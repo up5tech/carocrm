@@ -1,0 +1,177 @@
+# PLAN §58 — reports: saved report definitions, ad-hoc preview/run/export and cron schedules.
+# Source: apps/api/src/reports/report.controller.ts, apps/api/src/reports/report.service.ts,
+# apps/api/src/reports/report-shapes.ts, apps/worker/src/handlers/report-handlers.ts
+# Visibility: a non-admin sees only reports they own or that are shared; every run re-checks
+# entity read ACL and field-level visibility against the caller's current grants.
+# Format and required fields: api-spec/README.md §2.
+group: reports
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Report
+    auth: authenticated
+    permissions: authenticated — non-admins see only their own reports plus shared ones; administrators see all
+    request: none
+    response: "200 ReportView[] (not wrapped) — { id, name, entityType, userId, visibility, isShared, definition, createdAt, modifiedAt }, ordered by modifiedAt desc, capped at 200"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: "none; the whole visible set is returned, bounded at MAX_REPORTS = 200"
+    sorting: "fixed: modifiedAt descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Report
+    auth: authenticated
+    permissions: authenticated — the caller becomes the report owner; the definition's entityType must exist and pass entity read ACL
+    request: "ReportCreateSchema { name (1-190 chars), definition (ReportDefinition), visibility? (private|shared, default private) } — strict object"
+    response: "201 ReportView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [reports row]
+    idempotency: none; each call creates a new report id
+  - method: GET
+    path: /api/v1/Report/:id
+    auth: authenticated
+    permissions: authenticated — owner, shared report or administrator; anything else answers 404, not 403
+    request: none
+    response: "200 ReportView"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/Report/:id
+    auth: authenticated
+    permissions: authenticated — only the report owner or an administrator may change it
+    request: "ReportUpdateSchema { name?, definition?, visibility? } — strict object; omitted keys are left unchanged, a new definition re-validates entityType and every field against ACL"
+    response: "200 ReportView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [reports row updated, modifiedAt bumped]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/Report/:id
+    auth: authenticated
+    permissions: authenticated — only the report owner or an administrator may change it
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [reports row deleted, its report_schedules row removed via jobs.removeSchedule, audit trail in jobs service]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Report/action/preview
+    auth: authenticated
+    permissions: record ACL — definition.entityType must pass read ACL and every column/filter/dimension/metric field must be field-visible to the caller
+    request: "{ definition: ReportDefinition } — run against the ad-hoc definition without saving it"
+    response: "200 { result: ReportResult } — rows, groups, matrix or metrics depending on report kind"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; the scan is bounded by MAX_REPORT_SCAN
+  - method: POST
+    path: /api/v1/Report/:id/action/run
+    auth: authenticated
+    permissions: authenticated — owner, shared report or administrator; the stored definition is re-validated and re-authorized on every run
+    request: none
+    response: "200 { report: ReportView, result: ReportResult }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; each call re-executes the report under current ACL
+  - method: GET
+    path: /api/v1/Report/:id/action/export
+    auth: authenticated
+    permissions: authenticated — same visibility rule as run; the CSV is built in the response body, not stored
+    request: none
+    response: "200 { reportId, filename, csv, rows, truncated } — CRLF CSV text with escaped cells"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Report/:id/schedule
+    auth: authenticated
+    permissions: authenticated — same visibility rule as get
+    request: none
+    response: "200 ReportScheduleView { id, reportId, cron, enabled, createdAt, modifiedAt } or null when no schedule exists"
+    errors: [AUTHENTICATION_REQUIRED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Report/:id/schedule
+    auth: authenticated
+    permissions: authenticated — only the report owner or an administrator may change it
+    request: "{ cron: five-field cron expression, enabled? (default true) } — upsert keyed on report_id"
+    response: "200 ReportScheduleView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [report_schedules row upserted, scheduled_jobs row upserted/enable toggled for job reports.deliver; refused with VALIDATION_FAILED when REPORT_WORKER_SECRET is not configured]
+    idempotency: safe to repeat; the upsert keeps one schedule per report and rewrites cron/enabled
+  - method: POST
+    path: /api/v1/Report/:id/schedule/enable
+    auth: authenticated
+    permissions: authenticated — only the report owner or an administrator may change it
+    request: none
+    response: "200 ReportScheduleView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [report_schedules.enabled = true, scheduled_jobs row enabled — deliveries resume at the next cron tick; a scheduler failure rolls enabled back to false]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Report/:id/schedule/disable
+    auth: authenticated
+    permissions: authenticated — only the report owner or an administrator may change it
+    request: none
+    response: "200 ReportScheduleView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [report_schedules.enabled = false, scheduled_jobs row disabled — deliveries stop]
+    idempotency: safe to repeat
+  - method: DELETE
+    path: /api/v1/Report/:id/schedule
+    auth: authenticated
+    permissions: authenticated — only the report owner or an administrator may change it
+    request: none
+    response: "200 { reportId, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [report_schedules row deleted, scheduled_jobs row removed]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Report/action/deliver-scheduled
+    auth: public
+    permissions: "worker capability — header x-report-worker-secret must equal REPORT_WORKER_SECRET (constant-time compare); @Public route, no user principal"
+    request: "body { scheduleId } (required non-empty string) + header x-report-worker-secret"
+    response: "200 { reportId, reportName, recipient, filename, csv } — the worker emails this CSV to the schedule owner; the endpoint itself sends nothing"
+    errors: [AUTHENTICATION_FAILED, RECORD_NOT_FOUND, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [report executed as the schedule owner via runAsUser with current roles; no rows written by this route — the worker performs the email send]
+    idempotency: safe to repeat; each call re-runs the export, and the worker refuses truncated or >5 MiB CSVs

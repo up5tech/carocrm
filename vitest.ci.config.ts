@@ -18,6 +18,10 @@ import { defineConfig } from 'vitest/config';
  */
 const PURE_API_TESTS = [
   'advanced-integrations-connectors.test.ts',
+  // Phase 24.4: the api-spec strict-gate regression is filesystem-only (probe controller + the
+  // static checker script); the client-contract suite reads schema JSON and pure Zod objects.
+  'api-spec-registry.test.ts',
+  'api-spec-client-contract.test.ts',
   'advanced-integrations-transformation.test.ts',
   // Phase 23.8 (task 2): the named adversarial suite is DB-free (provider URL safety), as is the
   // Phase 23.5 SSRF boundary suite. Both belong in the nightly gate rather than the sandbox layer.

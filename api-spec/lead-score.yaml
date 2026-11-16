@@ -1,0 +1,400 @@
+# PLAN §58 — the LeadScore control plane (plans/PLAN_Phase_19_LeadScore.md §8, §9).
+# Source: apps/api/src/lead-score/lead-score.controller.ts and the services it calls
+# (lead-score-permission, lead-score-feature-gate, lead-score-settings,
+# lead-score-model, lead-score-preview, lead-score-calculation, lead-score-explanation,
+# lead-score-recalculation, lead-score-report, lead-score-insight, lead-duplicate-resolver,
+# lead-conversion, lead-conversion-preview, lead-conversion-audit).
+# Every non-worker route sits behind the global AuthGuard and a capability asserted
+# server-side — either directly via LeadScorePermissionService.assert or through the
+# feature gate's OPERATION_RULES table (capability + module/feature switch). Worker
+# routes are @Public and authorized by the shared x-worker-secret header compared in
+# constant time against REPORT_WORKER_SECRET-equivalent config; an unset secret refuses
+# every worker route. Module refusals carry stable LEADSCORE_* codes.
+# Format and required fields: api-spec/README.md §2.
+group: lead-score
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/LeadScore/action/health
+    auth: authenticated
+    permissions: "capability viewScore"
+    request: none
+    response: "200 module health view — platform foundation evidence, registration invariants, feature switches with effective state, and the per-operation gate assessment"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/capabilities
+    auth: authenticated
+    permissions: "capability viewScore"
+    request: none
+    response: "200 { module, capabilities[] { key, label, description, granted }, enabled, effective{}, pendingFeatures[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/permissions
+    auth: authenticated
+    permissions: "capability viewScore"
+    request: none
+    response: "200 { capabilities[] { key, label, description, resource, action } } — the declared synthetic-resource permission matrix"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/settings
+    auth: authenticated
+    permissions: "capability settingsManage"
+    request: none
+    response: "200 settings view — the leadScore settings document with warnings, pending phases, defaults and effective feature state; version bumps on every accepted change"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/settings
+    auth: authenticated
+    permissions: "capability settingsManage"
+    request: "SettingsPatchSchema — any object; fields are validated by LeadScoreSettingsSchema in the service and unknown keys are refused"
+    response: "200 the updated settings view"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings leadScore row updated, settings version bumped; effective feature state and every gate answer change on the next request]
+    idempotency: a repeat with the same patch is a no-op for the stored values
+  - method: POST
+    path: /api/v1/LeadScore/action/work/decay-sweep
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal the configured worker secret (constant-time compare); @Public route, no user principal; the work then runs under the module's service authority and the decaySweep gate (capability batchRecalculate, feature engagementSignals)"
+    request: "header x-worker-secret; no body"
+    response: "200 decay sweep decision — started with run bounds, or which reason it skipped (disabled, noDecayingRules, noActiveModel)"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [when admitted and enabled: a bounded chunked rebuild job is enqueued (source decay_sweep) that re-scores Leads whose model has time-dependent rules; evaluations and Lead projections are written by the chunks, not by this call]
+    idempotency: safe to repeat; the sweep is bounded and unchanged Leads produce identical evaluation keys, so a second sweep records nothing new
+  - method: POST
+    path: /api/v1/LeadScore/action/operation-gate
+    auth: authenticated
+    permissions: "authenticated — the probe never throws for a missing right; it reports admitted:false with the capability code instead"
+    request: "OperationProbeSchema { operation } — one of the LEADSCORE_OPERATIONS enum"
+    response: "200 LeadScoreOperationAssessment { operation, admitted, capability, feature, writes, pendingPhase, code, detail }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/editor
+    auth: authenticated
+    permissions: "capability modelRead"
+    request: "query: modelId? — when present the model's allowed-field-paths annotate the answer; the model read is ACL-gated (invisible id answers RECORD_NOT_FOUND)"
+    response: "200 editor catalog — fields, per-type operators, value controls, condition limits and module vocabularies; refused fields carry their reason"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/model/validate
+    auth: authenticated
+    permissions: "gate operation validateModel — capability modelManage plus the modelAdministration feature switch and the module switch"
+    request: "ModelValidateSchema { modelId }"
+    response: "200 ValidationReport — the full problem list, each issue with a stable code; read-only, writes nothing"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/model/publish
+    auth: authenticated
+    permissions: "gate operation publishModel — capability modelPublish plus modelAdministration; the model must be readable through record ACL"
+    request: "ModelPublishSchema { modelId, expectedVersion? } — expectedVersion is the optimistic-lock token the editor last read"
+    response: "200 the published LeadScoreModel record (status published, publishedById/publishedAt set)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, CONCURRENCY_CONFLICT, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_INVALID_STATE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [LeadScoreModel status draft→published (immutable from then on); validation is re-run at publish time and a failing model answers 422 with the issue list; stored evaluations are untouched — a rebuild is a separate command]
+    idempotency: none; publishing a non-draft answers LEADSCORE_INVALID_STATE, and a stale expectedVersion answers CONCURRENCY_CONFLICT
+  - method: POST
+    path: /api/v1/LeadScore/action/model/archive
+    auth: authenticated
+    permissions: "gate operation publishModel — capability modelPublish plus modelAdministration"
+    request: "ModelArchiveSchema { modelId, expectedVersion? } (same shape as publish)"
+    response: "200 the archived LeadScoreModel record (status archived, archivedById/archivedAt set)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, CONCURRENCY_CONFLICT, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_INVALID_STATE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [LeadScoreModel status→archived; stored evaluations keep naming the version they came from]
+    idempotency: archiving an already-archived model answers LEADSCORE_INVALID_STATE
+  - method: POST
+    path: /api/v1/LeadScore/action/model/new-version
+    auth: authenticated
+    permissions: "gate operation createModelVersion — capability modelManage plus modelAdministration"
+    request: "ModelNewVersionSchema { modelId } — the source must be published or archived"
+    response: "200 the new draft LeadScoreModel record with its rules copied and modelVersion incremented"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_INVALID_STATE, LEADSCORE_DRAFT_EXISTS]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: new LeadScoreModel draft (version N+1) plus copied LeadScoreRule rows; the source version is untouched]
+    idempotency: none; a second call answers LEADSCORE_DRAFT_EXISTS while the copy is still a draft
+  - method: POST
+    path: /api/v1/LeadScore/action/model/preview
+    auth: authenticated
+    permissions: "gate operation previewModel — capability modelManage plus the scoringPreview feature; the Lead sample comes through the core list path so record and field ACL are the real ones"
+    request: "ModelPreviewSchema { modelId, leadIds? (1..MAX_PREVIEW_SAMPLE), maxSize? } — maxSize can only narrow the bound"
+    response: "200 sample evaluations — per-Lead score output with no Lead values echoed; writes nothing"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING]
+    pagination: "bounded sample: leadIds or maxSize capped at MAX_PREVIEW_SAMPLE"
+    sorting: none
+    filtering: "fixed: the named leadIds, or the first maxSize Leads the caller may read"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/model/recalculate
+    auth: authenticated
+    permissions: "gate operation batchRecalculate — capability batchRecalculate plus the batchRecalculation feature and the module switch; modelId must equal the active published model"
+    request: "ModelRecalculateSchema { modelId, limit?, chunkSize? } — bounds can only be lowered below the service ceilings"
+    response: "200 { job row, runId, applied bounds } — the first chunk job of a bounded rebuild whose evaluations record trigger model_publish"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_NO_ACTIVE_MODEL]
+    pagination: none
+    sorting: none
+    filtering: "fixed: the active published model's Lead set; limit/chunkSize bounded"
+    sideEffects: [a rebuild job row plus outbox/job queue entries; chunks write LeadScoreEvaluation rows and Lead score projections under trigger model_publish]
+    idempotency: each call enqueues another run; identical inputs produce identical evaluation keys so re-run chunks record nothing new
+  - method: GET
+    path: /api/v1/LeadScore/action/report
+    auth: authenticated
+    permissions: "capability viewScore asserted in the service; the aggregates are computed under the reader's own record scope"
+    request: none
+    response: "200 four curated views — scored population, bands, freshness and conversions — each with its population and definitions"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/insight
+    auth: authenticated
+    permissions: "gate operation aiInsight — capability generateInsight plus the aiInsight feature; the AIAgents 'use' right is also asserted; the Lead must be readable and currently scored"
+    request: "InsightRequestSchema { leadId, idempotencyKey? (8-128 chars, caller-generated) }"
+    response: "200 the stored LeadScoreInsight record with model/provider identity, input digest and run counters — never a score"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_INSIGHT_NOT_CONFIGURED, LEADSCORE_INSIGHT_UNAVAILABLE, LEADSCORE_INSIGHT_AGENT_UNSUITABLE, LEADSCORE_INSIGHT_NOT_SCORED, LEADSCORE_INSIGHT_UNUSABLE]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one AIAgents run (provider call) and a LeadScoreInsight append-only record; the score and its projection are never touched]
+    idempotency: "the optional idempotencyKey replays the same insight instead of spending a second run"
+  - method: POST
+    path: /api/v1/LeadScore/action/conversion/candidates
+    auth: authenticated
+    permissions: "gate operation duplicateCheck — capability convertPreview plus the duplicateDetection feature; the Lead must be readable and record ACL decides which candidates are visible (hiddenMatches counts the rest)"
+    request: "ConversionCandidatesSchema { leadId } — one Lead per call, no stage/limit/wider-search inputs"
+    response: "200 candidates with match classes and reasons plus hiddenMatches count and requiresChoice/allowedDecisions — a question, never an action"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING]
+    pagination: none
+    sorting: none
+    filtering: "fixed: exact e-mail, phone, Account domain and Account company matches for the one Lead"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/conversion/affordance
+    auth: authenticated
+    permissions: "authenticated — deliberately no capability gate: the answer is a 200 with canConvert:false and reasons, never an error for 'no'; the module switch and the Lead's record ACL still apply"
+    request: "query: leadId (required)"
+    response: "200 ConversionAffordanceView { leadId, canPreview, canConvert, canOverride, targets[], alreadyConverted, status, convertedAt, convertedContactId/AccountId/OpportunityId, operationId, reasons[] }"
+    errors: [AUTHENTICATION_REQUIRED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/conversion/preview
+    auth: authenticated
+    permissions: "gate operation conversionPreview — capability convertPreview plus the conversionPreview feature; field-level ACL is applied to every proposed value"
+    request: "ConversionPreviewSchema { leadId, targets[] { type, action (create|link), existingId? }, fieldMerge?[], expectedLeadRevision?, mappingVersion? }"
+    response: "200 the conversion plan — proposed values, skipped fields with reasons, missing required values, before/after conflicts, duplicate candidates, required confirmations and the previewHash fingerprint; writes nothing"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_TARGET_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat — the fingerprint over the answer is what makes a held preview refusable later
+  - method: POST
+    path: /api/v1/LeadScore/action/conversion/convert
+    auth: authenticated
+    permissions: "gate operation conversionExecute — capability convertExecute plus the leadConversion feature; the preview is re-run and its fingerprint compared, and the target entities' own create/read/link ACL is enforced at execution (Contact/Account/Opportunity create, read for link); duplicateOverride and applyFieldChanges are separately asserted when used"
+    request: "ConvertSchema { leadId, operationKey (8-128), targets[], fieldMerge?, previewHash (64-hex), acknowledged[], overrideDuplicateFor?, allowReparent? }"
+    response: "200 the conversion operation row read back after the work — created/linked Contact/Account/Opportunity ids, Lead status — or the replayed prior result for a repeated key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_TARGET_DISABLED, LEADSCORE_PREVIEW_STALE, LEADSCORE_ALREADY_CONVERTED, LEADSCORE_CONVERSION_CONFLICT, LEADSCORE_CONVERSION_IN_FLIGHT, LEADSCORE_DUPLICATE_REVIEW_REQUIRED, LEADSCORE_CONVERSION_REPARENT_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: Lead marked Converted, Contact/Account/Opportunity records created or linked per the plan, field merges applied, LeadConversionOperation row settled, domain events and audit rows; attachments/files are not part of this command]
+    idempotency: "the caller-generated operationKey makes a retry safe — a repeated key replays the stored result instead of re-running; a stale previewHash or unacknowledged confirmation answers 409"
+  - method: GET
+    path: /api/v1/LeadScore/action/conversion/operations
+    auth: authenticated
+    permissions: "capability conversionAuditRead plus the module switch; each row's Lead label appears only when the caller may read that Lead"
+    request: "query: status? (processing|succeeded|failed_retryable|failed_final|needs_review), staleAfterMinutes?, limit? (default 25, max 100)"
+    response: "200 { total, limit, items[] } — bounded page of conversion operation views, newest first"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, LEADSCORE_MODULE_DISABLED]
+    pagination: "limit parameter, default 25, max 100; no offset"
+    sorting: "fixed: requestedAt descending"
+    filtering: "status equals-filter; staleAfterMinutes additionally restricts to processing rows older than the cutoff"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/conversion/operations/:operationId
+    auth: authenticated
+    permissions: "capability conversionAuditRead plus the module switch; an unknown or invisible operation answers 404 without confirming it exists"
+    request: "path: operationId"
+    response: "200 one conversion operation view — status, result summary, Lead label when readable"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/conversion/operations/:operationId/retry
+    auth: authenticated
+    permissions: "gate operation conversionRetry — capability conversionRecover plus the conversionRecovery feature; only failed_retryable or needs_review rows may be retried and the accounting must prove a retry cannot duplicate"
+    request: "path: operationId; no body"
+    response: "200 the retried conversion result — the operation keeps its original key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_CONVERSION_IN_FLIGHT, LEADSCORE_CONVERSION_NEEDS_RECOVERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [the operation is reclaimed and re-executed under its stored plan; unprovable accounting settles the row to needs_review instead of writing records]
+    idempotency: "safe to repeat by design — the retry keeps the operation key and replays created targets rather than duplicating them"
+  - method: POST
+    path: /api/v1/LeadScore/action/conversion/operations/:operationId/close
+    auth: authenticated
+    permissions: "gate operation conversionRetry — capability conversionRecover plus the conversionRecovery feature; only needs_review rows may be closed"
+    request: "path: operationId; body ConversionCloseSchema { reason? (max 500) }"
+    response: "200 the closed operation view (status failed_final)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [LeadConversionOperation settled to failed_final with the operator's reason recorded; no Lead or target record is touched]
+    idempotency: closing an already-closed operation answers VALIDATION_FAILED (not in a closable state)
+  - method: POST
+    path: /api/v1/LeadScore/action/work/recover-conversion-operations
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal the configured worker secret (constant-time compare); @Public route; the recovery then runs under the module's service authority and the conversionRetry gate (capability conversionRecover, feature conversionRecovery)"
+    request: "header x-worker-secret; no body"
+    response: "200 RecoveryView — what the scan settled (retryable vs needs_review) and what it left for a human; disabled by default in settings"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: "fixed: processing rows older than the configured staleAfterMinutes threshold"
+    sideEffects: [stale processing LeadConversionOperation rows are settled to failed_retryable or needs_review; no target records are written — a retry remains an administrator's explicit act]
+    idempotency: safe to repeat; already-settled rows are no longer in the scan's predicate
+  - method: POST
+    path: /api/v1/LeadScore/action/score/recalculate
+    auth: authenticated
+    permissions: "gate operation recalculateLead — capability recalculate plus the manualRecalculation feature; the Lead must be readable and the score write requires the core Lead:edit right (record ACL)"
+    request: "ScoreRecalculateSchema { leadId }"
+    response: "200 ScoreWriteView — the written (or unchanged) score: evaluationId, recorded/projectionWritten flags, model identity, score value/band, reason codes, freshness inputs, optional threshold outcome"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_NO_ACTIVE_MODEL]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: LeadScoreEvaluation row (deterministic idempotency key) plus the Lead score projection fields when they changed; a band crossing may publish a domain event and, when enabled, one owner notification; unchanged inputs record nothing]
+    idempotency: "safe to repeat — the evaluation key spans Lead+model+input hash, so an identical recompute is a provable no-op"
+  - method: GET
+    path: /api/v1/LeadScore/action/score/:leadId
+    auth: authenticated
+    permissions: "gate operation readScore — capability viewScore plus the scoring feature; the Lead must be readable through record ACL and no Lead field values are echoed in the breakdown"
+    request: "path: leadId"
+    response: "200 ScoreReadView — score value/band/previousValue/coverage/reasonCodes, model identity, freshness block (status, reasons, revisions), per-rule breakdown without Lead values, error codes, signal state, and the caller's action affordances including any stored AI insight"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/LeadScore/action/score/:leadId/history
+    auth: authenticated
+    permissions: "gate operation readScoreHistory — capability explainScore plus the scoreExplanation feature; the Lead must be readable; LeadScoreEvaluation is read:'no' at entity level so this Lead-scoped route is the only door"
+    request: "path: leadId; query: limit? (default 20, max MAX_HISTORY_PAGE), offset? (default 0, max 100000)"
+    response: "200 { leadId, total, limit, offset, items[] } — evaluation history newest first with model id/version, score, band, reason codes and trigger"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING]
+    pagination: "limit (default 20, capped at MAX_HISTORY_PAGE) and offset (default 0); total is the Lead's full evaluation count"
+    sorting: "fixed: newest first"
+    filtering: "fixed: evaluations of :leadId only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/LeadScore/action/recalculate-batch
+    auth: authenticated
+    permissions: "gate operation batchRecalculate — capability batchRecalculate plus the batchRecalculation feature; requires an active published model"
+    request: "BatchRecalculateSchema { limit?, chunkSize?, where?[] { field, operator, value? } (max 8 conditions) } — bounds can only be lowered; the where DSL is validated against Lead metadata when each chunk runs"
+    response: "200 { job row, runId, applied bounds } — the first chunk job of a bounded rebuild"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_NO_ACTIVE_MODEL]
+    pagination: none
+    sorting: none
+    filtering: "where: up to 8 { field, operator, value } conditions over Lead fields, validated by the query engine against metadata and field ACL"
+    sideEffects: [a rebuild job row plus queued chunk jobs; each chunk writes LeadScoreEvaluation rows and Lead projections under trigger batch_rebuild; progress and cancel live on /admin/jobs]
+    idempotency: each call enqueues a new run; identical inputs produce identical evaluation keys so re-scored unchanged Leads record nothing new
+  - method: POST
+    path: /api/v1/LeadScore/action/work/lead-changed
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal the configured worker secret (constant-time compare); @Public route called from an at-least-once outbox subscriber; the enqueue decision then runs under the module's service authority"
+    request: "header x-worker-secret; body LeadChangedSchema { leadId, revision, changed[] (max 512 field names) }"
+    response: "200 one of six enqueue decisions — always 200 for 'nothing to do' so the subscriber is not retried into a storm"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [when the change touches a field the active model reads, a debounced recalculation job is enqueued for the Lead; otherwise nothing is written]
+    idempotency: "safe to repeat — the deterministic job id (Lead+revision) collapses duplicate outbox deliveries"
+  - method: POST
+    path: /api/v1/LeadScore/action/work/recalculate
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal the configured worker secret (constant-time compare); @Public route; the recalculation runs under the module's service authority gated by eventRecalculate (capability recalculate, feature eventRecalculation)"
+    request: "header x-worker-secret; body ScoreRecalculateSchema { leadId }"
+    response: "200 ScoreWriteView — the written (or unchanged) score"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY, RECORD_NOT_FOUND, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_NO_ACTIVE_MODEL]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as the interactive recalculate: evaluation row plus Lead projection when changed, under trigger lead_change; runs with the module's service authority rather than a user's ACL]
+    idempotency: safe to repeat — identical inputs are a provable no-op
+  - method: POST
+    path: /api/v1/LeadScore/action/work/recalculate-batch-chunk
+    auth: public
+    permissions: "worker capability — header x-worker-secret must equal the configured worker secret (constant-time compare); @Public route; each chunk runs under the module's service authority gated by batchRecalculate"
+    request: "header x-worker-secret; body RecalculateBatchChunkSchema { runId, limit, chunkSize, processed, cursor, where[], trigger (batch_rebuild|model_publish), source } — bounds re-validated on the way in"
+    response: "200 chunk counts, the next cursor and the next job id (or run completion)"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY, VALIDATION_FAILED, LEADSCORE_MODULE_DISABLED, LEADSCORE_PHASE_PENDING, LEADSCORE_NO_ACTIVE_MODEL]
+    pagination: none
+    sorting: none
+    filtering: "fixed: the run's stored where filter and cursor; at most chunkSize Leads per call"
+    sideEffects: [LeadScoreEvaluation rows and Lead projections for the chunk's Leads under the run's trigger; the next chunk job is enqueued until the cursor is exhausted or the limit is reached]
+    idempotency: safe to repeat — the cursor and deterministic evaluation keys make a re-run chunk absorb duplicates

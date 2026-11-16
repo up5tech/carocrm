@@ -1,0 +1,401 @@
+# PLAN §58 — portals and external access (Phase 18, PLAN §37).
+# Source: apps/api/src/portal/portal-admin.controller.ts, portal.controller.ts,
+# portal-role.controller.ts, portal-admin.service.ts, portal-front.service.ts, shapes.ts.
+# Auth: a global AuthGuard resolves Bearer access tokens, API keys and the CRM-SESSION
+# cookie for every non-@Public route; cookie-authenticated unsafe methods additionally
+# require the CRM-CSRF double-submit header and a same-origin check. None of these
+# routes is @Public. Admin routes call PortalAdminService.requireAdmin() (principal
+# userType must be 'admin'); the /Portal/me|nav|dashboard routes call
+# PortalFrontService.requirePortalPrincipal() (principal userType must be 'portal'
+# with a portalId) and additionally refuse an inactive portal or inactive user.
+# Format and required fields: api-spec/README.md §2.
+group: portal
+basePath: /api/v1
+endpoints:
+  # --- portal administration (internal administrators only) ---
+  - method: GET
+    path: /api/v1/Portal
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 PortalSummary[] — { id, name, urlPath, isActive, settings, userCount, portalRoleIds, createdAt, modifiedAt }, ordered by name, capped at 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the answer is bounded at 50 portals by the server"
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Portal
+    auth: authenticated
+    permissions: administrator
+    request: "PortalInputSchema { id?, name (PORTAL_NAME pattern), urlPath? (default '/portal', must start with '/'), isActive? (default true), settings? (record, default {}) }"
+    response: "201 Portal { id, name, urlPath, isActive, settings, portalRoleIds, createdAt, modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portals row]
+    idempotency: "none; a client-supplied id that already exists answers 409, and more than 50 live portals answers 422"
+  - method: GET
+    path: /api/v1/Portal/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 Portal { id, name, urlPath, isActive, settings, portalRoleIds, createdAt, modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/Portal/:id
+    auth: authenticated
+    permissions: administrator
+    request: "partial PortalInputSchema — omitted keys are left unchanged"
+    response: "200 Portal"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portals row, modified_at bumped]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/Portal/:id
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller, not a full replacement"
+    response: "200 Portal"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/Portal/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portals.is_deleted set; refused with 409 while any non-deleted user still has portal_id = this portal]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Portal/:id/roles
+    auth: authenticated
+    permissions: administrator
+    request: "PortalRoleLinkSchema { portalRoleIds: string[] } (max 100, each id must be a live portal role)"
+    response: "200 { portalId, portalRoleIds } — the roles every portal user of this portal holds"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portals_portal_roles rows replaced inside one transaction]
+    idempotency: a repeat with the same body is a no-op; the set is replaced, not appended
+  - method: PUT
+    path: /api/v1/Portal/:id/roles
+    auth: authenticated
+    permissions: administrator
+    request: "same as POST — PUT is an alias on this controller"
+    response: "200 { portalId, portalRoleIds }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as POST]
+    idempotency: same as POST
+  - method: GET
+    path: /api/v1/Portal/:id/navigation
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 NavItem[] — { id, portalId, label, entity, route, icon, position, isActive }, ordered by position then label, capped at 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none; the answer is bounded at 50 items by the server"
+    sorting: "fixed: position ascending, then label ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Portal/:id/navigation
+    auth: authenticated
+    permissions: administrator
+    request: "PortalNavInputSchema { id?, label, entity? (PascalCase entity name or null), route? (must start with '/', or null), icon?, position? (default 0), isActive? (default true) } — entity or route is required"
+    response: "201 NavItem"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_nav_items row; an entity that is not in the metadata registry answers 404]
+    idempotency: none; a repeat creates another item (no duplicate check)
+  - method: PATCH
+    path: /api/v1/Portal/:id/navigation/:itemId
+    auth: authenticated
+    permissions: administrator
+    request: "partial PortalNavInputSchema — omitted keys are left unchanged; item must belong to :id"
+    response: "200 NavItem"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_nav_items row, modified_at bumped]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/Portal/:id/navigation/:itemId
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller"
+    response: "200 NavItem"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/Portal/:id/navigation/:itemId
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_nav_items row hard-deleted]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/Portal/:id/dashboards
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 Dashboard[] — { id, portalId, portalRoleId, name, layout, config, isDefault, dashlets[], createdAt, modifiedAt }, default first then by name, capped at 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none; the answer is bounded at 50 dashboards by the server"
+    sorting: "fixed: isDefault descending, then name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Portal/:id/dashboards
+    auth: authenticated
+    permissions: administrator
+    request: "PortalDashboardInputSchema { id?, name, portalRoleId? (null = portal-wide), layout? (array, default []), config? (record, default {}), isDefault? (default false) }"
+    response: "201 Dashboard (with dashlets)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_dashboards row in one transaction; setting isDefault on a portal-wide dashboard clears the previous default; a portalRoleId that does not exist answers 404]
+    idempotency: none; a repeat creates another dashboard (no duplicate check)
+  - method: PATCH
+    path: /api/v1/Portal/:id/dashboards/:dashboardId
+    auth: authenticated
+    permissions: administrator
+    request: "partial PortalDashboardInputSchema — omitted keys are left unchanged; dashboard must belong to :id"
+    response: "200 Dashboard (with dashlets)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_dashboards row in one transaction; making a portal-wide dashboard the default clears the previous default]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/Portal/:id/dashboards/:dashboardId
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller"
+    response: "200 Dashboard (with dashlets)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/Portal/:id/dashboards/:dashboardId
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_dashlets and portal_dashboards rows hard-deleted in one transaction]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/Portal/:id/dashboards/:dashboardId/dashlets
+    auth: authenticated
+    permissions: administrator
+    request: "PortalDashletInputSchema { id?, name, kind (list|chart|kpi), position? (default 0), config (record) } — config must satisfy PortalDashletConfigSchema { entity, where?, maxSize? (1-200, default 10), groupBy?, measure?, aggregation? (count|sum|avg, default count) } and the entity/field rules"
+    response: "201 Dashlet { id, dashboardId, name, kind, position, config }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_dashlets row; groupBy must be a categorical text field of the entity, measure a numeric field, measure requires sum|avg, and an unknown entity answers 404]
+    idempotency: none; a repeat creates another dashlet (no duplicate check)
+  - method: PATCH
+    path: /api/v1/Portal/:id/dashboards/:dashboardId/dashlets/:dashletId
+    auth: authenticated
+    permissions: administrator
+    request: "partial PortalDashletInputSchema — omitted keys are left unchanged; config revalidated when sent"
+    response: "200 Dashlet"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_dashlets row, modified_at bumped]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/Portal/:id/dashboards/:dashboardId/dashlets/:dashletId
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller"
+    response: "200 Dashlet"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/Portal/:id/dashboards/:dashboardId/dashlets/:dashletId
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_dashlets row hard-deleted]
+    idempotency: a second delete answers 404
+  # --- portal roles (their own role space; the internal /Role endpoints cannot touch them) ---
+  - method: GET
+    path: /api/v1/PortalRole
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 PortalRole[] — { id, name, permissions, fieldPermissions, createdAt, modifiedAt }, ordered by name, capped at 100"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the answer is bounded at 100 roles by the server"
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/PortalRole
+    auth: authenticated
+    permissions: administrator
+    request: "PortalRoleInputSchema { id?, name, permissions? ({entity:{action:level}}, levels yes|all|team|own|no, actions create|read|edit|delete|stream), fieldPermissions? }"
+    response: "201 PortalRole"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_roles row]
+    idempotency: none; a client-supplied id that collides with a live row surfaces as a database error, not a checked 409
+  - method: GET
+    path: /api/v1/PortalRole/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 PortalRole { id, name, permissions, fieldPermissions, createdAt, modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/PortalRole/:id
+    auth: authenticated
+    permissions: administrator
+    request: "partial PortalRoleInputSchema — omitted keys are left unchanged"
+    response: "200 PortalRole"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_roles row, modified_at bumped; the change applies to every portal principal holding the role on their next request]
+    idempotency: a repeat with the same body is a no-op
+  - method: PUT
+    path: /api/v1/PortalRole/:id
+    auth: authenticated
+    permissions: administrator
+    request: "same as PATCH — PUT is an alias on this controller"
+    response: "200 PortalRole"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same as PATCH]
+    idempotency: same as PATCH
+  - method: DELETE
+    path: /api/v1/PortalRole/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [portal_roles.is_deleted set and its portals_portal_roles links removed; portal users keep their direct portal_role_ids but the deleted role no longer resolves]
+    idempotency: a second delete answers 404
+  # --- the signed-in portal user's own surface (principal userType must be 'portal') ---
+  - method: GET
+    path: /api/v1/Portal/me
+    auth: authenticated
+    permissions: "portal user — principal.userType must be 'portal' with a portalId; an inactive portal or inactive user is refused"
+    request: none
+    response: "200 PortalContextView { portal { id, name, urlPath }, user { id, userName, firstName, lastName, emailAddress, isActive }, contact { id, name } | null, roles[{ id, name }], nav[], dashboard { id, name, dashlets[] } | null }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "nav ordered by position then label (active items only, capped at 50); roles ordered by name"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Portal/nav
+    auth: authenticated
+    permissions: "portal user — principal.userType must be 'portal' with a portalId; an inactive portal is refused"
+    request: none
+    response: "200 NavItem[] — { id, label, entity, route, icon, position }, active items only, ordered by position then label, capped at 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the answer is bounded at 50 items by the server"
+    sorting: "fixed: position ascending, then label ascending"
+    filtering: "only is_active = true items are returned"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Portal/dashboard
+    auth: authenticated
+    permissions: "portal user — principal.userType must be 'portal' with a portalId; an inactive portal is refused"
+    request: none
+    response: "200 Dashboard | null — a dashboard bound to one of the user's portal roles wins (first by name), otherwise the portal-wide isDefault dashboard; null when the portal has none. Shape: { id, name, dashlets[{ id, name, kind, position, config }] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "dashlets ordered by position, capped at 50"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Portal/dashboard/dashlets/:dashletId/action/run
+    auth: authenticated
+    permissions: "portal user — principal.userType must be 'portal' with a portalId; the dashlet must be on the caller's resolved dashboard and its entity read is enforced by the entity record ACL for the portal principal"
+    request: none
+    response: "200 { dashletId, kind, entity, scanned, truncated, ... } — list returns { count, list }; chart returns { groups[{ key, count, value? }] }; kpi returns { key, count, value? }; truncated = true when the entity total exceeds the dashlet maxSize scan"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED, INVALID_QUERY]
+    pagination: "bounded by the dashlet config maxSize (1-200, default 10); no page parameters"
+    sorting: "service-defined record order from the entity list"
+    filtering: "the dashlet's stored config.where is applied as the entity list filter"
+    sideEffects: none
+    idempotency: safe to repeat

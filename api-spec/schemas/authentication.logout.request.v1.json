@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authentication.logout.request.v1",
+  "title": "LogoutRequest",
+  "description": "POST /api/v1/Logout body. Mirrors LogoutSchema in apps/api/src/auth/auth.controller.ts; the body may be empty and the CRM-REFRESH cookie is the fallback.",
+  "type": "object",
+  "properties": {
+    "refreshToken": { "type": "string" }
+  }
+}

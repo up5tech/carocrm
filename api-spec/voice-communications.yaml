@@ -1,0 +1,844 @@
+# PLAN §58 — voice communications: calls, SMS/MMS/WhatsApp messaging, voicemail-adjacent media,
+# recordings, transcripts, provider accounts, webhook inbox and consent/suppression.
+# Source: apps/api/src/voice-communications/voice-communications.controller.ts,
+#         apps/api/src/voice-communications/voice-webhook.controller.ts and the services they call.
+# Auth model: the global AuthGuard authenticates every route here except the provider webhook,
+# which is @Public and verified by the provider's own signature inside the ingress service.
+# Routes that call requireAdmin() need userType 'admin'; the rest enforce entity ACL in the
+# services (Call, CommunicationMessage, CommunicationConversation, VoiceProviderAccount) or
+# record-level visibility rules documented per endpoint.
+# Format and required fields: api-spec/README.md §2.
+group: voice-communications
+basePath: /api/v1
+endpoints:
+  # ---------------------------------------------------------------------------
+  # Module surface
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/health
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ModuleHealthView { module, ok, dependencies[], optionalIntegrations[], features[], providers{configuredDefaultAccount,available[],accounts,enabledAccounts}, settings{version,updatedAt,warnings[]}, checks[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/settings
+    auth: authenticated
+    permissions: authenticated — any signed-in principal may read the settings document
+    request: none
+    response: "200 VoiceCommunicationsSettingsView { settings{features,provider,policy,webhook,media,ai}, version, updatedAt, updatedBy, defaults, warnings[] }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/settings
+    auth: authenticated
+    permissions: administrator
+    request: "body: partial settings object, deep-merged into the stored document; strict schema, unknown keys refused"
+    response: "200 VoiceCommunicationsSettingsView (version bumped, updatedBy stamped)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row 'voiceCommunications' upserted, in-process settings cache invalidated]
+    idempotency: a repeat with the same body bumps the version again
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/nav
+    auth: authenticated
+    permissions: authenticated — reports VoiceProviderAccount read capability; a report, never a gate
+    request: none
+    response: "200 { visible, readableEntities, entities[], admin }"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # ---------------------------------------------------------------------------
+  # Provider catalog and accounts
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/providers
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { providers: VoiceProviderInfo[] (capability metadata, never a credential), defaultAccountKey }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "adapter registry order"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/accounts
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: ProviderAccountView[] } — key, providerKey, label, environment, enabled, capabilities, effectiveCapabilities, config, credential/webhookSecret presence + hints only, lastHealth, timestamps; ordered by key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: key ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/accounts
+    auth: authenticated
+    permissions: administrator
+    request: "ProviderAccountCreateSchema { key, providerKey, label, environment? (test|production, default test), enabled? (default false), capabilities? [], config? {}, credential?, webhookSecret? } (strict)"
+    response: "201 ProviderAccountView — secrets are stored encrypted and never returned"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_provider_accounts row with encrypted credential/webhookSecret; an enabled account must already carry what its adapter requires]
+    idempotency: none; a duplicate key answers 409
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/accounts/:key
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ProviderAccountView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/VoiceCommunications/action/accounts/:key
+    auth: authenticated
+    permissions: administrator
+    request: "ProviderAccountPatchSchema { label?, environment?, enabled?, capabilities?, config?, credential? (null clears), webhookSecret? (null clears) } (strict; omitted keys unchanged)"
+    response: "200 ProviderAccountView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_provider_accounts row updated; credential/webhookSecret re-encrypted when supplied]
+    idempotency: a repeat with the same body is a no-op
+  - method: DELETE
+    path: /api/v1/VoiceCommunications/action/accounts/:key
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_provider_accounts row deleted; endpoints and recorded events keep their account_key]
+    idempotency: a second delete answers 404
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/accounts/:key/enabled
+    auth: authenticated
+    permissions: administrator
+    request: "AccountStateSchema { enabled: boolean } (strict)"
+    response: "200 ProviderAccountView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_provider_accounts.enabled flipped; enabling without the required credential/webhookSecret is refused]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/accounts/:key/health
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ProviderHealthResult & { persisted: true } { ok, checkedAt, detail, persisted } — an adapter failure is reported, not thrown"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [adapter healthCheck call to the provider; voice_provider_accounts last_health_* persisted]
+    idempotency: safe to repeat; each call re-runs the provider check
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/accounts/:key/endpoints
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: EndpointView[] } — id, accountKey, key, channel, address (E.164), displayAddress, country, active, teamId, timestamps; ordered by channel then address"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: channel, address ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/accounts/:key/endpoints
+    auth: authenticated
+    permissions: administrator
+    request: "EndpointCreateSchema { key, channel (voice|sms|mms|whatsapp|...), address, country? (ISO alpha-2), active? (default true), teamId? } (strict); address normalized to E.164"
+    response: "201 EndpointView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_endpoints row inserted]
+    idempotency: none; a duplicate address+channel for the account answers 409
+  - method: PATCH
+    path: /api/v1/VoiceCommunications/action/accounts/:key/endpoints/:endpointKey
+    auth: authenticated
+    permissions: administrator
+    request: "EndpointStateSchema { active: boolean } (strict)"
+    response: "200 EndpointView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_endpoints.active updated]
+    idempotency: a repeat with the same body is a no-op
+  # ---------------------------------------------------------------------------
+  # Webhook inbox inspection and replay
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/webhook-events
+    auth: authenticated
+    permissions: administrator
+    request: "query: status? (processing_status), accountKey?, limit? (default 50, max 200), offset? (default 0)"
+    response: "200 { list: ReceiptSummary[], total } — id, accountKey, providerKey, vendorEventId, eventType, signatureValid, processingStatus, attempts, failureCode/Detail, receivedAt, processedAt; ordered received_at desc"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit (default 50, max 200) and offset (default 0); total is the filtered count"
+    sorting: "fixed: received_at descending"
+    filtering: "status and accountKey equality"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/webhook-events/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ReceiptSummary & { payload } — payload is the redacted body, never the raw provider payload"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/webhook-events/:id/replay
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { eventId, queued } — queued=false when the job enqueue failed and the receipt is marked enqueue_failed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_webhook_events row reset to received with failure fields cleared; voiceCommunications.processWebhookEvent job enqueued]
+    idempotency: safe to repeat; processing is idempotent and a signature-invalid receipt cannot be replayed
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/webhook-events/process
+    auth: authenticated
+    permissions: "administrator — or any authenticated caller presenting header x-worker-secret equal to REPORT_WORKER_SECRET (constant-time compare); the route is not @Public, so a session or API key is still required"
+    request: "WorkerProcessSchema { eventId: uuid } (strict) + optional header x-worker-secret"
+    response: "200 ProcessResult { eventId, status: processed|duplicate|skipped|failed, kind, normalizedEventId?, reason? }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHENTICATION_FAILED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [webhook receipt processed under the system principal; normalized voice_communication_events row, call/message/conversation materialization, domain events]
+    idempotency: safe to repeat; event dedup and terminal call-state rules make reprocessing a no-op
+  # ---------------------------------------------------------------------------
+  # Calls: click-to-call, session reads, control, notes, links
+  # ---------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/initiate
+    auth: authenticated
+    permissions: "record ACL (Call) create — plus channel policy evaluation before any provider call"
+    request: "InitiateCallSchema { to, idempotencyKey (8-128 chars, client-generated), accountKey?, endpointKey?, relatedEntityType?, relatedEntityId? } (strict)"
+    response: "201 { session: CallSessionView, duplicate } — duplicate=true returns the existing session and places no second call"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_call_sessions row, Call activity record synced, outbound call placed through the provider adapter; a provider refusal leaves a failed session]
+    idempotency: "client idempotencyKey: a repeat returns the same session with duplicate=true"
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/calls
+    auth: authenticated
+    permissions: "record ACL (Call) read — scoped to all/own/team by the caller's read level; 'none' answers an empty list"
+    request: "query: state?, limit? (default 50, max 200), offset? (default 0)"
+    response: "200 { list: CallSessionView[] } — no total; ordered created_at desc"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: "limit (default 50, max 200) and offset (default 0); no total is returned"
+    sorting: "fixed: created_at descending"
+    filtering: "state equality"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/calls/incoming
+    auth: authenticated
+    permissions: "record ACL (Call) read — same visibility scope as the call list; only live inbound sessions (ringing, in_progress)"
+    request: none
+    response: "200 { list: IncomingCallView[] } — CallSessionView plus controls[] naming only the actions this account can honour; bounded at 20"
+    errors: [AUTHENTICATION_REQUIRED]
+    pagination: "none; bounded at 20 by the server"
+    sorting: "fixed: created_at descending"
+    filtering: "fixed: inbound and live states only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/:id/control
+    auth: authenticated
+    permissions: "record ACL (Call) edit plus visibility of this session; the account must grant the matching provider capability"
+    request: "CallControlSchema { action: answer|hangup } (strict)"
+    response: "200 CallSessionView — state advanced only after the provider accepts the control"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider controlCall request; voice_call_sessions state/timestamps updated; answering an unassigned inbound call assigns it to the caller; Call activity synced]
+    idempotency: "a repeat on a terminal or wrong-state call is refused with VALIDATION_FAILED"
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/calls/:id
+    auth: authenticated
+    permissions: "record ACL (Call) read — own/team/all scope enforced; an invisible session answers 404, not 403"
+    request: none
+    response: "200 CallSessionView { id, accountKey, direction, state, numbers, timestamps, result, failureCategory, initiator/assigned user, relatedEntity, activityId }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/calls/:id/context
+    auth: authenticated
+    permissions: "record ACL (Call) read plus per-record read ACL on Contact/Lead/Account matches"
+    request: none
+    response: "200 { session: CallSessionView, matches: [{entityType,id,name}], hiddenMatches } — ACL-filtered, ambiguity preserved"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/:id/note
+    auth: authenticated
+    permissions: "record ACL (Call) edit plus visibility of this session"
+    request: "CallNoteSchema { description } (1-10000 chars, strict)"
+    response: "200 CallSessionView — the note is appended to the linked Call activity's description and stored as the session result"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Call activity description appended, voice_call_sessions.result updated, audit/event trail via the entity service]
+    idempotency: "a repeat appends the text again — not idempotent"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/:id/link
+    auth: authenticated
+    permissions: "record ACL (Call) edit plus read access on the target entity type"
+    request: "CallLinkSchema { entityType, entityId } (strict)"
+    response: "200 CallSessionView with relatedEntityType/relatedEntityId set"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_call_sessions related entity set, linked Call activity relation updated]
+    idempotency: "a repeat with the same target is a no-op"
+  # ---------------------------------------------------------------------------
+  # Messaging: outbound send and conversation reads
+  # ---------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/messages/send
+    auth: authenticated
+    permissions: "record ACL (CommunicationMessage) create — channel policy (consent, suppression, quiet hours, WhatsApp window/template) is evaluated before and again immediately before dispatch"
+    request: "SendMessageSchema { channel: sms|mms|whatsapp, body? (max 10000), idempotencyKey (8-128), accountKey?, conversationId?, to?, purpose?, mediaAttachmentIds? (max 10), templateKey?, templateLanguage?, templateVariables?, isInternalNote? } (strict)"
+    response: "201 { message: MessageView, duplicate } — message states include queued/sent/failed/unknown; an internal note is stored and never sent"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_messages row, conversation/thread/participant rows, policy evaluation rows read, media references recorded, outbound SMS/MMS/WhatsApp sent through the provider adapter — a real external effect; timeout outcomes are marked unknown for reconciliation]
+    idempotency: "client idempotencyKey: a repeat returns the same message with duplicate=true and never sends twice"
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/conversations
+    auth: authenticated
+    permissions: "record ACL (CommunicationMessage) read"
+    request: "query: limit? (default 50, max 200), offset? (default 0) — the strict schema accepts no filters"
+    response: "200 { list: ConversationView[] } — id, accountKey, channel, status, subject, unreadCount, lastActivity/lastInboundAt, assignee, related entity, caseId; ordered last_activity_at desc"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit (default 50, max 200) and offset (default 0); no total is returned"
+    sorting: "fixed: last_activity_at descending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/conversations/:id
+    auth: authenticated
+    permissions: "record ACL (CommunicationMessage) read"
+    request: none
+    response: "200 { conversation: ConversationView, messages: MessageView[] } — messages capped at 200, oldest first"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none; messages are bounded at 200 by the server"
+    sorting: "fixed: messages created_at ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # ---------------------------------------------------------------------------
+  # WhatsApp templates (local registry)
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/templates/:accountKey
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: WhatsappTemplateView[] } — id, accountKey, templateKey, name, category, language, components, status (pending|approved|rejected|disabled), vendorStatus, rejectionReason; ordered template_key, language"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: template_key, language ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/templates/:accountKey
+    auth: authenticated
+    permissions: administrator
+    request: "WhatsappTemplateSchema { templateKey, name, category, language, components?, status? (default pending), vendorStatus?, rejectionReason? } (strict)"
+    response: "200 WhatsappTemplateView — upsert on (account_key, template_key, language)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_whatsapp_templates row inserted or updated]
+    idempotency: "safe to repeat; the upsert key makes a retry converge"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/templates/:accountKey/:templateKey/:language/status
+    auth: authenticated
+    permissions: administrator
+    request: "WhatsappTemplateStatusSchema { status: pending|approved|rejected|disabled, vendorStatus?, rejectionReason? } (strict)"
+    response: "200 WhatsappTemplateView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_whatsapp_templates status/vendor fields updated]
+    idempotency: a repeat with the same body is a no-op
+  # ---------------------------------------------------------------------------
+  # Unified inbox
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/inbox
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) read"
+    request: "query: status?, channel? (sms|mms|whatsapp), assignee? (user/team id, 'me', or 'unassigned'), includeArchived? ('true'|'false'), limit? (default 50, max 200), offset? (default 0)"
+    response: "200 { list: InboxConversationView[], total } — includes assignedTeamId, archived; ordered last_activity_at desc"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: "limit (default 50, max 200) and offset (default 0); total is the filtered count"
+    sorting: "fixed: last_activity_at descending"
+    filtering: "status, channel, assignee (incl. me/unassigned), includeArchived equality"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/conversations/:id/timeline
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) read"
+    request: "query: limit? (default 100, max 200), offset? (default 0); internal notes are always included on this route"
+    response: "200 { entries: TimelineEntryView[] } — merged messages and history events, chronological; each entry is kind message (direction, body, state, isInternalNote, author, channel) or event (kind, actor, from/to, detail)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: "limit (default 100, max 200) and offset (default 0) applied to each source; no total"
+    sorting: "fixed: chronological ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/conversations/:id/history
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) read"
+    request: none
+    response: "200 { list: ConversationEventView[] } — append-only assignment/status/case events with actor and time; ordered created_at asc"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: created_at ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/conversations/:id/read
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) edit"
+    request: none
+    response: "200 { unreadCount: 0 }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations.unread_count set to 0]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/conversations/:id/status
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) edit"
+    request: "ConversationStatusSchema { status: open|pending_customer|pending_internal|resolved|closed|spam, reason? } (strict)"
+    response: "200 InboxConversationView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations.status updated, voice_conversation_events row appended, voiceCommunications.conversation.statusChanged domain event dispatched]
+    idempotency: "a repeat of the current status is a no-op"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/conversations/:id/assign
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) edit"
+    request: "ConversationAssignSchema { userId?, teamId?, reason? } (strict; both null/omitted releases the assignment)"
+    response: "200 InboxConversationView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations assignee fields updated, voice_conversation_events row appended (assigned or unassigned), voiceCommunications.conversation.assigned domain event dispatched]
+    idempotency: "a repeat with the same assignee rewrites the same values and appends another event"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/conversations/:id/case/link
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) edit plus read access on the target Case"
+    request: "CaseLinkSchema { caseId } (strict)"
+    response: "200 InboxConversationView with caseId set"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations.case_id set, voice_conversation_events row appended]
+    idempotency: "a repeat with the same caseId is a no-op"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/conversations/:id/case/handoff
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) edit plus record ACL (Case) create"
+    request: "CaseHandoffSchema { subject, description, reason? } (strict)"
+    response: "201 { caseId, duplicate } — duplicate=true returns the already-linked Case"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [Case record created through the entity service, voice_conversations.case_id set, voice_conversation_events row appended, voiceCommunications.conversation.caseLinked domain event dispatched]
+    idempotency: "the conversation's case_id is the dedup key; a repeated click returns the existing Case"
+  # ---------------------------------------------------------------------------
+  # Service snippets and composer validation
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/snippets
+    auth: authenticated
+    permissions: authenticated — team-scoped snippets are visible only to their team (admins see all); only active templates are listed
+    request: "query: channel? (sms|mms|whatsapp|any)"
+    response: "200 { list: MessageTemplateView[] } — id, key, name, channel, body, placeholders, active, teamId, language, usageCount, lastUsedAt, timestamps; at most 200, ordered by key"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: "none; bounded at 200 by the server"
+    sorting: "fixed: key ascending"
+    filtering: "channel equality plus channel='any' rows; language-matched rows"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/snippets/:key
+    auth: authenticated
+    permissions: authenticated
+    request: none
+    response: "200 MessageTemplateView"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/snippets
+    auth: authenticated
+    permissions: administrator
+    request: "TemplateUpsertSchema { key, name, channel: sms|mms|whatsapp|any, body (plain text, markup refused), active?, teamId?, language? } (strict)"
+    response: "200 MessageTemplateView — upsert on key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_message_templates row inserted or updated]
+    idempotency: "safe to repeat; the key upsert converges"
+  - method: DELETE
+    path: /api/v1/VoiceCommunications/action/snippets/:key
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { removed: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_message_templates row deleted]
+    idempotency: "a second delete answers 404"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/snippets/:key/render
+    auth: authenticated
+    permissions: authenticated
+    request: "TemplateRenderSchema { variables: Record<string,string> } (strict; every declared placeholder must be supplied)"
+    response: "200 { body, segments: { encoding: GSM-7|UCS-2, segments, characters, charsPerSegment } }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/composer/validate
+    auth: authenticated
+    permissions: authenticated
+    request: "ComposerValidateSchema { channel: sms|mms|whatsapp, body } (strict)"
+    response: "200 { ok, segments, warnings[] } — the same length/segment/channel checks the send path applies"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # ---------------------------------------------------------------------------
+  # Recordings and media
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/calls/:id/media
+    auth: authenticated
+    permissions: "call assignee, a member of the assignee's team, or sysAdmin — anything else answers 404"
+    request: none
+    response: "200 { list: MediaView[] } — id, kind, messageId, callSessionId, mimeType, sizeBytes, durationSeconds, scanStatus, retentionAt, createdAt; provider URLs are never exposed"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: created_at ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/media/:id/playback
+    auth: authenticated
+    permissions: "same visibility rule as the parent call's media list; bytes come from private storage, never a provider redirect"
+    request: none
+    response: "200 { contentType, filename, dataBase64 }"
+    errors: [AUTHENTICATION_REQUIRED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/media/fetch
+    auth: authenticated
+    permissions: "administrator — or any authenticated caller presenting header x-worker-secret equal to REPORT_WORKER_SECRET; the route is not @Public, so a session or API key is still required"
+    request: "MediaActionSchema { mediaId } (strict) + optional header x-worker-secret"
+    response: "200 { stored, reason? } — stored=false with a reason when fetchMode is off, the host is not allowed, or the body exceeds the ceiling"
+    errors: [AUTHENTICATION_REQUIRED, AUTHENTICATION_FAILED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider media URL fetched under SSRF policy (allowedHosts, size cap) and written to private storage; voice_media.storage_ref updated]
+    idempotency: "a repeat re-fetches and overwrites the stored object"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/media/retention-sweep
+    auth: authenticated
+    permissions: "administrator — or any authenticated caller presenting header x-worker-secret equal to REPORT_WORKER_SECRET; the route is not @Public, so a session or API key is still required"
+    request: none
+    response: "200 { removed } — at most 200 expired rows per call"
+    errors: [AUTHENTICATION_REQUIRED, AUTHENTICATION_FAILED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [expired voice_media rows deleted and their private-storage objects removed]
+    idempotency: safe to repeat; already-removed rows are simply absent
+  # ---------------------------------------------------------------------------
+  # Transcription and AI enrichment
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/calls/:id/transcript
+    auth: authenticated
+    permissions: "record ACL (Call) read"
+    request: none
+    response: "200 { transcript: TranscriptView | null } — segments, text, and the draft-only ai block {summary, topics, actions, suggestedReply, reviewStatus, connectionKey, model, generatedAt}"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/:id/transcript/request
+    auth: authenticated
+    permissions: "record ACL (Call) read — requires the transcripts feature flag and an adapter that offers transcript retrieval"
+    request: none
+    response: "200 TranscriptView — state ready or failed with the provider's error recorded"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider fetchTranscript call; voice_transcripts row inserted or updated]
+    idempotency: "a ready transcript is returned unchanged; a repeat after failure retries the provider call"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/:id/transcript/enrich
+    auth: authenticated
+    permissions: "record ACL (Call) read — requires transcripts and aiEnrichment flags plus ai.connectionKey/ai.model settings"
+    request: none
+    response: "200 TranscriptView — ai block stamped with connectionKey, model, generatedAt and reviewStatus pending; enrichment failure is recorded on the row, not thrown"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [AI gateway completion call with the redacted, length-capped transcript; voice_transcripts ai_* fields updated]
+    idempotency: "a repeat re-runs the model call and overwrites the draft"
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/calls/:id/transcript/review
+    auth: authenticated
+    permissions: "record ACL (Call) edit"
+    request: "TranscriptReviewSchema { status: approved|dismissed } (strict)"
+    response: "200 TranscriptView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_transcripts.ai_review_status updated; approving exposes the suggested reply to the agent — the AI never sends]
+    idempotency: "a repeat with the same status is a no-op"
+  # ---------------------------------------------------------------------------
+  # CRM panels and record linking
+  # ---------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/panels/:entityType/:entityId
+    auth: authenticated
+    permissions: "record ACL on the named entity — entityType must be one of Account|Contact|Lead|Opportunity|Case; an unreadable record answers as not found"
+    request: "query: limit? (default 20, max 100), offset? (default 0)"
+    response: "200 { record{entityType,id}, conversations: PanelConversationView[], calls: PanelCallView[], total{conversations,calls} } — summaries only; bodies load through their own endpoints"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: "limit (default 20, max 100) and offset (default 0) applied to each list; totals are window counts"
+    sorting: "fixed: conversations last_activity_at desc, calls created_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/panels/:entityType/:entityId/touchpoints
+    auth: authenticated
+    permissions: "record ACL on the named entity — same panel entity allowlist"
+    request: none
+    response: "200 { conversations, calls, lastInboundAt, lastOutboundAt } — counts and recency only, no message content"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/conversations/:id/link-record
+    auth: authenticated
+    permissions: "record ACL (CommunicationConversation) edit plus read access on the target entity (Account|Contact|Lead|Opportunity|Case)"
+    request: "PanelLinkSchema { entityType, entityId } (strict, allowlisted)"
+    response: "200 { linked: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_conversations related entity set, modified_at bumped]
+    idempotency: "a repeat with the same target rewrites the same values"
+  # ---------------------------------------------------------------------------
+  # Phone resolution, policy evaluation, consent and suppression
+  # ---------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/resolve
+    auth: authenticated
+    permissions: authenticated — entity-level and record-level read ACL applied per candidate; hidden matches are counted, never named
+    request: "ResolvePhoneSchema { phone, defaultRegion? (ISO alpha-2), entities? [Contact|Lead|Account] } (strict)"
+    response: "200 ContactResolution { status: matched|ambiguous|unmatched|invalid, input, address, candidates[{entityType,id,name}], hiddenMatches, truncated, reason? }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/policy/evaluate
+    auth: authenticated
+    permissions: authenticated — read-only evaluation; no send or call is placed
+    request: "PolicyEvaluateSchema { channel, address, purpose?, accountKey?, lastInboundAt?, messageLength?, templateKey?, templateLanguage?, templateVariables? } (strict)"
+    response: "200 PolicyEvaluation { allowed, channel, address, accountKey, refusals[{code,message}], consent, suppression, window{applicable,open,requiresTemplate,lastInboundAt}, checkedAt }"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/consent
+    auth: authenticated
+    permissions: authenticated
+    request: "query: channel (required), address (required), purpose? (default 'service')"
+    response: "200 ConsentState { channel, address, purpose, status: granted|denied|revoked|unknown, basis, source, occurredAt, evidence } — never-seen is 'unknown', never an implied grant"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/consent
+    auth: authenticated
+    permissions: authenticated
+    request: "ConsentRecordSchema { channel, address, purpose, status, basis?, source, evidence?, occurredAt? } (strict)"
+    response: "201 ConsentState — the latest event for (channel,address,purpose)"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_consent_events row appended — consent is append-only evidence, never updated]
+    idempotency: "a repeat appends another event; the latest one wins"
+  - method: GET
+    path: /api/v1/VoiceCommunications/action/suppressions
+    auth: authenticated
+    permissions: authenticated
+    request: "query: channel?, limit? (default 50, max 200), offset? (default 0) — revoked rows are never listed"
+    response: "200 SuppressionView[] — bare array: id, channel, address, reason, source, createdAt, revokedAt"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: "limit (default 50, max 200) and offset (default 0); no total is returned"
+    sorting: "fixed: created_at descending"
+    filtering: "channel equality"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/VoiceCommunications/action/suppressions
+    auth: authenticated
+    permissions: authenticated
+    request: "SuppressionAddSchema { channel, address, reason: opt_out|stop_keyword|complaint|hard_failure|administrative_stop|provider_block, source } (strict)"
+    response: "201 SuppressionView"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_suppressions row inserted (at most one active per channel+address); an existing active suppression is returned unchanged]
+    idempotency: "a repeat returns the existing active suppression — effectively idempotent"
+  - method: DELETE
+    path: /api/v1/VoiceCommunications/action/suppressions/:channel/:address
+    auth: authenticated
+    permissions: authenticated
+    request: "path params channel, address; channel validated against the channel enum"
+    response: "200 { revoked: boolean } — false when no active suppression existed"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_suppressions.revoked_at set — a tombstone, the row and history remain]
+    idempotency: safe to repeat; a second call answers revoked=false
+  # ---------------------------------------------------------------------------
+  # Provider webhook ingress (public, signature-verified)
+  # ---------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/integrations/voice-communications/:providerKey/:accountKey/:kind
+    auth: public
+    permissions: "provider signature — @Public route; the account's webhookSecret is verified by the adapter's validateWebhook (vendor scheme, e.g. Twilio HMAC) after a replay-window check; kind must be voice-events|message-events|status-events|media-events"
+    request: "provider callback body (JSON or form) + provider signature/timestamp headers; the absolute callback URL is reconstructed from forwarded/host headers for URL-signing schemes"
+    response: "202 WebhookIngestResult { eventId, duplicate, accepted, processingStatus, reason?, bodyMismatch? } — deliberately thin: a provider learns the callback was recorded, not whether the address is a customer"
+    errors: [AUTHENTICATION_FAILED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [voice_webhook_events receipt persisted (deduplicated by account+dedup_key; rejected callbacks are recorded but never enqueued), voiceCommunications.processWebhookEvent job enqueued; a redelivery with a different body under a known key stamps DEDUP_BODY_MISMATCH]
+    idempotency: "provider dedup key: a repeated callback answers the stored receipt with duplicate=true and enqueues nothing"

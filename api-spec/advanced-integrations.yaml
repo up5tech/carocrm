@@ -1,0 +1,901 @@
+# PLAN §58 — advanced integrations control plane. Source:
+# apps/api/src/advanced-integrations/advanced-integrations.controller.ts,
+# oauth-callback.controller.ts, webhook.controller.ts and the services they call
+# (connection-lifecycle, oauth-flow, mapping, sync-orchestrator, conflict, dead-letter,
+# webhook-ingress, outbound-sync, enrichment, connection-detail, settings, health,
+# metrics, retention, audit).
+#
+# Every route checks a module capability server-side (AdvancedIntegrationsPermissionService);
+# the capabilities are the ACL resources declared in advanced-integrations-module.ts:
+# use, providerAdmin, connectionAdmin, credentialAdmin, authorize, settingsAdmin, diagnostics.
+# Connections carry vault-encrypted credentials that are write-only; non-administrator callers
+# only see connections they own (owner_type 'user' + owner_id = caller).
+#
+# The generic record API these routes write through is documented in entities.yaml.
+group: advanced-integrations
+basePath: /api/v1
+endpoints:
+  # -------------------------------------------------------------------------
+  # diagnostics
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/health
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 ModuleHealthView { module, ok, dependencies[], providers[], features[], warnings[] } — encryption key presence, registered providers, feature flags"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/capabilities
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { capabilities: [{ key, label, description, granted }] } — every module right with whether this caller holds it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/nav
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 navigation visibility { visible, admin } — the module's own navigation signal"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # settings
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/settings
+    auth: authenticated
+    permissions: settingsAdmin
+    request: none
+    response: "200 AdvancedIntegrationsSettingsView { settings, version, updatedAt, updatedBy, defaults, warnings } — the app_settings row 'AdvancedIntegrations'"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/settings
+    auth: authenticated
+    permissions: settingsAdmin
+    request: "body: partial settings document (features, oauth, notifications, health, retention); unknown keys are refused"
+    response: "200 AdvancedIntegrationsSettingsView — merged, validated, version bumped"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [app_settings row 'AdvancedIntegrations' upserted, settings version incremented]
+    idempotency: "idempotent for the same merged document"
+  # -------------------------------------------------------------------------
+  # provider catalog
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/providers
+    auth: authenticated
+    permissions: providerAdmin
+    request: none
+    response: "200 { list: ProviderDescription[] } — the connector catalog with capabilities; never a secret"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/providers/:providerKey
+    auth: authenticated
+    permissions: providerAdmin
+    request: none
+    response: "200 ProviderDescription — one connector's declared capabilities, scopes and objects"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # connections
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: IntegrationConnectionView[] } — connections the caller may see; a non-administrator sees only user-owned connections of their own; credentials are never returned, only hasCredential and a kind/expiry hint"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: provider_key asc, name asc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: ConnectionCreateSchema { providerKey, name, ownerType? (organization|user), ownerId?, tenantRef?, connectionOptions? } — strict; connectionOptions may not smuggle a credential"
+    response: "201 IntegrationConnectionView — created in status draft, enabled false"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_connections row (draft), integration_audit_log row, webhook_key generated for webhook-capable providers]
+    idempotency: none; each call creates a connection (unique name per provider+owner enforced)
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 IntegrationConnectionView — status, scopes, health, hasCredential; never the credential value"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/AdvancedIntegrations/action/connections/:id
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: ConnectionPatchSchema { name?, tenantRef?, connectionOptions?, enabled? } — strict"
+    response: "200 IntegrationConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_connections row, integration_audit_log rows (updated, enabled/disabled)]
+    idempotency: "idempotent for the same body"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/credentials
+    auth: authenticated
+    permissions: credentialAdmin
+    request: "body: CredentialWriteSchema { kind (api_key|client_secret|webhook_secret|signing_secret), value, expiresAt? } — value is write-only"
+    response: "200 IntegrationConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [credential vault row (encrypted with ENCRYPTION_KEY), integration_connections credential_reference_id, integration_audit_log row — the value is never stored in plaintext or returned]
+    idempotency: "replaces the stored credential of that kind"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/pause
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 IntegrationConnectionView — status paused; no provider call may run through it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_connections status paused, integration_audit_log rows]
+    idempotency: "a paused connection cannot be paused again (state machine refuses)"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/resume
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 IntegrationConnectionView — status connected; missing required scopes move it to reauthorization_required and answer VALIDATION_FAILED instead"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_connections status connected or reauthorization_required, integration_audit_log rows]
+    idempotency: safe to repeat once connected
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/revoke
+    auth: authenticated
+    permissions: authorize
+    request: none
+    response: "200 IntegrationConnectionView — status revoked; provider grant revocation attempted when the adapter supports it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [vault credentials revoked, integration_connections status revoked + credential_reference_id cleared, integration_oauth_states deleted later on remove, integration_audit_log rows]
+    idempotency: "a revoked connection cannot be revoked again (state machine refuses)"
+  - method: DELETE
+    path: /api/v1/AdvancedIntegrations/action/connections/:id
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 { success: true } — soft delete; synced CRM records are never touched"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [vault credentials removed, integration_connections deleted_at set + status revoked + enabled false, integration_oauth_states rows deleted, integration_audit_log row]
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # authorization (OAuth)
+  # -------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/authorize
+    auth: authenticated
+    permissions: authorize
+    request: "body: AuthorizeSchema { scopes? } — strict; scopes may only narrow the provider's declared set"
+    response: "200 OAuthAuthorizationStartResult { connectionId, authorizationUrl, expiresAt, scopes } — the browser is sent to the provider"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_oauth_states row (hashed single-use state + PKCE verifier), connection status pending_authorization, audit trail]
+    idempotency: none; each call starts a new flow
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/reconnect
+    auth: authenticated
+    permissions: authorize
+    request: "body: AuthorizeSchema { scopes? } — strict"
+    response: "200 OAuthAuthorizationStartResult — same as authorize, for a connection whose grant is no longer usable"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_oauth_states row, connection status pending_authorization]
+    idempotency: none; each call starts a new flow
+  # -------------------------------------------------------------------------
+  # external id links
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/links
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: ExternalLinkView[] } — provider object ↔ CRM record links, ordered object_type, external_id"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: "fixed: object_type asc, external_id asc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # mappings
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/mappings
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: ObjectMappingView[] } — every ACTIVE mapping in the installation (not just the caller's connections')"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: connection_id asc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/mappings
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: MappingCreateSchema { providerKey, connectionId?, objectType, crmEntityType, direction?, syncMode?, conflictPolicy?, deletionPolicy?, fieldAuthority?, fields[] } — strict; connectionId required when the provider has several connections"
+    response: "201 ObjectMappingView — created in status draft, mapping_version 1"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_object_mappings row, integration_field_mappings rows, integration_audit_log row]
+    idempotency: none; each call creates a mapping
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 ObjectMappingView — with its field mappings"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: PATCH
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: MappingPatchSchema { crmEntityType?, direction?, syncMode?, conflictPolicy?, deletionPolicy?, fieldAuthority?, fields[] } — strict; field transforms are recompiled and refused when invalid"
+    response: "200 ObjectMappingView — mapping_version incremented"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_object_mappings row (version bump), integration_field_mappings rows replaced]
+    idempotency: "idempotent for the same body; version increments per call"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id/activate
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 ObjectMappingView — status active; any other active mapping for the same connection+object is retired"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_object_mappings status changes, integration_audit_log row]
+    idempotency: "activating an already-active mapping retires nothing new; safe to repeat"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id/retire
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 ObjectMappingView — status retired; history kept"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_object_mappings status retired, integration_audit_log row]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id/preview
+    auth: authenticated
+    permissions: use
+    request: "body: MappingPreviewSchema { sample: object } — a sample provider object; strict"
+    response: "200 PreviewResult { mappingId, mappingVersion, values, missingRequired, emptySources, dryRun: true } — nothing is written"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # sync runs
+  # -------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id/sync
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: SyncRunSchema { runType?, triggerSource?, maxRecords? (1-1000), pageSize? (1-1000) } — strict; the body may be empty"
+    response: "200 SyncRunView — the run executes synchronously in the request and returns its final state with record counters"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_sync_runs row, integration_sync_operations rows, integration_sync_checkpoints cursor, CRM records created/updated via the entity engine under the connection owner's authority, integration_external_links rows, integration_conflicts rows, integration_dead_letters row on failure, integration.record.* domain events, provider page/delta reads]
+    idempotency: "per-record idempotency keys on operations; the checkpoint makes a repeated run continue rather than rewrite"
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/runs
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: SyncRunView[] } — newest first, capped at 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none (fixed limit 50)"
+    sorting: "fixed: created_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/runs/:id
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 SyncRunView — status, counters, cursors, last error"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/runs/:id/cancel
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 SyncRunView — status cancelled; a running loop stops at the next page boundary and keeps applied pages"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_sync_runs status cancelled + finished_at]
+    idempotency: "a finished run cannot be cancelled again (VALIDATION_FAILED)"
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/runs/:id/operations
+    auth: authenticated
+    permissions: use
+    request: "query: status?, limit? (1-500, default 100)"
+    response: "200 { list: SyncOperationView[] } — the operations of a run, oldest first, with retryable flag"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "limit query param, default 100, max 500"
+    sorting: "fixed: created_at asc"
+    filtering: "status equals one of pending|applied|skipped|failed|dead_letter"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/operations/:id/retry
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 { id, status: pending, attempts } — only a failed or dead-lettered operation can be retried; nothing is queued"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_sync_operations status pending, attempts+1, error cleared — the run and checkpoint are untouched]
+    idempotency: "the next delivery of that record reuses the same idempotency key"
+  # -------------------------------------------------------------------------
+  # conflicts
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/conflicts
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: ConflictView[] } — open conflicts only, capped at 100"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none (fixed limit 100)"
+    sorting: "fixed: created_at desc"
+    filtering: "status=open only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/conflicts/:id
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 ConflictDetailView — snapshots, conflicting fields, field authority, stale flag and which resolutions are enabled"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/conflicts/:id/resolve
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: ConflictResolveSchema { resolution: keep_crm|keep_provider|ignore|unlink } — strict"
+    response: "200 ConflictView — status resolved or ignored; keep_provider writes the remote snapshot to the CRM record unless the conflict is stale"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_conflicts status/resolution/resolved_by, CRM record update on keep_provider, integration_audit_log row]
+    idempotency: "an already-resolved conflict answers VALIDATION_FAILED"
+  # -------------------------------------------------------------------------
+  # dead letters
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/dead-letters
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: DeadLetterView[] } — open dead letters only, capped at 100; redacted error code/category/detail, never a credential"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none (fixed limit 100)"
+    sorting: "fixed: created_at desc"
+    filtering: "status=open only"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/dead-letters/:id/replay
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 DeadLetterView — status replayed, stamped with the run that re-ran the failed mapping"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [a fresh inbound sync run for the recorded mapping (provider reads, CRM writes, sync rows), integration_dead_letters status replayed]
+    idempotency: "only an open letter with a recorded mapping can be replayed; a failed re-run leaves the letter open"
+  # -------------------------------------------------------------------------
+  # webhook deliveries
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/webhook-deliveries
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: WebhookDeliveryReceipt[] } — receipts newest first, capped at 100; payload shape only while debug mode is active"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none (fixed limit 100)"
+    sorting: "fixed: received_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # outbound operations
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/outbound
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: OutboundOperationView[] } — queued/applied/failed outbound pushes, capped at 100"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "none (fixed limit 100)"
+    sorting: "fixed: created_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # provider subscription renewal
+  # -------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/renew-subscriptions
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 provider renewal result — renews push subscriptions (e.g. Microsoft Graph) through the connector"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider subscription API calls, provider-side subscription renewal]
+    idempotency: "provider-dependent; a repeat renews the same subscriptions again"
+  # -------------------------------------------------------------------------
+  # enrichment (19-INT.24)
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: EnrichmentProfileView[] } — ordered by name"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: "fixed: name asc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles/:id
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 EnrichmentProfileView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: EnrichmentProfileCreateSchema { providerKey, connectionId, name, entityType, allowedFields[], protectedFields?, dailyQuota?, costPerCredit?, cacheTtlSeconds?, providerOptions?, enabled? } — strict; providerOptions may not hold a credential"
+    response: "201 EnrichmentProfileView — disabled unless enabled is set"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_enrichment_profiles row, integration_audit_log row]
+    idempotency: none; each call creates a profile
+  - method: PATCH
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles/:id
+    auth: authenticated
+    permissions: connectionAdmin
+    request: "body: EnrichmentProfilePatchSchema { name?, enabled?, allowedFields?, protectedFields?, dailyQuota?, costPerCredit?, cacheTtlSeconds?, providerOptions? } — strict"
+    response: "200 EnrichmentProfileView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_enrichment_profiles row, integration_audit_log row]
+    idempotency: "idempotent for the same body"
+  - method: DELETE
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles/:id
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 { deleted: true } — soft delete; decided results are kept as history"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_enrichment_profiles deleted_at set]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles/:id/preview
+    auth: authenticated
+    permissions: use
+    request: "body: EnrichmentPreviewSchema { recordId } — strict"
+    response: "200 EnrichmentResultView — status pending; a fresh cached answer is returned without a provider call"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [enrichment provider call with only the opted-in fields, integration_enrichment_results pending row (or upsert of the pending one), daily quota consumption, integration_audit_log row — nothing is written to the CRM]
+    idempotency: "a pending result for the same record is replaced; a fresh cache hit makes no provider call"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/enrichment/results/:id/accept
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 EnrichmentResultView — status accepted; changedFields lists what was applied (protected and non-opted-in fields skipped)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [CRM record fields updated via the entity engine, integration_enrichment_results status accepted, integration_audit_log row]
+    idempotency: "a non-pending result answers VALIDATION_FAILED"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/enrichment/results/:id/reject
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 EnrichmentResultView — status rejected; nothing is written to the CRM"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_enrichment_results status rejected, integration_audit_log row]
+    idempotency: "a non-pending result answers VALIDATION_FAILED"
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles/:id/results
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { list: EnrichmentResultView[] } — newest first, capped at 50"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none (fixed limit 50)"
+    sorting: "fixed: retrieved_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/enrichment/profiles/:id/usage
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { credits, cost, quota } — what the profile spent today against its daily quota"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # contracts, audit, metrics, retention (19-INT.25/26)
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/contracts
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 { published: ContractView[], unavailable: string[] } — cross-module contracts this installation publishes; unavailable names the owning module as not installed"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/audit
+    auth: authenticated
+    permissions: diagnostics
+    request: "query: connectionId?, action?, limit? (1-500, default 100)"
+    response: "200 { list: AuditEntry[] } — the module's redacted audit trail"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "limit query param, default 100, max 500"
+    sorting: "fixed: newest first"
+    filtering: "connectionId equals, action equals"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/metrics
+    auth: authenticated
+    permissions: diagnostics
+    request: none
+    response: "200 IntegrationMetrics — derived counters from the module's own tables; no record ids, tokens or payloads"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/retention/purge
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 RetentionPurgeReport { enabled, cutoff, removed{...}, total } — off by default; clears payloads and deletes terminal diagnostics rows by primary key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_sync_operations/webhook_deliveries payloads nulled, resolved conflicts/dead letters/finished runs/decided enrichment results/audit rows deleted in bounded batches, integration_audit_log row when anything was removed]
+    idempotency: "a second pass finds nothing left; counts report what was removed"
+  # -------------------------------------------------------------------------
+  # catalog and connection detail (19-INT.14)
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/catalog
+    auth: authenticated
+    permissions: providerAdmin
+    request: none
+    response: "200 { list: CatalogProviderView[] } — every registered provider with objects, scopes, connection counts and executable flag"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/detail
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 ConnectionDetailView — connection, provider definition, mappings, last run/webhook/test, warnings and attention counters"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/test
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 { ok, code, message, accountRef, grantedScopes, checkedAt } — a read-only provider call; provider failures answer ok:false with a redacted code, never throw"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one read-only provider call, integration_connections health_status/health_summary_code/last_validated_at, integration_audit_log row]
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/rotate-secret
+    auth: authenticated
+    permissions: credentialAdmin
+    request: "body: RotateSecretSchema { kind (api_key|client_secret|webhook_secret|signing_secret), value, expiresAt? } — write-only"
+    response: "200 IntegrationConnectionView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [credential vault row (encrypted), integration_connections credential_reference_id, integration_audit_log row]
+    idempotency: "replaces the stored credential of that kind"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/reconcile
+    auth: authenticated
+    permissions: connectionAdmin
+    request: none
+    response: "200 { resetMappings, message } — resets every inbound checkpoint so the next run is a full re-sync; no run is started"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_sync_checkpoints cursor_value cleared + reset_required for the connection's inbound mappings, integration_audit_log row]
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/connections/:id/logs
+    auth: authenticated
+    permissions: use
+    request: "query: limit? (1-200, default 50)"
+    response: "200 { list: JobLogEntry[] } — jobs rows matching advancedIntegrations.* for this connection, newest first"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: "limit query param, default 50, max 200"
+    sorting: "fixed: created_at desc"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # mapping builder extras (19-INT.15)
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/AdvancedIntegrations/action/mappings/:id/fields
+    auth: authenticated
+    permissions: use
+    request: none
+    response: "200 MappingFieldsView { providerFields[], crmFields[], fields[], warnings[] } — the field catalogue with pre-publish warnings"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  # -------------------------------------------------------------------------
+  # worker-authorized operations — @Public() routes authorized by the shared
+  # worker→API capability in the x-worker-secret header (constant-time compare
+  # against REPORT_WORKER_SECRET; refused when unset). No user session exists.
+  # -------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/outbound-event
+    auth: public
+    permissions: "worker capability (x-worker-secret)"
+    request: "body: OutboundEventSchema { eventId, eventType, entityType, entityId } — strict; delivered by the worker for a CRM domain event"
+    response: "200 OutboundEventResult { queued, echoes, unmapped } — counts of outbound operations created vs skipped by the echo guard"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_outbound_operations rows (idempotency-keyed), advancedIntegrations.pushOutbound jobs enqueued]
+    idempotency: "the operation idempotency key is derived from connection+mapping+record+event, so a redelivered event queues nothing twice"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/process-webhook-event
+    auth: public
+    permissions: "worker capability (x-worker-secret)"
+    request: "body: WebhookProcessSchema { connectionId, deliveryId, providerKey, objectType, externalId?, eventType, handled? } — strict"
+    response: "200 { status, outcome } — already_processed when the receipt was processed before"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_webhook_deliveries status processed/failed, CRM record writes via the mapping path, integration_external_links, sync operations]
+    idempotency: "the receipt status is the guard: a processed delivery answers already_processed and applies nothing twice"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/push-outbound
+    auth: public
+    permissions: "worker capability (x-worker-secret)"
+    request: "body: OutboundPushSchema { operationId } — strict"
+    response: "200 OutboundOperationView — an already-applied operation returns unchanged"
+    errors: [AUTHENTICATION_FAILED, INVALID_QUERY, NOT_FOUND, INTERNAL_ERROR]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [provider upsert/delete call, integration_outbound_operations status/attempts/error, integration_external_links, record-origin row]
+    idempotency: "an applied operation is a no-op; failures after 5 attempts become dead_letter"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/notify-expiring-credentials
+    auth: public
+    permissions: "worker capability (x-worker-secret)"
+    request: none
+    response: "200 { notified, expired, purgedStates } — expiry sweep counts"
+    errors: [AUTHENTICATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_oauth_states expired rows deleted, notifications rows (deterministic ids), connections moved to reauthorization_required when a credential expired]
+    idempotency: "deterministic notification ids make a re-run add nothing"
+  - method: POST
+    path: /api/v1/AdvancedIntegrations/action/purge-retention
+    auth: public
+    permissions: "worker capability (x-worker-secret)"
+    request: none
+    response: "200 RetentionPurgeReport — same purge as the admin route, under service authority"
+    errors: [AUTHENTICATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [same bounded retention deletes/clears as action/retention/purge]
+    idempotency: "a second pass finds nothing left"
+  # -------------------------------------------------------------------------
+  # OAuth callback — @Public(): the provider redirects the administrator's
+  # browser here with no session. Security is the single-use hashed state
+  # (consumed atomically, bound to connection+provider+initiator), the
+  # allowlisted constant redirect URI, and PKCE. Answers 302 to /admin/settings.
+  # -------------------------------------------------------------------------
+  - method: GET
+    path: /api/v1/integrations/advanced-integrations/oauth/callback
+    auth: public
+    permissions: "state-bound OAuth callback (single-use state, PKCE, allowlisted redirect_uri)"
+    request: "query: OAuthCallbackSchema { state, code?, error?, error_description?, redirect_uri? } — strict; redirect_uri is compared, never used"
+    response: "302 redirect to /admin/settings?integrationConnection=<id>&integrationStatus=<connected|reauthorization_required>"
+    errors: [BAD_REQUEST, AUTHENTICATION_FAILED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_oauth_states row consumed, vault token rows (access/refresh) stored, connection status connected or reauthorization_required, audit trail — the authorization code is never persisted or logged]
+    idempotency: "the state is consumed atomically; a replay finds nothing and is refused"
+  # -------------------------------------------------------------------------
+  # inbound provider webhook — @Public(): the provider holds no CRM session.
+  # The path segment is an opaque webhook key (not enumerable); the connector
+  # verifies the provider signature before anything is recorded. Answers 202
+  # after verification; processing runs in a worker job.
+  # -------------------------------------------------------------------------
+  - method: POST
+    path: /api/v1/integrations/advanced-integrations/:providerKey/:webhookKey/:kind
+    auth: public
+    permissions: "provider signature (verified by the connector against the vault-held webhook secret)"
+    request: "raw body + provider headers/query — the exact bytes the provider signed; kind is the event kind segment"
+    response: "202 { status: accepted|duplicate, eventCount } or 401 { status: rejected, eventCount: 0 } — no error.code envelope; a rejected delivery will fail the same way forever so the provider should stop retrying"
+    errors: []
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [integration_webhook_deliveries receipt rows (rejected receipts carry no payload), advancedIntegrations.processWebhookEvent jobs enqueued, security events on rejected signatures/replays]
+    idempotency: "(connection_id, delivery_id) dedup: a repeated delivery is acknowledged as duplicate and never processed twice"

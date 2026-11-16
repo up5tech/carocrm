@@ -1,0 +1,226 @@
+# PLAN §58 — BPM processes: definitions (admin), instances and tasks (participants).
+# Source: apps/api/src/processes/process.controller.ts, process.service.ts, process-runtime.service.ts
+# Definition administration (Process/*) is administrator-only via ProcessService.requireAdmin();
+# `GET /Process/action/available` is the one participant-facing read (authentication only).
+# Instance and task routes are participant-scoped server-side: a non-admin sees only processes
+# they started or take part in, and may answer only tasks assigned to them or their roles.
+# Format and required fields: api-spec/README.md §2.
+group: processes
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/Process
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: ProcessView[], total } — ordered by name ascending; ProcessView carries key, name, entityType, isActive, current/published version numbers and per-version issues"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "none; the definition list is not paged"
+    sorting: "fixed: name ascending"
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Process/action/catalog
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { actions[], nodeTypes[], assigneeTypes[] } — the editor vocabulary: workflow actions with mutatesRecords, node kinds (userTask, serviceTask, gateway, end) and assignee kinds (user, role, recordField)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Process/action/available
+    auth: authenticated
+    permissions: authenticated — participants only; returns process identity (id, key, name, description, entityType), never nodes or actions
+    request: "query: entityType (required, PascalCase entity name)"
+    response: "200 { list: [{ id, key, name, description, entityType }] } — enabled, published processes bound to the entity type or to any record"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: "none; the answer is bounded by the number of definitions"
+    sorting: "fixed: name ascending"
+    filtering: "entityType must match ^[A-Z][A-Za-z0-9]{1,49}$ and is matched against the process binding or ANY"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Process/action/validate
+    auth: authenticated
+    permissions: administrator
+    request: "body: a ProcessDefinition object, or { definition: ProcessDefinition }"
+    response: "200 { valid: boolean, issues: [{ code, message, path? }] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/Process/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ProcessView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/Process
+    auth: authenticated
+    permissions: administrator
+    request: "{ key, name, description?, definition } — key is lowercase kebab-case ^[a-z][a-z0-9-]{1,63}$; definition is validated before storage"
+    response: "201 ProcessView — created disabled, with draft version 1"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [process_definitions row, process_definition_versions draft row]
+    idempotency: none; a duplicate key answers 409
+  - method: PUT
+    path: /api/v1/Process/:id
+    auth: authenticated
+    permissions: administrator
+    request: "{ name?, description?, definition? } — omitted keys unchanged; a new definition becomes a new draft version when the current one is published (published versions are immutable)"
+    response: "200 ProcessView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [process_definitions row, process_definition_versions row updated or inserted as draft]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/Process/:id/action/publish
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ProcessView — the current draft becomes the published version new instances run against"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: previous published version archived, current version marked published, process_definitions.published_version_id repointed; running instances keep their own version]
+    idempotency: publishing an already-published version answers 422
+  - method: POST
+    path: /api/v1/Process/:id/action/enable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ProcessView — isActive true; requires a published version"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [process_definitions.is_active set; new instances may now be started; running instances are unaffected]
+    idempotency: a repeat is a no-op
+  - method: POST
+    path: /api/v1/Process/:id/action/disable
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 ProcessView — isActive false; blocks new instances only"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [process_definitions.is_active cleared; running instances keep executing]
+    idempotency: a repeat is a no-op
+  - method: DELETE
+    path: /api/v1/Process/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, deleted: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [process_definitions soft-deleted and deactivated; in-flight instances keep their pinned version and finish]
+    idempotency: a second delete answers 404
+  - method: GET
+    path: /api/v1/ProcessInstance
+    auth: authenticated
+    permissions: authenticated — admins see all; other principals see only instances they started or take part in
+    request: "query: definitionId?, status? (running|waiting|completed|cancelled|failed), entityType? + entityId? (both or neither), offset?, limit?"
+    response: "200 { list: ProcessInstanceView[], total, offset, count } — each view embeds tasks[] and events[]"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: "offset (default 0) and limit (default 50, max 200)"
+    sorting: "fixed: created_at descending"
+    filtering: "definitionId, status enum, entityType+entityId record pair; a lone entityType/entityId or unknown status answers 422"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ProcessInstance
+    auth: authenticated
+    permissions: authenticated — anyone who can read the target record may start it; record read ACL is enforced server-side (unreadable answers 404)
+    request: "{ processId? or processKey? (one required), entityType, entityId }"
+    response: "201 ProcessInstanceView — status running/waiting with the first tasks already materialized"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: process_instances row, process_events row, process_tasks rows for user tasks, notifications rows for concrete assignees, queued bpm.serviceTask/bpm.taskTimer jobs for dispatched actions and timers]
+    idempotency: none; every call starts a new instance
+  - method: GET
+    path: /api/v1/ProcessInstance/:id
+    auth: authenticated
+    permissions: authenticated — admin, initiator, or holder/candidate of one of its tasks
+    request: none
+    response: "200 ProcessInstanceView { id, definitionId, processKey, processName, version, entityType, entityId, status, currentNode, outcome, error, initiatedBy, startedAt, finishedAt, tasks[], events[] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ProcessInstance/:id/action/cancel
+    auth: authenticated
+    permissions: authenticated — the initiator or an admin only
+    request: none
+    response: "200 ProcessInstanceView — status cancelled"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction: instance marked cancelled, open tasks cancelled, process_events rows for each cancelled task and the instance]
+    idempotency: cancelling a finished instance answers 422
+  - method: GET
+    path: /api/v1/ProcessTask
+    auth: authenticated
+    permissions: authenticated — tasks assigned to the caller or their roles; all=true is honoured only for admins
+    request: "query: status? (open|overdue|escalated|completed|cancelled|all; default is the answerable set), all? (true), offset?, limit?"
+    response: "200 { list: ProcessTaskView[], total, offset, count } — each view carries processId/processName/entityType/entityId and the outcomes its node offers"
+    errors: [AUTHENTICATION_REQUIRED, VALIDATION_FAILED]
+    pagination: "offset (default 0) and limit (default 50, max 200)"
+    sorting: "fixed: due_at ascending, then created_at descending"
+    filtering: "status enum; all=true widens to every status but only for admins"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/ProcessTask/:id
+    auth: authenticated
+    permissions: authenticated — admin, the assignee, or a member of the candidate role
+    request: none
+    response: "200 ProcessTaskView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/ProcessTask/:id/action/complete
+    auth: authenticated
+    permissions: authenticated — admin, the assignee, or a member of the candidate role
+    request: "{ outcome, comment? } — outcome must be one of the values the task node offers"
+    response: "200 ProcessInstanceView — the parent instance after the state machine advanced (may now wait on the next task or be completed/failed)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, RECORD_NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [one transaction under a row lock on the instance: task marked completed, instance advanced — new process_tasks rows, notifications, process_events rows, queued bpm.serviceTask/bpm.taskTimer jobs; a failed advancement marks the instance failed with the reason in its audit trail]
+    idempotency: the task row is claimed with a status guard — a second answer to the same task answers 422

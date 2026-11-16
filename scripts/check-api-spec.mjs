@@ -190,7 +190,13 @@ for (const file of specFiles()) {
     if (!Array.isArray(endpoint.sideEffects) && endpoint.sideEffects !== 'none') {
       errors.push(`${where}: "sideEffects" must be an inline array or the literal "none"`);
     }
-    documented.push({ file, group: spec.group, method: endpoint.method, path: endpoint.path, auth: endpoint.auth });
+    const entry = { file, group: spec.group, method: endpoint.method, path: endpoint.path, auth: endpoint.auth };
+    // Phase 24.4: schema-backed contract fields ride along in --print so the client generator can
+    // consume them without a second parser.
+    for (const key of ['operationId', 'requestSchema', 'responseSchema']) {
+      if (key in endpoint) entry[key] = endpoint[key];
+    }
+    documented.push(entry);
   }
 }
 

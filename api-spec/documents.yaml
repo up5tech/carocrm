@@ -1,0 +1,72 @@
+# PLAN §58 — the document module: DocumentTemplate records plus render commands.
+# Source: apps/api/src/document/document.controller.ts, document-template.service.ts,
+# dto/document-shapes.ts.
+# All routes sit behind the global AuthGuard (no @Public). Templates are entity records, so
+# their ACL is the generic entity ACL on `DocumentTemplate` (assertAccess read/create/edit plus
+# the record predicate); the preview route additionally requires an administrator because it
+# renders arbitrary caller-supplied data into HTML. Full template CRUD also exists under the
+# generic /api/v1/:entity API — it is documented in entities.yaml, not here.
+# Format and required fields: api-spec/README.md §2.
+group: documents
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/DocumentTemplate
+    auth: authenticated
+    permissions: "read on DocumentTemplate, with the entity record-scope predicate applied"
+    request: "query: entityType? — filters templates to one targetEntity"
+    response: "200 { list: DocumentTemplate[] } — flat entity records through the generic serializer; the service returns only the list, not the paging envelope"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: "entity-list defaults apply inside the service; no paging parameters are accepted on this route"
+    sorting: "entity-list default order"
+    filtering: "entityType equals-filter on targetEntity; no free-form where grammar"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/DocumentTemplate
+    auth: authenticated
+    permissions: "create on DocumentTemplate"
+    request: "CreateDocumentTemplateSchema (strict) { name, code, entityType, description?, subject?, body, format? (html|text, default html), locale?, active? (default true), isDefault? (default false) }"
+    response: "201 DocumentTemplate record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [DocumentTemplate entity record via the generic entity create path, audit/stream side effects of that path; when isDefault is true every other default template for the same entityType is cleared first]
+    idempotency: none; a duplicate code answers 422 and a repeated call with the same body creates another record only if the code differs
+  - method: PATCH
+    path: /api/v1/DocumentTemplate/:id
+    auth: authenticated
+    permissions: "edit on DocumentTemplate, and the record must match the edit predicate"
+    request: "UpdateDocumentTemplateSchema (strict, all optional) { name?, description?, subject?, body?, format?, locale?, active?, isDefault? } — code and entityType cannot be changed here"
+    response: "200 DocumentTemplate record"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, RECORD_NOT_FOUND, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [DocumentTemplate entity record update via the generic entity update path; setting isDefault=true clears the previous default for the same entityType first]
+    idempotency: a repeat with the same body is a no-op for the field values
+  - method: GET
+    path: /api/v1/document/defaultTemplate
+    auth: authenticated
+    permissions: "read on DocumentTemplate, with the record predicate applied"
+    request: "query: entityType (required by the route signature)"
+    response: "200 { code: string | undefined } — the isDefault template's code for the entity type, else the first active template's code, else undefined"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none
+    sorting: none
+    filtering: "fixed: targetEntity equals entityType and active=true"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/document/action/preview
+    auth: authenticated
+    permissions: "administrator — rendering arbitrary caller-supplied data into HTML is an administrative act; the service also asserts read on DocumentTemplate"
+    request: "PreviewDocumentSchema (strict union): either { templateCode, data } to render a stored template, or { body, subject?, format? (html|text, default html), data } to render a draft"
+    response: "200 DocumentRenderResult { format, templateCode? (stored renders only), subject, body, warnings[] } — unresolved placeholders stay in place and are reported in warnings, never blanked"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; the same template/code and data produce the same output — the renderer is pure and writes nothing
