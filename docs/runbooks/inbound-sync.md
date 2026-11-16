@@ -22,6 +22,23 @@ such rather than approximated.
 | Inbound calendar events (Microsoft 365) | Full enumeration plus incremental sync through Graph delta links; webhook delivery for change notifications (client-state verified) | `POST /api/v1/AdvancedIntegrations/action/connections/:id/renew-subscriptions`, `POST /api/v1/AdvancedIntegrations/action/process-webhook-event` |
 | Ownership of synced records | A **personal** connection's records are written under the connection owner's authority, through the same path the polling and webhook paths use; a deactivated owner stops the sync | `sync-orchestrator.service.ts` (`asOwner`), `webhook-ingress.service.ts` |
 
+An **incremental** mapping does not re-read the object: the engine calls the connector's delta feed
+(Google `syncToken`, Graph `@odata.deltaLink`), so a run collects the changes since the last one and
+stores the provider's next delta token. A `full` mapping still enumerates every page. The checkpoint
+records **which feed** its cursor belongs to (`integration_sync_checkpoints.cursor_kind`, migration
+`097_phase24_7_incremental_cursor.sql`), because a page offset handed to a delta reader is a cursor
+the connector refuses. After an upgrade from a build that only had the page reader, the first
+incremental run starts the delta feed at its beginning instead — the external link makes that re-read
+idempotent, so no record is duplicated.
+
+**Supported connection counts.** There is no product cap on mailboxes or calendars: each connection
+is its own row with its own owner, credential, cursor and ACL, and the suites run two connections
+against the same provider ids to prove that neither sees the other's records. The bound that matters
+in practice is provider-side: Google and Graph apply per-installation quotas, and the engine's rate
+limit and circuit breaker are **per connection**, so one throttled mailbox does not stop the others.
+The `MAIL_INBOUND_PROVIDER` environment singleton remains the one-mailbox shortcut; the connections
+endpoint above is the supported way to collect several.
+
 The sync engine keeps one checkpoint per `(connection, mapping, direction)`: inbound cursors are
 advanced **per page**, only past operations that committed, and an expired provider cursor
 (`410 Gone` from Google, an invalid delta link from Graph) drops the cursor and re-runs a **full**

@@ -263,3 +263,14 @@ refuse them until they are signed.
 
 Extension data follows AGENTS.md §3: records carry a run marker, only rows the run created are
 removed, and extension migrations are additive (`CREATE TABLE IF NOT EXISTS`).
+## 9. Outbound events (Phase 24.8)
+
+Extensions subscribe to domain events through `domainEvents` in their backend module. Delivery is
+signed and logged as documented in [`docs/outbound-events.md`](outbound-events.md). No GraphQL
+endpoint, second webhook framework or parallel CLI is introduced.
+
+## 10. Single-tenant rule
+
+An extension must never process another installation's data and must not introduce a tenant id or
+tenant predicate. Production runs with `EXTENSION_TRUST_MODE=enforce` and signed packages
+(Phase 23.6). See `docs/reference/product-charter.md` §6.

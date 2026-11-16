@@ -1290,6 +1290,8 @@ export interface IntegrationSyncCheckpointsTable {
   direction: string;
   cursor_value: string | null;
   reset_required: boolean;
+  /** Which feed the cursor belongs to: the page reader or the delta feed (migration 097). */
+  cursor_kind: string;
   updated_at: Date;
   created_at: Date;
 }

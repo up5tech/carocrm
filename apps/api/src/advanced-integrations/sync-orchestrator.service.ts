@@ -50,6 +50,16 @@ export type RunType = (typeof RUN_TYPES)[number];
 export const TRIGGER_SOURCES = ['schedule', 'manual', 'webhook', 'event'] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
 
+/**
+ * Which feed a checkpoint cursor belongs to.
+ *
+ * A cursor is opaque to the runtime, but the runtime still has to know **which method** to hand it
+ * to: a page offset is not a delta token. The kind is stored next to the cursor (migration 097) so
+ * a run resumes on the feed that wrote it.
+ */
+export const CURSOR_KINDS = ['page', 'delta'] as const;
+export type CursorKind = (typeof CURSOR_KINDS)[number];
+
 export interface SyncRunView {
   readonly id: string;
   readonly connectionId: string;
@@ -183,6 +193,23 @@ export class SyncOrchestrator {
     const startFresh = checkpoint.resetRequired || (runType === 'full');
     if (startFresh) cursor = null;
 
+    // Phase 24.7 — an `incremental` run reads the connector's **delta feed** when it has one
+    // (Google's `syncToken`, Graph's `@odata.deltaLink`), so a change is collected without
+    // re-reading every page. A page cursor is not a delta token: a mapping that was interrupted
+    // mid-page finishes that page first, and a page cursor left by an earlier build is replaced by
+    // a delta feed started at its beginning — the external link makes that re-read idempotent.
+    const declaredIncremental =
+      this.registry.find(connection.providerKey)?.capabilities.objects.find(
+        (object) => object.objectType === mapping.objectType,
+      )?.incrementalSync === true;
+    const deltaCapable =
+      !startFresh &&
+      declaredIncremental &&
+      this.registry.find(connection.providerKey)?.adapter?.fetchChanges !== undefined;
+    const resumePage = checkpoint.cursorKind === 'page' && checkpoint.cursorValue !== null;
+    const useDelta = deltaCapable && !resumePage;
+    const cursorKind: CursorKind = useDelta ? 'delta' : 'page';
+
     let scanned = 0;
     let applied = 0;
     let skipped = 0;
@@ -201,34 +228,61 @@ export class SyncOrchestrator {
           cancelled = true;
           break;
         }
-        const page = await this.executor.call(
-          mapping.connectionId,
-          async (context, adapter) => {
-            if (adapter.fetchPage === undefined) {
-              throw new ProviderError('CONFIGURATION_INVALID', 'The connector cannot read objects.', {
+        let objects: readonly ExternalObject[];
+        let next: string | null;
+        let pageExpired: boolean;
+        if (useDelta) {
+          const delta = await this.executor.call(mapping.connectionId, async (context, adapter) => {
+            if (adapter.fetchChanges === undefined) {
+              throw new ProviderError('CONFIGURATION_INVALID', 'The connector cannot read changes.', {
                 category: 'configuration_invalid',
                 retryable: false,
-                detail: 'no_fetch',
+                detail: 'no_fetch_changes',
               });
             }
-            return adapter.fetchPage({
+            return adapter.fetchChanges({
               context,
               objectType: mapping.objectType,
-              cursor,
+              deltaToken: cursor,
               pageSize,
-              since: null,
             });
-          },
-        );
-        cursorExpired = page.cursorExpired;
+          });
+          objects = delta.objects;
+          next = delta.nextDeltaToken;
+          pageExpired = delta.cursorExpired;
+        } else {
+          const page = await this.executor.call(
+            mapping.connectionId,
+            async (context, adapter) => {
+              if (adapter.fetchPage === undefined) {
+                throw new ProviderError('CONFIGURATION_INVALID', 'The connector cannot read objects.', {
+                  category: 'configuration_invalid',
+                  retryable: false,
+                  detail: 'no_fetch',
+                });
+              }
+              return adapter.fetchPage({
+                context,
+                objectType: mapping.objectType,
+                cursor,
+                pageSize,
+                since: null,
+              });
+            },
+          );
+          objects = page.objects;
+          next = page.nextCursor;
+          pageExpired = page.cursorExpired;
+        }
+        cursorExpired = pageExpired;
         if (cursorExpired) break;
 
         // The run's budget is checked **before** the page is taken apart, and the checkpoint only
         // moves past a page this process actually finished. Advancing past a page whose remaining
         // records were cut off by `maxRecords` would tell the next run those records were applied,
         // and they never would be.
-        const budget = options.maxRecords === undefined ? page.objects.length : Math.max(0, options.maxRecords - scanned);
-        const readable = page.objects.slice(0, budget);
+        const budget = options.maxRecords === undefined ? objects.length : Math.max(0, options.maxRecords - scanned);
+        const readable = objects.slice(0, budget);
         // The records of a **personal** connection are written as their owner (Phase 24.7): the
         // scope is entered once for the page, not once per object, so the owner's roles are read
         // once and every record of the page lands under the same authority.
@@ -245,20 +299,24 @@ export class SyncOrchestrator {
           else if (outcome.action === 'skipped') skipped += 1;
           else failed += 1;
         }
-        const pageComplete = readable.length === page.objects.length;
-        nextCursor = pageComplete ? page.nextCursor : cursor;
-        if (pageComplete && nextCursor !== null) {
+        const pageComplete = readable.length === objects.length;
+        nextCursor = pageComplete ? next : cursor;
+        if (pageComplete && nextCursor !== null && nextCursor !== cursor) {
           // The checkpoint advances **per page**, past the records already committed. Advancing it
           // only when the loop ends meant an interruption — a provider error on page 40, a cancelled
           // run, a dying process — discarded the cursor of 39 applied pages, and the next run started
           // from the old cursor and re-read all of them.
-          await this.writeCheckpoint(mapping.id, 'inbound', nextCursor, false);
+          await this.writeCheckpoint(mapping.id, 'inbound', nextCursor, false, cursorKind);
         }
-        if (!pageComplete || page.nextCursor === null) break;
-        cursor = page.nextCursor;
+        if (!pageComplete) break;
+        if (next === null) break;
+        // A delta feed ends when it stops advancing: a provider that answers an unchanged token has
+        // nothing left to deliver, and re-asking would spin.
+        if (next === cursor) break;
+        cursor = next;
       }
 
-      await this.writeCheckpoint(mapping.id, 'inbound', nextCursor, cursorExpired);
+      await this.writeCheckpoint(mapping.id, 'inbound', nextCursor, cursorExpired, cursorKind);
       const status = cancelled ? 'cancelled' : failed > 0 && applied === 0 ? 'failed' : 'completed';
       await this.finishRun(run.id, {
         status,
@@ -609,15 +667,19 @@ export class SyncOrchestrator {
   async readCheckpoint(
     mappingId: string,
     direction: 'inbound' | 'outbound',
-  ): Promise<{ cursorValue: string | null; resetRequired: boolean }> {
-    const rows = await sql<{ cursor_value: string | null; reset_required: boolean }>`
-      select cursor_value, reset_required from integration_sync_checkpoints
+  ): Promise<{ cursorValue: string | null; resetRequired: boolean; cursorKind: CursorKind }> {
+    const rows = await sql<{ cursor_value: string | null; reset_required: boolean; cursor_kind: string }>`
+      select cursor_value, reset_required, cursor_kind from integration_sync_checkpoints
       where mapping_id = ${mappingId} and direction = ${direction}
       limit 1
     `.execute(this.database.db);
     const row = rows.rows[0];
-    if (!row) return { cursorValue: null, resetRequired: false };
-    return { cursorValue: row.cursor_value, resetRequired: row.reset_required };
+    if (!row) return { cursorValue: null, resetRequired: false, cursorKind: 'page' };
+    return {
+      cursorValue: row.cursor_value,
+      resetRequired: row.reset_required,
+      cursorKind: row.cursor_kind === 'delta' ? 'delta' : 'page',
+    };
   }
 
   /**
@@ -625,22 +687,28 @@ export class SyncOrchestrator {
    *
    * A `resetRequired` checkpoint makes the next run a full sync: the provider told us its cursor
    * is no longer valid, and a full re-sync is the only correct response.
+   *
+   * `cursorKind` records **which feed** the cursor belongs to (Phase 24.7): the same opaque string
+   * means different things to `fetchPage` and `fetchChanges`, so the run has to know which method
+   * may receive it.
    */
   async writeCheckpoint(
     mappingId: string,
     direction: 'inbound' | 'outbound',
     cursorValue: string | null,
     resetRequired = false,
+    cursorKind: CursorKind = 'page',
   ): Promise<void> {
     const now = new Date();
     await sql`
       insert into integration_sync_checkpoints
-        (id, connection_id, mapping_id, direction, cursor_value, reset_required, created_at, updated_at)
-      select ${randomUUID()}, connection_id, id, ${direction}, ${cursorValue}, ${resetRequired}, ${now}, ${now}
+        (id, connection_id, mapping_id, direction, cursor_value, reset_required, cursor_kind, created_at, updated_at)
+      select ${randomUUID()}, connection_id, id, ${direction}, ${cursorValue}, ${resetRequired}, ${cursorKind}, ${now}, ${now}
       from integration_object_mappings where id = ${mappingId}
       on conflict (connection_id, mapping_id, direction) do update set
         cursor_value = excluded.cursor_value,
         reset_required = excluded.reset_required,
+        cursor_kind = excluded.cursor_kind,
         updated_at = excluded.updated_at
     `.execute(this.database.db);
   }

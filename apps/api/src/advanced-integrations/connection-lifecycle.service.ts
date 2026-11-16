@@ -452,7 +452,7 @@ export class ConnectionLifecycleService {
   async resetCheckpoints(connectionId: string): Promise<number> {
     const result = await sql`
       update integration_sync_checkpoints
-      set cursor_value = null, reset_required = true, updated_at = ${new Date()}
+      set cursor_value = null, reset_required = true, cursor_kind = 'page', updated_at = ${new Date()}
       where connection_id = ${connectionId} and direction = 'inbound'
     `.execute(this.database.db);
     const reset = Number(result.numAffectedRows ?? 0n);

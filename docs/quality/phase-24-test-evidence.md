@@ -370,7 +370,8 @@ their evidence sections above; no production-ready or parity claim was added.
   checkpoint, idempotent re-run, provider outage → dead letter + run `failed`, paused connection
   refused, two connections independent (overlapping provider ids), personal connection written as
   owner (owner can read via `runAsUser`), personal webhook via `applyObjectForConnection` as owner,
-  stranger user denied access. File now 36/36 tests.
+  stranger user denied access, incremental delta-feed run with cursorKind checkpoint and idempotent
+  re-read, revoked credential refused. File now 38/38 tests.
 - `apps/api/test/advanced-integrations-connectors.test.ts`: the Google Workspace connector reads
   calendar event boundaries correctly — timed event → UTC ISO instant; all-day → midnight in the
   event zone. File now 53 tests.

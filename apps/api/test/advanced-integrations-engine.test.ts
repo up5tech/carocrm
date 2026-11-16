@@ -769,12 +769,12 @@ describe('Advanced Integrations — Phase 24.7 installation-wide inbound sync', 
    * A calendarEvent mapping against the fake provider: the provider's calendar events become CRM
    * Meetings, carrying the event's location onto the Meeting.
    */
-  async function calendarMapping(connectionId: string) {
+  async function calendarMapping(connectionId: string, syncMode: 'full' | 'incremental' = 'full') {
     const mapping = await mappings.create({
       connectionId,
       objectType: 'calendarEvent',
       crmEntityType: 'Meeting',
-      syncMode: 'full',
+      syncMode,
       fields: [
         { sourcePath: 'summary', targetField: 'name', transform: null, required: true },
         { sourcePath: 'description', targetField: 'description', transform: null, required: false },
@@ -987,6 +987,67 @@ describe('Advanced Integrations — Phase 24.7 installation-wide inbound sync', 
         await ctx.app.get(EntityCrudService).get('Meeting', meetingId);
       }),
     ).rejects.toThrow();
+  });
+
+  itSystem('reads an incremental mapping from the provider delta feed and resumes from its delta token', async () => {
+    fake.reset();
+    const connectionId = await createConnection();
+    const mapping = await calendarMapping(connectionId, 'incremental');
+    const first = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual' });
+    expect(first.status).toBe('completed');
+    expect(first.recordsApplied).toBe(3);
+
+    // The delta feed, not the page reader: the connector's own incremental method is the one the
+    // engine calls, and the checkpoint remembers which feed its cursor belongs to.
+    expect(fake.callCounts.fetchChanges).toBeGreaterThan(0);
+    expect(fake.callCounts.fetchPage).toBe(0);
+    const checkpoint = await orchestrator.readCheckpoint(mapping.id, 'inbound');
+    expect(checkpoint.cursorKind).toBe('delta');
+    expect(checkpoint.cursorValue).not.toBeNull();
+
+    // A new provider event is collected by the next incremental run alone.
+    const meetingsBefore = await countMeetings();
+    fake.appendObject('calendarEvent', {
+      summary: 'Fake Meeting Four',
+      description: 'Created after the first incremental run.',
+      location: 'Room 4',
+      start: '2026-01-08T09:00:00.000Z',
+      end: '2026-01-08T10:00:00.000Z',
+      allDay: false,
+    });
+
+    const second = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual' });
+    expect(second.status).toBe('completed');
+    // One change, one record: the three events the first run applied are not re-applied.
+    expect(second.recordsApplied).toBe(1);
+    expect(second.recordsScanned).toBe(1);
+    expect(await countMeetings()).toBe(meetingsBefore + 1);
+    expect(fake.callCounts.fetchPage).toBe(0);
+    expect((await links.list(connectionId)).length).toBe(4);
+  });
+
+  itSystem('refuses to sync through a connection whose stored credential was revoked', async () => {
+    fake.reset();
+    const connectionId = await createConnection();
+    const mapping = await calendarMapping(connectionId);
+    const secret = `agent-test-${runId}-revoked`;
+    await ctx.app.get(ConnectionLifecycleService).storeCredential({ connectionId, kind: 'api_key', value: secret });
+
+    await ctx.app.get(ConnectionLifecycleService).revoke(connectionId);
+
+    // The stored secret is gone, not merely marked: a revoked credential cannot be recovered from a
+    // database snapshot, and the connection no longer permits a provider call.
+    const row = await ctx.database.db
+      .selectFrom('integration_credential_secrets')
+      .select(['state', 'payload_encrypted'])
+      .where('connection_id', '=', connectionId)
+      .executeTakeFirst();
+    expect(row?.state).toBe('revoked');
+    expect(row?.payload_encrypted).not.toContain(secret);
+
+    await expect(orchestrator.runInbound(mapping.id, { triggerSource: 'manual' })).rejects.toThrow(
+      /may not call the provider/,
+    );
   });
 });
 

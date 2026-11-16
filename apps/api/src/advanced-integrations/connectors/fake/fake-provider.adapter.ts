@@ -510,6 +510,21 @@ export class FakeProviderAdapter implements ConnectorAdapter {
     return this.orderedRecords(objectType).map((record) => this.toExternalObject(record));
   }
 
+  /**
+   * Append one provider-side object, as the provider would after a user created it.
+   *
+   * The calendar object is **inbound-only** (`create: false`), so a test cannot produce a new event
+   * through `upsertObject` — and it must not weaken the declaration to try. This is the provider's
+   * own side effect instead: a new record with the next change sequence, which is exactly what an
+   * incremental run has to pick up.
+   */
+  appendObject(objectType: string, fields: Readonly<Record<string, unknown>>): ExternalObject {
+    const externalId = `${objectType}-${String(this.nextId(objectType))}`;
+    return this.toExternalObject(
+      this.insertSeeded(objectType, externalId, { ...fields, id: externalId }, this.nextTimestamp()),
+    );
+  }
+
   /** The deletion tombstones of one object type, in deletion order. */
   tombstonesOf(objectType: string): readonly ExternalObject[] {
     return this.tombstones
@@ -611,8 +626,13 @@ export class FakeProviderAdapter implements ConnectorAdapter {
     this.idSequence.set('calendarEvent', SEEDED_EVENT_COUNT + 1);
   }
 
-  private insertSeeded(objectType: string, externalId: string, fields: Record<string, unknown>, updatedAt: string): void {
-    this.bucket(objectType).set(externalId, {
+  private insertSeeded(
+    objectType: string,
+    externalId: string,
+    fields: Record<string, unknown>,
+    updatedAt: string,
+  ): FakeRecord {
+    const record: FakeRecord = {
       objectType,
       externalId,
       externalParentId: null,
@@ -622,7 +642,9 @@ export class FakeProviderAdapter implements ConnectorAdapter {
       order: (this.orderSequence += 1),
       changeSeq: (this.changeSequence += 1),
       deleted: false,
-    });
+    };
+    this.bucket(objectType).set(externalId, record);
+    return record;
   }
 
   /** The record bucket of one object type, created on demand. */

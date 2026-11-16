@@ -23,6 +23,7 @@ These rules hold for every connector, and they are the platform's, not a vendor'
 | The same record may not be written by two directions at once. | `record-origin.service.ts` — the origin table prevents an inbound sync from echoing back to the provider. |
 | A conflict never overwrites silently. | `conflict.service.ts` — the default `manual` policy opens a conflict instead. |
 | A **personal** connection's inbound objects are written as the connection's owner, not as the caller. | `sync-orchestrator.service.ts` — `asOwner`; a deactivated owner stops the sync under that identity. An `organization`-owned connection keeps the caller's authority. |
+| An **incremental** mapping reads the provider's **delta feed**, not the page reader, and the checkpoint remembers which feed its cursor belongs to. | `sync-orchestrator.service.ts` — `fetchChanges` for `incremental` runs; `integration_sync_checkpoints.cursor_kind` (migration 097). A page cursor left by an earlier build is never handed to the delta reader: the feed restarts at its beginning, and the external link makes that re-read idempotent. |
 
 ## 2. The provider facts
 

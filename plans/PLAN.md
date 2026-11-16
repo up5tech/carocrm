@@ -2911,8 +2911,8 @@ demonstrated security regression; and the final review records an honest go/no-g
 
 Status: **In progress** (started 2026-11-14). 24.0 baseline audit, 24.1 single-tenant charter,
 24.2 NO-GO blocker records and 24.3 production install/upgrade artifacts are delivered; 24.5
-(release truthfulness) is delivered; 24.6 (real inbound mail) and **24.7 (installation-wide email and
-calendar sync) are delivered**; 24.4 (`api-spec/` to `--strict` + typed client) is in flight; 24.8–24.12
+(release truthfulness) is delivered; 24.6 (real inbound mail), **24.7 (installation-wide email and
+calendar sync)** and **24.8 (outbound events and developer surface)** are delivered; 24.4 (`api-spec/` to `--strict` + typed client) is in flight; 24.9–24.12
 have not started. The release decision remains
 **NO-GO for production** — see
 `docs/releases/2026-11-15-phase-24.md`. Scope, priority definitions, owner decisions and
