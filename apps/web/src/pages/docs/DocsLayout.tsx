@@ -7,9 +7,9 @@ import type { DocsTreeView } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { useDocsSettings, useDocsTree } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
-
 /**
  * The three-column reader shell (§5.3, §5.10).
  *
@@ -46,7 +46,7 @@ export function DocsLayout({
   if (tree.isError || tree.data === undefined) {
     return (
       <div className="carocrm-doc">
-        <ErrorState message={tree.error instanceof Error ? tree.error.message : t('web.docs.loadFailed')} onRetry={() => void tree.refetch()} />
+        <ErrorState message={errorMessage(tree.error, t('web.docs.loadFailed')) } onRetry={() => void tree.refetch() } />
       </div>
     );
   }

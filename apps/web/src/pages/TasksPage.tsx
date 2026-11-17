@@ -23,6 +23,7 @@ import type { ProcessInstanceView, ProcessTaskView } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { INSTANCE_STATUS_COLORS, ProcessTrailModal } from '../components/ProcessTrailModal.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { useProcessInstances, useProcessTasks } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -105,7 +106,7 @@ export function TasksPage() {
     onError: (error: Error, _vars, context) => {
       const ctx = context as { snapshots?: Array<[unknown, unknown]> } | undefined;
       ctx?.snapshots?.forEach(([key, data]) => queryClient.setQueryData(key as readonly unknown[], data));
-      void message.error(error.message);
+      void message.error(errorMessage(error, t('web.tasks.answerFailed')));
     },
     onSuccess: (instance) => {
       void message.success(t('web.tasks.answered', { status: instance.status }));

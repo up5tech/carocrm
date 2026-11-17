@@ -5,6 +5,7 @@ import { api } from '../../api/client.js';
 import type { CRMChatCapabilitiesView } from '../../api/types.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 
 export interface CRMChatDiagnosticsDrawerProps {
@@ -48,7 +49,7 @@ export function CRMChatDiagnosticsDrawer(props: CRMChatDiagnosticsDrawerProps) {
         {health.isLoading ? <LoadingSkeleton rows={4} /> : null}
         {health.isError ? (
           <ErrorState
-            message={health.error instanceof Error ? health.error.message : undefined}
+            message={errorMessage(health.error) }
             onRetry={() => void health.refetch()}
           />
         ) : null}

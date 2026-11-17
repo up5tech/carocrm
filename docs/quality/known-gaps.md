@@ -74,14 +74,14 @@
 | G61 | One chat string was hard-coded English in a shared component | crm-chat / SPA | Low | Fixed (22.15) |
 | G62 | The chat action card rendered its own decision response instead of the server's | crm-chat / SPA | Medium | Fixed (22.15) |
 | G63 | No route guard sits in front of `/admin/*` — only the menu is filtered by the server | platform / SPA | Medium | Fixed (2026-11-03) |
-| G64 | ~150 call sites still show `error.message` raw instead of the code-aware helper | platform / SPA | Medium | Open (found 22.15) |
+| G64 | ~150 call sites still show `error.message` raw instead of the code-aware helper | platform / SPA | Medium | Fixed (24.10, 2026-11-17) — shared `errorMessage` helper + convention-gate rule |
 | G65 | Home content is chosen from `principal.roles` in the client, a rule the server does not mirror | platform / SPA | Low | Fixed (23.4) |
 | G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15; error/empty/denial browser spec added in 22.16, run pending) |
 | G67 | Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion | platform / SPA | Low | Open (found 22.15) |
 | G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
 | G69 | The stock-movement history page returned an arbitrary 200-row sample, not the newest movements | sales (inventory read) | Medium | Fixed (22.26) — the "lot stock" diagnosis was wrong |
 | G70 | An outbox event claimed by a worker that then died stayed `running` forever | platform (outbox) | High | Fixed (22.18) |
-| G71 | Offset pagination is a live window, not a snapshot | platform (entity list) | Low | Accepted (22.19) |
+| G71 | Offset pagination is a live window, not a snapshot | platform (entity list) | Low | Accepted (22.19); re-measured, kept (24.11) |
 | G72 | An AI approval did not pin the target record's version | ai-agents | Medium | Fixed (22.19) |
 | G73 | Bulk update/delete have no record-count cap and run one record at a time | platform (entity list) | Medium | Fixed (22.26) |
 | G74 | No per-query statement timeout or request deadline | platform (database) | Medium | Fixed (22.26) |
@@ -105,7 +105,7 @@
 | G92 | The DB-free CI lane has no API authorization assertion | platform (CI) | Medium | Partial (23.8/23.10) — exception G92 |
 | G93 | The Phase 22.17 exception list drifted from this register | platform (docs) | Low | Fixed (23.0) |
 | G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
-| G95 | The AI-agent trigger door reads only the first 20 published agents, ordered by a random UUID | ai-agents | Medium | Open — exception G95 |
+| G95 | The AI-agent trigger door reads only the first 20 published agents, ordered by a random UUID | ai-agents | Medium | Fixed (24.11, 2026-11-17) — full published-agent scan, regression test |
 | G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
 | G97 | Dependency-vulnerability audit is manual, not in the mandatory gate | platform | Low | Accepted (23.6) |
 | G98 | The three sample extension packages in `modules/` are unsigned | extensions | Low | Accepted (23.6) |
@@ -732,7 +732,13 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 
 - **Module / contract:** platform / SPA — every `catch` that renders `error instanceof Error ? error.message : …`.
 - **Impact:** the server's answer is `{code, message, details}` and the useful reading depends on the code: a validation refusal should list its field issues, a rate limit should give the number (G56), a permission denial should not be a red toast at all. Most sites read only the message, and one module's helper (`errorMessage()` in `admin/tabs/identity.ts`) already does it properly — so the same failure looks different depending on which page the user happened to be on, which is exactly the consistency §14 is about.
-- **Status:** Open (found 22.15) — the shared edit page now handles the field-shaped case (G55) and the list page the throttled case; migrating the remaining call sites onto one helper is a wide mechanical change with ~150 small behaviour decisions in it, and it deserves its own pass rather than arriving inside a hardening phase.
+- **Status:** Fixed (24.10, 2026-11-17) — every generic `catch` now renders through the shared
+  code-aware `errorMessage()` helper (`apps/web/src/lib/errors.ts`), which surfaces `ApiError`
+  codes, `details.issues` (string or `{path, message}` form) and falls back safely for non-API
+  errors. `admin/tabs/identity.ts` delegates to it so its specialised behaviour is preserved.
+  `scripts/check-ui-conventions.mjs` rule 9 fails the build on the old `instanceof Error ?
+  error.message` pattern, so the migration cannot silently regress. Specialized helpers that add
+  domain detail on top of the shared formatter were kept where they already existed.
 
 ## G65 — Home content is chosen from `principal.roles` in the client, a rule the server does not mirror
 
@@ -783,7 +789,7 @@ does **not** re-run the failed work, so the route's contract overstates what it 
 - **Module / contract:** platform — the generic list API (`offset`/`maxSize` over the current order).
 - **Impact:** a page is a window over the order as it is when the query runs. An insert that sorts before the next page's boundary shifts the window (a row the caller already saw can move out, and a new row can appear); an edit that does not move the sort key does not. No authorization or money decision depends on a page's contents — the server filters every row by ACL and recomputes derived values — but a client that assumes a stable snapshot can show a duplicate or skip a record between two requests.
 - **Expected vs observed:** expected — either a documented window or a cursor; observed — an offset window with no cursor, and no documentation until 22.19.
-- **Status:** **Accepted (22.19).** `phase22-data-integrity.test.ts` pins the behaviour: an edit that leaves the sort key alone keeps the next page stable, a record inserted after the remaining page does not change it, and a record inserted before the boundary shifts it. A stable cursor is an API-shape decision for a later phase; until then the UI refetches after a write, and no workaround relies on client serialization.
+- **Status:** **Accepted (22.19); re-measured and kept (24.11, 2026-11-17).** `phase22-data-integrity.test.ts` pins the behaviour: an edit that leaves the sort key alone keeps the next page stable, a record inserted after the remaining page does not change it, and a record inserted before the boundary shifts it. A stable cursor is an API-shape decision for a later phase; until then the UI refetches after a write, and no workaround relies on client serialization. The 24.11 scale baseline (`scripts/perf-jsonb-scale.ts`, 16 130 Contacts) measured `limit 20 offset 5000` at ~9 ms p50 / ~12 ms p95 — linear cost, no defect; keyset pagination already exists where a stable walk matters (`GET /api/v1/Sales/inventory/history?cursor`, 22.27).
 - **Remaining risk:** a long paging session over a changing dataset can show a duplicate or miss a row; consumers must treat the list as a view, not an export snapshot.
 
 ## G72 — An AI approval did not pin the target record's version
@@ -931,7 +937,7 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
 | G92 | The DB-free CI lane contains no API authorization assertion; SSRF/security-event suites were outside the include list | platform (CI) | Medium | Partial (23.8: SSRF/security events added; authorization still sandbox-only) |
 | G93 | The Phase 22.17 §7/§9 exception list drifted from this register after the 2026-11-03 fixes | platform (docs) | Low | **Fixed (23.0)** |
 | G94 | `POST /api/v1/Refresh` is public and cookie-driven with no CSRF check | auth | Medium | Fixed (23.1) |
-| G95 | The AI-agent trigger door reads only the **first 20** published agents, ordered by a random UUID, so a matching agent can be invisible | ai-agents | Medium | Open (found 23.3) |
+| G95 | The AI-agent trigger door reads only the **first 20** published agents, ordered by a random UUID, so a matching agent can be invisible | ai-agents | Medium | Fixed (24.11, 2026-11-17) |
 | G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
 | G97 | Dependency-vulnerability audit is manual; it is not in the mandatory CI gate | platform / supply chain | Low | Accepted (23.6; release checklist) |
 | G98 | The three sample extension packages in `modules/` are unsigned, so production `enforce` refuses them | extensions / supply chain | Low | Accepted (23.6; development fixtures) |
@@ -1151,12 +1157,14 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
   from earlier runs, and the suite's own agent fell outside the window. The leftovers were removed by
   their exact `AGENT_TEST` marker (the suite's own `afterAll` had not run for the interrupted run), and
   the suite passes (15/15) with a clean database. The underlying defect is the window, not the leftovers.
-- **Status:** Open (found 23.3) — out of scope for 23.3, which is external identity and OAuth
-  correctness; the fix belongs with the AI-agent trigger work (filter by the event type and the entity
-  in SQL instead of paging an arbitrary window, and keep the fan-out cap on the *matched* set). The
-  finding is recorded here rather than fixed opportunistically.
-- **Remaining risk:** until it is fixed, an installation with more than 20 published agents has agents
-  whose triggers silently never fire.
+- **Status:** Fixed (24.11, 2026-11-17) — both doors now call `publishedTriggerAgents()`, one join of
+  `ai_agents` to `ai_agent_versions` on `version = current_version` over **all** published,
+  non-deleted agents, ordered by id. The arbitrary window is gone and the per-event fan-out cap
+  (`candidates.slice(0, 5)`) still bounds how many runs one event can start. Regression:
+  `apps/api/test/ai-agent-triggers.test.ts` seeds 25 published filler agents with ids sorting below
+  every real UUID and proves a matching agent still fires.
+- **Remaining risk:** none for correctness; the scan is one indexed join plus an in-memory config
+  parse per published agent, which is bounded by how many agents an admin publishes.
 
 ## G97 — Dependency-vulnerability auditing is manual, not part of the mandatory gate
 

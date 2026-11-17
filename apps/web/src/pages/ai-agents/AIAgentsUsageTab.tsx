@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { api } from '../../api/client.js';
 import type { AIAgentBudgetPolicyStatus, AIAgentPricingSnapshot, AIAgentUsageView } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
-
 /**
  * Phase 19-AI.10/19-AI.13 — usage, quotas and cost administration
  * (plans/PLAN_Phase_19_AI_Agents.md §12, §15, §20 `19-AI.13`).
@@ -101,7 +101,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
   }
   if (usage.isLoading) return <Skeleton active paragraph={{ rows: 6 }} />;
   if (usage.isError || usage.data === undefined) {
-    return <Alert type="error" showIcon message={t('web.aiAgents.usageFailed')} description={usage.error instanceof Error ? usage.error.message : undefined} />;
+    return <Alert type="error" showIcon message={t('web.aiAgents.usageFailed') } description={errorMessage(usage.error) } />;
   }
 
   const view: AIAgentUsageView = usage.data;
@@ -404,7 +404,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           {savePricing.isError ? (
-            <Alert type="error" showIcon message={savePricing.error instanceof Error ? savePricing.error.message : String(savePricing.error)} />
+            <Alert type="error" showIcon message={errorMessage(savePricing.error, String(savePricing.error)) } />
           ) : null}
         </Form>
       </Modal>
@@ -461,7 +461,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
             <InputNumber min={1} max={100} style={{ width: '100%' }} />
           </Form.Item>
           {saveQuota.isError ? (
-            <Alert type="error" showIcon message={saveQuota.error instanceof Error ? saveQuota.error.message : String(saveQuota.error)} />
+            <Alert type="error" showIcon message={errorMessage(saveQuota.error, String(saveQuota.error)) } />
           ) : null}
         </Form>
       </Modal>

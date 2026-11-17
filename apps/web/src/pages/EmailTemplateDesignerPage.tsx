@@ -31,10 +31,10 @@ import type { EmailTemplatePreviewView } from '../api/types.js';
 import type { EmailVisualEditorHandle } from '../components/email/EmailVisualEditor.js';
 import { FieldEditor } from '../components/fields.js';
 import { HelpTip } from '../components/HelpTip.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { editEntries, fieldLabel, recordLabel, useEntity, useMetadata } from '../state/metadata.js';
 import { COLOR } from '../theme/tokens.js';
-
 /**
  * GrapesJS is a heavy dependency only the visual mode of this screen needs, so it loads on
  * demand: the source modes and the rest of the app never pay for it.
@@ -136,7 +136,7 @@ export function EmailTemplateDesignerPage() {
       .catch((error: unknown) => {
         if (cancelled) return;
         setLoadFailed(true);
-        void message.error(error instanceof Error ? error.message : t('web.edit.notFound'));
+        void message.error(errorMessage(error, t('web.edit.notFound')));
       });
     return () => {
       cancelled = true;
@@ -216,7 +216,7 @@ export function EmailTemplateDesignerPage() {
         .catch((error: unknown) => {
           if (!active) return;
           setPreview(null);
-          setPreviewError(error instanceof Error ? error.message : t('web.emailTemplate.previewFailed'));
+          setPreviewError(errorMessage(error, t('web.emailTemplate.previewFailed')));
         })
         .finally(() => {
           if (active) setPreviewing(false);
@@ -439,7 +439,7 @@ export function EmailTemplateDesignerPage() {
                 navigate(`/EmailTemplate/${id}`);
               }
             } catch (error: unknown) {
-              void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
+              void message.error(errorMessage(error, t('web.edit.saveFailed')));
             } finally {
               setSaving(false);
             }

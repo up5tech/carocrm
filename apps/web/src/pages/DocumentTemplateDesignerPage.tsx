@@ -44,6 +44,7 @@ import {
   DOCUMENT_TARGET_ENTITIES,
   DOCUMENT_TOKEN_GROUPS,
 } from '../document/template-catalog.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, useEntity, useMetadata } from '../state/metadata.js';
 import { COLOR } from '../theme/tokens.js';
@@ -121,7 +122,7 @@ export function DocumentTemplateDesignerPage() {
       .catch((error: unknown) => {
         if (cancelled) return;
         setLoadFailed(true);
-        void message.error(error instanceof Error ? error.message : t('web.detail.notFound'));
+        void message.error(errorMessage(error, t('web.detail.notFound')));
       });
     return () => {
       cancelled = true;
@@ -177,7 +178,7 @@ export function DocumentTemplateDesignerPage() {
         .catch((error: unknown) => {
           if (!active) return;
           setPreview(null);
-          setPreviewError(error instanceof Error ? error.message : t('web.documentTemplate.previewFailed'));
+          setPreviewError(errorMessage(error, t('web.documentTemplate.previewFailed')));
         })
         .finally(() => {
           if (active) setPreviewing(false);
@@ -380,7 +381,7 @@ export function DocumentTemplateDesignerPage() {
                 navigate(`/DocumentTemplate/${id}`);
               }
             } catch (error: unknown) {
-              void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
+              void message.error(errorMessage(error, t('web.edit.saveFailed')));
             } finally {
               setSaving(false);
             }

@@ -17,13 +17,13 @@ import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { ESignatureConnectionsPanel } from './esignature/ESignatureConnectionsPanel.js';
 import { ESignatureOperationsPanel } from './esignature/ESignatureOperationsPanel.js';
 import { ESignatureReportsPanel } from './esignature/ESignatureReportsPanel.js';
 import { ESignatureRequestsPanel } from './esignature/ESignatureRequestsPanel.js';
 import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.js';
-
 /**
  * Phase 19-ES.1 — the ESignature module page
  * (`plans/PLAN_Phase_19_ESignature.md` §13.1, §18 `19-ES.1`).
@@ -81,7 +81,7 @@ export function ESignaturePage() {
     return (
       <ErrorState
         message={`${t('esignature.page.loadFailed')} ${
-          health.error instanceof Error ? health.error.message : t('esignature.page.loadFailedHint')
+          errorMessage(health.error, t('esignature.page.loadFailedHint'))
         }`}
         onRetry={() => void health.refetch()}
       />

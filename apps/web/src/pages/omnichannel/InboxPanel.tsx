@@ -10,11 +10,11 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../../components/PermissionDenied.js';
+import { errorMessage } from '../../lib/errors.js';
 import { formatClock, formatDateTime,t } from '../../state/i18n.js';
 import { useSession } from '../../state/session.js';
 import { inboxQuery, STATUS_OPTIONS, STATUS_VIEWS,type StatusView } from './filters.js';
 import { errorText as inboxErrorText } from './refusals.js';
-
 /**
  * Phase 19-OM.10 — the agent inbox workspace (plan §9.1–§9.2, §14 `19-OM.10`).
  *
@@ -185,7 +185,7 @@ export function InboxPanel() {
       }
       throw new Error(t('omnichannel.inbox.aiTimeout'));
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('omnichannel.inbox.aiFailed'));
+      setActionError(errorMessage(error, t('omnichannel.inbox.aiFailed')));
     } finally {
       setAiPending(false);
     }

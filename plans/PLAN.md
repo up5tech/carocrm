@@ -2912,10 +2912,12 @@ demonstrated security regression; and the final review records an honest go/no-g
 Status: **In progress** (started 2026-11-14). 24.0 baseline audit, 24.1 single-tenant charter,
 24.2 NO-GO blocker records and 24.3 production install/upgrade artifacts are delivered; 24.5
 (release truthfulness) is delivered; 24.6 (real inbound mail), **24.7 (installation-wide email and
-calendar sync)** and **24.8 (outbound events and developer surface)** are delivered; 24.4 is in flight —
-the `api-spec/` registry is complete at `--strict` (920/920 routes, gate-enabled 2026-11-16) and the
-schema-backed typed client remains; 24.9–24.12
-have not started. The release decision remains
+calendar sync)** and **24.8 (outbound events and developer surface)** are delivered; **24.10
+(UX completion)** and **24.11 (quality debt and single-tenant scale)** are delivered (2026-11-17);
+24.9 (provider sandbox certification) is in progress — inventory done, live certification
+owner-gated; 24.4 is in flight —
+the `api-spec/` registry is complete at `--strict` (927/927 routes) and the
+schema-backed typed client remains; 24.12 (release review) has not started. The release decision remains
 **NO-GO for production** — see
 `docs/releases/2026-11-15-phase-24.md`. Scope, priority definitions, owner decisions and
 acceptance criteria
@@ -2942,7 +2944,7 @@ recovered from documented artifacts; and the final review records an honest go/n
 # 58. API Endpoint Inventory Plan
 
 Status (2026-11-16): **registry complete, strict gate enabled** — `api-spec/` now holds 29 files
-documenting all **920 `/api` routes** (authentication/metadata/users/entities/email/admin/jobs/
+documenting all **927 `/api` routes** (authentication/metadata/users/entities/email/admin/jobs/
 attachments/documents/stream/search/reports/workflows/processes/extensions/portal/service-desk/
 projects/lead-score/omnichannel/crm-chat/esignature/sales/marketing-automation/ai-agents/
 advanced-integrations/voice-communications/customer-success/platform). `pnpm ci:api-spec` runs

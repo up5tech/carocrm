@@ -31,6 +31,10 @@
  *    phase, multi-tenancy support or multi-tenant isolation tests fails the gate. Only the boundary
  *    documents that must quote those phrases in order to prohibit or reconcile them are allowlisted;
  *    a NEW document is checked regardless of whether it is already tracked by git.
+ * 9. **No `error instanceof Error ? error.message : …` ternary.** G64: ~190 call sites rendered the
+ *    raw `Error.message`, which leaks transport text and ignores the `ApiError` envelope (`code`,
+ *    `details.issues`). `lib/errors.ts` `errorMessage()` is the one code-aware formatter; the API
+ *    client itself is exempt because it builds the envelope.
  *
  * Run: `node scripts/check-ui-conventions.mjs` (also wired to `pnpm lint:ui` and `pnpm lint`).
  */
@@ -83,6 +87,10 @@ const HOST_DATE_RE = /new Date\((?:[^()]|\([^)]*\))*\)\.toLocale(?:String|DateSt
 // same in both themes by design. A `color`/`background` literal is not — it is a colour that stops
 // following the theme, which is how a placeholder dash became invisible in dark mode.
 const ALPHA_INLINED_RE = /(?:color|background(?:-color)?)\s*:\s*['"]\s*rgba?\(\s*(?:0,\s*0,\s*0|255,\s*255,\s*255)/;
+// `x instanceof Error ? x.message : fallback` — the raw-message leak G64 closed. The check fires on
+// the `? ….message :` half so a guard that returns the error object itself (`? err : new Error()`)
+// or a module's own code-aware formatter (`? errorText(err) : …`) does not trip it.
+const RAW_ERROR_RE = /\binstanceof\s+Error\s*\?\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\.message\s*:/;
 
 /**
  * The token rule (§20.21): every token the styles and the components read must be declared, and every
@@ -142,6 +150,18 @@ function selfTest() {
       `<span style={{ color: 'rgba(0,0,0,0.25)' }}>—</span>`,
       `<span style={{ color: 'var(--carocrm-c-8c8c8c)' }}>—</span>`,
       (line) => ALPHA_INLINED_RE.test(line),
+    ],
+    [
+      'raw error.message ternary',
+      "const m = error instanceof Error ? error.message : t('x.failed');",
+      "const m = errorMessage(error, t('x.failed'));",
+      (line) => RAW_ERROR_RE.test(line),
+    ],
+    [
+      'member-expr error.message ternary',
+      "const m = submit.error instanceof Error ? submit.error.message : undefined;",
+      'const e = parseError instanceof Error ? parseError : new Error();',
+      (line) => RAW_ERROR_RE.test(line),
     ],
   ];
   for (const [name, bad, good, check] of cases) {
@@ -207,6 +227,15 @@ for (const file of walk(srcDir)) {
       violations.push(`${at}  raw <Empty> — use EmptyState`);
     }
     if (RAW_ANCHOR_RE.test(line)) violations.push(`${at}  raw <a href="/…"> — use Link`);
+    if (
+      RAW_ERROR_RE.test(line) &&
+      !rel.endsWith('lib/errors.ts') &&
+      !rel.endsWith('api/client.ts') &&
+      !rel.endsWith('.test.ts') &&
+      !rel.endsWith('.test.tsx')
+    ) {
+      violations.push(`${at}  raw error.message ternary — use errorMessage() from lib/errors.ts (G64)`);
+    }
     if (hexScoped && HEX_RE.test(line)) violations.push(`${at}  hex colour literal — use a --carocrm-* token (tokens.css)`);
     // A literal fallback behind `var()` means the property may not exist — and when it does not, the
     // literal wins and the colour never follows the theme. That is how a light chat bubble survived

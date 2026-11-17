@@ -4,6 +4,7 @@ import { Button, Input, Modal, Space, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 
 export interface CRMChatFeedbackButtonsProps {
@@ -89,7 +90,7 @@ export function CRMChatFeedbackButtons(props: CRMChatFeedbackButtonsProps) {
         ) : null}
         {submit.isError ? (
           <Typography.Text type="danger" style={{ fontSize: 11 }}>
-            {submit.error instanceof Error ? submit.error.message : t('web.crmChat.feedback.failed')}
+            {errorMessage(submit.error, t('web.crmChat.feedback.failed')) }
           </Typography.Text>
         ) : null}
       </Space>

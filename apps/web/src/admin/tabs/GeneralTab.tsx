@@ -3,6 +3,7 @@ import { Alert, App as AntApp, Button, Card, Form, Input, Select, Space, Typogra
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 import { accentTone, NAV_ACCENT_NAMES } from '../../theme.js';
 import { useDocumentForm } from '../document-form.js';
@@ -48,7 +49,7 @@ export function GeneralTab() {
       document.edit({ logoAttachmentId: stored.id });
       void message.success(t('web.adminSettings.logoUploaded'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.adminSettings.logoUploadFailed'));
+      void message.error(errorMessage(error, t('web.adminSettings.logoUploadFailed')));
     } finally {
       setUploading(false);
     }

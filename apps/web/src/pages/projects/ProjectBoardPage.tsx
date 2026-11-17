@@ -8,15 +8,19 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
-import type { ProjectMemberRow, ProjectStageRow, ProjectTaskRow } from '../../api/types.js';
+import type { ProjectBoardView, ProjectMemberRow, ProjectStageRow, ProjectTaskRow } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 import {
+  boardWithTaskMove,
   formatDay,
   projectQueryKey,
- ProjectShell,  useErrorReporter,
+  ProjectShell,
+  useErrorReporter,
+  useOptimisticProjectMutation,
   useProjectCapabilities,
   useProjectPlan,
-  useProjectRefresh } from './projectShared.js';
+  useProjectRefresh,
+} from './projectShared.js';
 import { ProjectTaskModal } from './ProjectTaskModal.js';
 
 /**
@@ -24,8 +28,8 @@ import { ProjectTaskModal } from './ProjectTaskModal.js';
  * group at a time.
  *
  * A column drop is a stage change, which the server turns into the mapped status and guards with the
- * dependency, subtask and role rules. Dropping is therefore never the authority to move — the column
- * simply shows where the server agreed to put the card.
+ * dependency, subtask and role rules. The card moves optimistically and a refused drop restores the
+ * snapshot, so the column only keeps a position the server agreed to.
  *
  * The card being dragged is rendered through `DragOverlay`, not inside its own column. Without the
  * overlay the card stays a child of its source column, so the following columns — each with an
@@ -84,7 +88,22 @@ export function ProjectBoardPage() {
   const taskById = (taskId: string): ProjectTaskRow | undefined =>
     columns.flatMap((column) => column.tasks).find((task) => task.id === taskId);
 
-  const onDragEnd = async (event: DragEndEvent): Promise<void> => {
+  const moveTask = useOptimisticProjectMutation<
+    { taskId: string; stageId: string; order: string[]; after?: string; before?: string },
+    ProjectBoardView
+  >(
+    [...projectQueryKey(id), 'board', activeGroup],
+    (vars) =>
+      api.moveProjectTask(vars.taskId, {
+        stageId: vars.stageId,
+        ...(vars.after !== undefined ? { afterTaskId: vars.after } : {}),
+        ...(vars.before !== undefined ? { beforeTaskId: vars.before } : {}),
+      }),
+    (data, vars) => boardWithTaskMove(data, vars.taskId, vars.stageId, vars.order),
+    { onError: report, onSettled: refresh },
+  );
+
+  const onDragEnd = (event: DragEndEvent): void => {
     const activeId = String(event.active.id);
     const overId = event.over === undefined || event.over === null ? '' : String(event.over.id);
     if (overId === '') return;
@@ -100,17 +119,13 @@ export function ProjectBoardPage() {
     const after = position > 0 ? String(desired[position - 1]) : undefined;
     const before = position < desired.length - 1 ? String(desired[position + 1]) : undefined;
 
-    try {
-      await api.moveProjectTask(activeId, {
-        stageId: String(target.stage['id']),
-        ...(after !== undefined ? { afterTaskId: after } : {}),
-        ...(before !== undefined ? { beforeTaskId: before } : {}),
-      });
-    } catch (error) {
-      report(error);
-    }
-    refresh();
-    void board.refetch();
+    moveTask.mutate({
+      taskId: activeId,
+      stageId: String(target.stage['id']),
+      order: desired,
+      ...(after !== undefined ? { after: after } : {}),
+      ...(before !== undefined ? { before: before } : {}),
+    });
   };
 
   return (

@@ -500,7 +500,8 @@
     "recordAnswer": "Ghi nhận câu trả lời",
     "chooseAnswer": "Chọn câu trả lời, sau đó thêm bình luận nếu bước kế tiếp cần:",
     "commentPlaceholder": "Vì sao? (được lưu trên nhiệm vụ để phục vụ dấu vết kiểm toán)",
-    "signIn": "Đăng nhập để xem nhiệm vụ của bạn."
+    "signIn": "Đăng nhập để xem nhiệm vụ của bạn.",
+    "answerFailed": "Không thể ghi nhận câu trả lời — nhiệm vụ giữ nguyên."
   },
   "recordProcess": {
     "title": "Phê duyệt",

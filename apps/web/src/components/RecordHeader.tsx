@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, RowActions } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
 import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
@@ -90,7 +91,7 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
       await onChanged();
       setEditing(false);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.detail.nameSaveFailed'));
+      void message.error(errorMessage(error, t('web.detail.nameSaveFailed')));
     } finally {
       setSavingName(false);
     }
@@ -107,7 +108,7 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
           void message.success(t('web.detail.deleted'));
           navigate(`${base}/${entity}`);
         } catch (error) {
-          void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
+          void message.error(errorMessage(error, t('web.detail.deleteFailed')));
         }
       },
     });
@@ -118,7 +119,7 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
       await api.follow(entity, id);
       void message.success(t('web.list.followed'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.followFailed'));
+      void message.error(errorMessage(error, t('web.list.followFailed')));
     }
   };
 

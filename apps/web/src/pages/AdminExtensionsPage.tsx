@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ExtensionRow } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
-
 /**
  * Extension administration (PLAN §38.3, §19.1).
  *
@@ -27,7 +27,7 @@ export function AdminExtensionsPage() {
       const result = await api.extensions();
       setRows(result.list);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.adminExtensions.loadFailed'));
+      void message.error(errorMessage(error, t('web.adminExtensions.loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export function AdminExtensionsPage() {
       }
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.adminExtensions.actionFailed'));
+      void message.error(errorMessage(error, t('web.adminExtensions.actionFailed')));
     }
   };
 

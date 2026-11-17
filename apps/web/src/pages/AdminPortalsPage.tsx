@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import type { PortalDashboardRow, PortalNavItemRow, PortalRoleRow, PortalRow } from '../api/types.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 /** Portal administration (PLAN 37, Phase 18). Admin-only; record visibility is server-enforced. */
@@ -23,7 +24,7 @@ export function AdminPortalsPage() {
       const rows = await api.portals();
       setPortals(rows);
       setActiveId((prev) => (rows.some((r) => r.id === prev) ? prev : (rows[0]?.id ?? null)));
-    } catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.loadFailed')); }
+    } catch (e) { void message.error(errorMessage(e, t('web.adminPortals.loadFailed'))); }
     finally { setLoading(false); }
   }, [message]);
   useEffect(() => { void load(); }, [load]);
@@ -54,11 +55,11 @@ export function AdminPortalsPage() {
             { title: t('web.adminPortals.active'), dataIndex: 'isActive', width: 90, render: (v: boolean, row) => (
               <Switch size="small" checked={v} aria-label={t('web.adminPortals.toggleAria', { name: row.name })} onClick={(_, e) => e.stopPropagation()}
                 onChange={async (c) => { try { await api.updatePortal(row.id, { isActive: c }); await load(); }
-                  catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.updateFailed')); } }} /> ) },
+                  catch (e) { void message.error(errorMessage(e, t('web.adminPortals.updateFailed'))); } }} /> ) },
             { title: '', width: 110, render: (_: unknown, row: PortalRow) => (
               <Popconfirm title={t('web.adminPortals.deleteConfirm', { name: row.name })} description={t('web.adminPortals.deleteHint')}
                 onConfirm={() => void (async () => { try { await api.deletePortal(row.id); await load(); }
-                  catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.deleteFailed')); } })()} okText={t('web.common.delete')}>
+                  catch (e) { void message.error(errorMessage(e, t('web.adminPortals.deleteFailed'))); } })() } okText={t('web.common.delete') }>
                 <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>{t('web.common.delete')}</Button>
               </Popconfirm> ) },
           ]} />
@@ -76,7 +77,7 @@ export function AdminPortalsPage() {
         onOk={() => void (async () => { const v = await form.validateFields();
           try { const c = await api.createPortal({ name: v.name, ...(v.urlPath ? { urlPath: v.urlPath } : {}) });
             void message.success(t('web.adminPortals.created', { name: c.name })); setOpen(false); form.resetFields(); await load(); setActiveId(c.id); }
-          catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.createFailed')); } })()}>
+          catch (e) { void message.error(errorMessage(e, t('web.adminPortals.createFailed'))); } })() }>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true }]}><Input placeholder={t('web.adminPortals.namePlaceholder')} /></Form.Item>
           <Form.Item name="urlPath" label={t('web.adminPortals.urlPath')} rules={[{ pattern: /^\/[A-Za-z0-9/_-]*$/, message: t('web.adminPortals.urlPathInvalid') }]}>
@@ -91,7 +92,7 @@ function RolesTab({ portal }: { portal: PortalRow }) {
   const [roles, setRoles] = useState<PortalRoleRow[]>([]);
   const [selected, setSelected] = useState<string[]>(portal.portalRoleIds);
   const load = useCallback(async () => { try { setRoles(await api.portalRoles()); }
-    catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.rolesLoadFailed')); } }, [message]);
+    catch (e) { void message.error(errorMessage(e, t('web.adminPortals.rolesLoadFailed'))); } }, [message]);
   useEffect(() => { setSelected(portal.portalRoleIds); }, [portal.id, portal.portalRoleIds]);
   useEffect(() => { void load(); }, [load]);
   return (
@@ -104,7 +105,7 @@ function RolesTab({ portal }: { portal: PortalRow }) {
               onChange={async (c) => { const next = c ? [...selected, row.id] : selected.filter((id) => id !== row.id);
                 setSelected(next);
                 try { await api.setPortalRoles(portal.id, next); void message.success(t('web.adminPortals.rolesUpdated')); }
-                catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.updateFailed')); } }} /> ) }]} />
+                catch (e) { void message.error(errorMessage(e, t('web.adminPortals.updateFailed'))); } }} /> ) }]} />
     </Space>
   );
 }
@@ -112,7 +113,7 @@ function NavTab({ portal }: { portal: PortalRow }) {
   const { message } = AntApp.useApp();
   const [items, setItems] = useState<PortalNavItemRow[]>([]);
   const load = useCallback(async () => { try { setItems(await api.portalNavItems(portal.id)); }
-    catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.navLoadFailed')); } }, [message, portal.id]);
+    catch (e) { void message.error(errorMessage(e, t('web.adminPortals.navLoadFailed'))); } }, [message, portal.id]);
   useEffect(() => { void load(); }, [load]);
   return (
     <Table<PortalNavItemRow> rowKey="id" size="small" dataSource={items} pagination={false}
@@ -126,7 +127,7 @@ function DashboardsTab({ portal }: { portal: PortalRow }) {
   const { message } = AntApp.useApp();
   const [rows, setRows] = useState<PortalDashboardRow[]>([]);
   const load = useCallback(async () => { try { setRows(await api.portalDashboards(portal.id)); }
-    catch (e) { void message.error(e instanceof Error ? e.message : t('web.adminPortals.dashboardsLoadFailed')); } }, [message, portal.id]);
+    catch (e) { void message.error(errorMessage(e, t('web.adminPortals.dashboardsLoadFailed'))); } }, [message, portal.id]);
   useEffect(() => { void load(); }, [load]);
   return (
     <Table<PortalDashboardRow> rowKey="id" size="small" dataSource={rows} pagination={false}

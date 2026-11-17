@@ -1,12 +1,14 @@
 import { ReloadOutlined } from '@ant-design/icons';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { App as AntApp, Avatar, Button, Card, Segmented, Space, Spin, Typography } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type StreamItem } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { updateSummary } from '../components/StreamPanel.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime,t } from '../state/i18n.js';
 import { useEntity, useMetadata } from '../state/metadata.js';
 
@@ -27,33 +29,23 @@ export function StreamPage() {
   const { message } = AntApp.useApp();
   const metadata = useMetadata();
   const [view, setView] = useState<View>('followed');
-  const [items, setItems] = useState<StreamItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const [exhausted, setExhausted] = useState(false);
 
-  const load = useCallback(
-    async (nextOffset: number, replace: boolean) => {
-      setLoading(true);
-      try {
-        const result = await api.activityStream({ view, maxSize: PAGE, offset: nextOffset });
-        setItems((current) => (replace ? result.list : [...current, ...result.list]));
-        setOffset(nextOffset + result.list.length);
-        setExhausted(result.list.length < PAGE);
-      } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.stream.loadFailed'));
-        if (replace) setItems([]);
-        setExhausted(true);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [view, message],
-  );
+  // 24.10.3: "load more" is cursor-free offset paging, which is exactly useInfiniteQuery — each
+  // page is one request and the pages accumulate in the cache instead of a hand-rolled items array.
+  const stream = useInfiniteQuery({
+    queryKey: ['stream', view],
+    queryFn: ({ pageParam }) => api.activityStream({ view, maxSize: PAGE, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.list.length < PAGE ? undefined : pages.reduce((total, page) => total + page.list.length, 0),
+  });
+  const items = stream.data?.pages.flatMap((page) => page.list) ?? [];
+  const loading = stream.isFetching;
+  const exhausted = stream.hasNextPage !== true;
 
   useEffect(() => {
-    void load(0, true);
-  }, [load]);
+    if (stream.isError) void message.error(errorMessage(stream.error, t('web.stream.loadFailed')));
+  }, [stream.isError, stream.error, message]);
 
   return (
     <Card
@@ -72,7 +64,7 @@ export function StreamPage() {
               { value: 'all', label: t('web.stream.all') },
             ]}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load(0, true)}>
+          <Button icon={<ReloadOutlined />} onClick={() => void stream.refetch()}>
             {t('core.common.refresh')}
           </Button>
         </Space>
@@ -91,7 +83,7 @@ export function StreamPage() {
       )}
       {items.length > 0 ? (
         <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <Button disabled={exhausted} loading={loading} onClick={() => void load(offset, false)}>
+          <Button disabled={exhausted} loading={stream.isFetchingNextPage} onClick={() => void stream.fetchNextPage()}>
             {t('web.stream.loadMore')}
           </Button>
         </div>

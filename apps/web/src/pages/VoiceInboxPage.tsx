@@ -25,8 +25,8 @@ import type {
 } from '../api/types.js';
 import { usePageTitle } from '../components/PageHeader.js';
 import { VoiceCallDetail } from '../components/VoiceCallDetail.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
-
 /**
  * Phase 19-VC.12–19-VC.14 — the agent workspace
  * (`plans/PLAN_Phase_19_Voice_Communications.md` §9–§10, §15 `19-VC.12` … `19-VC.14`).
@@ -191,7 +191,7 @@ function SnippetPicker({
               onInsert(rendered.body);
               setPending(undefined);
             } catch (error) {
-              void message.error(error instanceof Error ? error.message : t('voice.inbox.renderFailed'));
+              void message.error(errorMessage(error, t('voice.inbox.renderFailed')));
             }
           })();
         }}
@@ -257,7 +257,7 @@ function Composer({ conversation, onSent }: { conversation: VoiceConversationVie
       }
       onSent();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.sendFailedGeneric'));
+      void message.error(errorMessage(error, t('voice.inbox.sendFailedGeneric')));
     } finally {
       setSending(false);
     }
@@ -538,7 +538,7 @@ function ConversationPane({ conversation, onChanged }: { conversation: VoiceConv
       return api.voiceMarkConversationRead(conversation.id);
     },
     onSuccess: () => refresh(),
-    onError: (error) => void message.error(error instanceof Error ? error.message : t('voice.inbox.actionFailed')),
+    onError: (error) => void message.error(errorMessage(error, t('voice.inbox.actionFailed'))),
   });
 
   const userOptions = (users.data?.list ?? []).map((user) => ({ value: user.id, label: user.name || user.userName }));
@@ -653,7 +653,7 @@ function ConversationPane({ conversation, onChanged }: { conversation: VoiceConv
               setHandoffOpen(false);
               refresh();
             } catch (error) {
-              void message.error(error instanceof Error ? error.message : t('voice.inbox.handoffFailed'));
+              void message.error(errorMessage(error, t('voice.inbox.handoffFailed')));
             }
           });
         }}
@@ -760,7 +760,7 @@ export function VoiceInboxPage() {
       );
       await queryClient.invalidateQueries({ queryKey: ['voice', 'calls'] });
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.callFailedGeneric'));
+      void message.error(errorMessage(error, t('voice.inbox.callFailedGeneric')));
     } finally {
       setPlacing(false);
     }

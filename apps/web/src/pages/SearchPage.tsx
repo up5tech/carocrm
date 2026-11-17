@@ -1,15 +1,16 @@
 import { SearchOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { App as AntApp, Button, Card, Input, List, Select, Space, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { api, type GlobalSearchResult } from '../api/client.js';
+import { api } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { navEntities, recordLabel, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
-
 /** Global search (PLAN §30): one query across readable entities, ACL enforced server-side. */
 export function SearchPage() {
   usePageDocs('user/search');
@@ -19,41 +20,47 @@ export function SearchPage() {
   const [params] = useSearchParams();
   const [query, setQuery] = useState(() => params.get('q') ?? '');
   const [entities, setEntities] = useState<string[]>([]);
-  const [result, setResult] = useState<GlobalSearchResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 24.10.3: the executed search is query state, not a fetch effect — the URL preset and the submit
+  // button both write it, and React Query owns loading/error/data for that exact {q, entities} pair.
+  const [submitted, setSubmitted] = useState<{ q: string; entities: string[] } | null>(null);
 
   const options = navEntities(metadata.data, principal?.type).map((entity) => ({ value: entity.name, label: entity.label }));
 
   const preset = params.get('q') ?? '';
 
+  const search = useQuery({
+    queryKey: ['globalSearch', submitted?.q ?? '', submitted?.entities ?? []],
+    queryFn: () =>
+      api.globalSearch({
+        q: submitted?.q ?? '',
+        ...(submitted !== null && submitted.entities.length > 0 ? { entities: submitted.entities.join(',') } : {}),
+        limit: 10,
+      }),
+    enabled: submitted !== null,
+  });
+  const loading = search.isFetching;
+  const result = search.data ?? null;
+
+  useEffect(() => {
+    if (search.isError) void message.error(errorMessage(search.error, t('web.search.failed')));
+  }, [search.isError, search.error, message]);
+
   useEffect(() => {
     // Follows the URL query: the header search box navigates here with ?q=, and a second Enter only
     // changes the query, so this re-runs instead of firing once at mount. Deps are intentionally
-    // [preset] — runWith/entities are recreated on every render.
+    // [preset] — `entities` is read from this render's closure, matching the old runWith capture.
     if (preset.trim() === '') return;
     setQuery(preset);
-    void runWith(preset, entities);
+    setSubmitted({ q: preset.trim(), entities });
   }, [preset]);
 
-  const runWith = async (raw: string, scoped: string[]) => {
-    const q = raw.trim();
+  const run = () => {
+    const q = query.trim();
     if (q === '') {
       void message.warning(t('web.search.queryRequired'));
       return;
     }
-    setLoading(true);
-    try {
-      const data = await api.globalSearch({ q, ...(scoped.length > 0 ? { entities: scoped.join(',') } : {}), limit: 10 });
-      setResult(data);
-    } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.search.failed'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const run = async () => {
-    await runWith(query, entities);
+    setSubmitted({ q, entities });
   };
 
   const grouped = new Map<string, { entityType: string; record: Record<string, unknown> }[]>();

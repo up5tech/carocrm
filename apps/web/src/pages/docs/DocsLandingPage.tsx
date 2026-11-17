@@ -7,10 +7,10 @@ import type { DocPageMeta } from '../../api/types.js';
 import { DocSearchInput } from '../../components/docs/DocSearchInput.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { useDocsTree } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
 import { DocsLayout } from './DocsLayout.js';
-
 /**
  * The four doors carry a mark, not a colour per section: the icon is what makes the landing page
  * scannable at a glance, and it is decoration only — the title still names the section.
@@ -47,7 +47,7 @@ export function DocsLandingPage() {
   if (tree.isError || tree.data === undefined) {
     return (
       <DocsLayout>
-        <ErrorState message={tree.error instanceof Error ? tree.error.message : t('web.docs.loadFailed')} onRetry={() => void tree.refetch()} />
+        <ErrorState message={errorMessage(tree.error, t('web.docs.loadFailed')) } onRetry={() => void tree.refetch() } />
       </DocsLayout>
     );
   }

@@ -22,6 +22,7 @@ import type {
   MarketingCampaignCapabilities,
   MarketingCampaignTransitionRow,
 } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { linkLabelsOf,LinkValue } from './fields.js';
 
@@ -62,7 +63,7 @@ function errorText(error: unknown): string {
     if (typeof reason === 'string' && reason.trim() !== '') return reason;
     return error.message;
   }
-  return String(error);
+  return errorMessage(error, String(error));
 }
 
 export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLifecycleActionsProps) {

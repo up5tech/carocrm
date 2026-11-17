@@ -4,6 +4,7 @@ import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
 
 import { api } from '../../api/client.js';
 import type { CRMChatActionView } from '../../api/types.js';
+import { errorMessage } from '../../lib/errors.js';
 import { formatDateTime, t } from '../../state/i18n.js';
 
 const { Text } = Typography;
@@ -75,7 +76,7 @@ export function CRMChatActionCard(props: CRMChatActionCardProps) {
         type="warning"
         showIcon
         message={t('web.crmChat.action.unavailable')}
-        description={action.error instanceof Error ? action.error.message : undefined}
+        description={errorMessage(action.error) }
       />
     );
   }
@@ -87,7 +88,7 @@ export function CRMChatActionCard(props: CRMChatActionCardProps) {
     <CRMChatActionCardView
       view={view}
       deciding={decide.isPending ? decide.variables : null}
-      decideError={decide.isError ? (decide.error instanceof Error ? decide.error.message : t('web.crmChat.action.failed')) : null}
+      decideError={decide.isError ? (errorMessage(decide.error, t('web.crmChat.action.failed'))) : null}
       onDecide={(decision) => decide.mutate(decision)}
     />
   );

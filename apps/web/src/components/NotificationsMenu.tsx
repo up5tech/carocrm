@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type { NotificationItem } from '../api/client.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, formatRelative, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import {
@@ -99,7 +100,7 @@ export function NotificationsMenu() {
             markAll.mutate(undefined, {
               onSuccess: () => void message.success(t('web.notifications.markedAllRead')),
               onError: (error) =>
-                void message.error(error instanceof Error ? error.message : t('web.notifications.markAllFailed')),
+                void message.error(errorMessage(error, t('web.notifications.markAllFailed'))),
             });
           }}
         >
@@ -147,7 +148,7 @@ export function NotificationsMenu() {
                       markRead.mutate(item.id, {
                         onError: (error) =>
                           void message.error(
-                            error instanceof Error ? error.message : t('web.notifications.markReadFailed'),
+                            errorMessage(error, t('web.notifications.markReadFailed')),
                           ),
                       })
                     }

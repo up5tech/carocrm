@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { SalesDocumentView } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { salesDocumentDate } from '../sales/documents.js';
 import { t } from '../state/i18n.js';
 import { DocumentSendModal } from './DocumentSendModal.js';
@@ -81,7 +82,7 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
       setTotals(mapTotals(document.totals as Record<string, unknown> | undefined, currency));
     } catch (error) {
       // A 403 and a 404 both mean "this panel has nothing to show"; the reason is the useful part.
-      setLoadError(error instanceof Error ? error.message : String(error));
+      setLoadError(errorMessage(error, String(error)));
     } finally {
       setLoading(false);
     }
@@ -108,8 +109,8 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
       setDirty(false);
       await load();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
-      void message.error(error instanceof Error ? error.message : t('sales.document.saveFailed'));
+      setSaveError(errorMessage(error, String(error)));
+      void message.error(errorMessage(error, t('sales.document.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -122,7 +123,7 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
       await api.salesRecalculateDocument(kind, id);
       await load();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
+      setSaveError(errorMessage(error, String(error)));
     } finally {
       setSaving(false);
     }

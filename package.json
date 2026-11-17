@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "lint": "node scripts/check-ui-conventions.mjs && eslint . --max-warnings=0 --cache",
+    "lint": "node scripts/check-ui-conventions.mjs && node scripts/check-single-tenant.mjs && eslint . --max-warnings=0 --cache",
     "lint:fix": "eslint . --fix --cache",
     "lint:changed": "node scripts/lint-changed.mjs",
     "lint:ui": "node scripts/check-ui-conventions.mjs",

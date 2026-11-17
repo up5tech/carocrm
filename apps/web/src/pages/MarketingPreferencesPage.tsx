@@ -18,6 +18,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { MarketingPreferenceView } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 
 export function MarketingPreferencesPage() {
@@ -68,7 +69,7 @@ export function MarketingPreferencesPage() {
       await api.marketingUnsubscribe(token, { all });
       setDone(all ? 'all' : 'unsubscribed');
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.marketing.preferences.invalid'));
+      void message.error(errorMessage(error, t('web.marketing.preferences.invalid')));
     } finally {
       setBusy(false);
     }

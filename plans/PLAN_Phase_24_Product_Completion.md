@@ -5,9 +5,12 @@
 > 927/927 routes including extension-module controllers, gate-enabled) with a bounded schema-backed
 > typed client for the five session operations (2026-11-16); **24.8 delivered 2026-11-17** — the
 > generic outbound connector is the opt-in `webhook-integration` extension with a documented event
-> catalogue, signed deliveries, ledger and contract tests, and no GraphQL/CLI; G1/D3 sign-off, G90
-> and full client coverage remain open; 24.9–24.12 not
-> started. The Phase 24 release decision
+> catalogue, signed deliveries, ledger and contract tests, and no GraphQL/CLI; **24.10 and 24.11
+> delivered 2026-11-17** — optimistic writes with rollback on project surfaces, shared code-aware error
+> helper (G64 closed), React Query migration started, UX docs re-measured, G95 fixed, single-tenant
+> lint gate added, JSONB/EAV baselines measured, G71 re-confirmed; 24.9 in progress (inventory done,
+> live certification owner-gated); 24.12 not started. G1/D3 sign-off, G90 and full client coverage
+> remain open. The Phase 24 release decision
 > remains **NO-GO for production** (Phase 23 review; final Phase 24 go/no-go in 24.12 pending).
 > **Date:** 2026-11-13
 > **Workstream type:** Product completion, release closure, platform DX and UX — the P0/P1/P2 recommendations from the system review, sequenced after the security workstream. Not a new business module and not a rewrite of the Entity Engine.

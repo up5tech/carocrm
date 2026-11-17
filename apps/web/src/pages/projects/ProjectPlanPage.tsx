@@ -7,19 +7,25 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
-import type { ProjectMemberRow, ProjectStageRow, ProjectTaskRow } from '../../api/types.js';
+import type { ProjectMemberRow, ProjectPlanView, ProjectStageRow, ProjectTaskRow } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import {
   childrenOf,
   formatDay,
+  planWithTaskMove,
+  planWithTaskStatus,
   PROJECT_GROUP_TYPES,
   projectQueryKey,
- ProjectShell,  topLevelTasks,
+  ProjectShell,
+  topLevelTasks,
+  TRANSITION_STATUS,
   useErrorReporter,
+  useOptimisticProjectMutation,
   useProjectCapabilities,
   useProjectPlan,
-  useProjectRefresh } from './projectShared.js';
+  useProjectRefresh,
+} from './projectShared.js';
 import { ProjectTaskModal, statusTag } from './ProjectTaskModal.js';
 
 /**
@@ -69,7 +75,22 @@ export function ProjectPlanPage() {
   const taskById = (taskId: string): ProjectTaskRow | undefined =>
     groups.flatMap((entry) => entry.tasks).find((task) => task.id === taskId);
 
-  const onDragEnd = async (event: DragEndEvent): Promise<void> => {
+  const moveTask = useOptimisticProjectMutation<
+    { taskId: string; groupId: string; order: string[]; after?: string; before?: string },
+    ProjectPlanView
+  >(
+    [...projectQueryKey(id), 'plan'],
+    (vars) =>
+      api.moveProjectTask(vars.taskId, {
+        groupId: vars.groupId,
+        ...(vars.after !== undefined ? { afterTaskId: vars.after } : {}),
+        ...(vars.before !== undefined ? { beforeTaskId: vars.before } : {}),
+      }),
+    (data, vars) => planWithTaskMove(data, vars.taskId, vars.groupId, vars.order),
+    { onError: report, onSettled: refresh },
+  );
+
+  const onDragEnd = (event: DragEndEvent): void => {
     const activeId = String(event.active.id);
     const overId = event.over === undefined || event.over === null ? '' : String(event.over.id);
     if (overId === '') return;
@@ -85,21 +106,22 @@ export function ProjectPlanPage() {
     const siblings = topLevelTasks(target.tasks).filter((task) => task.id !== activeId);
     const overIndex = siblings.findIndex((task) => task.id === overId);
     const insertAt = overIndex >= 0 ? overIndex : siblings.length;
-    const desired = [...siblings.slice(0, insertAt), activeId, ...siblings.slice(insertAt)];
+    const desired = [
+      ...siblings.slice(0, insertAt).map((task) => task.id),
+      activeId,
+      ...siblings.slice(insertAt).map((task) => task.id),
+    ];
     const position = desired.indexOf(activeId);
     const after = position > 0 ? String(desired[position - 1]) : undefined;
     const before = position < desired.length - 1 ? String(desired[position + 1]) : undefined;
 
-    try {
-      await api.moveProjectTask(activeId, {
-        groupId: String(target.group['id']),
-        ...(after !== undefined ? { afterTaskId: after } : {}),
-        ...(before !== undefined ? { beforeTaskId: before } : {}),
-      });
-    } catch (error) {
-      report(error);
-    }
-    refresh();
+    moveTask.mutate({
+      taskId: activeId,
+      groupId: String(target.group['id']),
+      order: desired,
+      ...(after !== undefined ? { after: after } : {}),
+      ...(before !== undefined ? { before: before } : {}),
+    });
   };
 
   const moveGroup = async (groupId: string, direction: -1 | 1): Promise<void> => {
@@ -300,6 +322,7 @@ function GroupSection({ projectId, group, tasks, position, total, canManageGroup
           {roots.map((task) => (
             <TaskRow
               key={task.id}
+              projectId={projectId}
               task={task}
               subtasks={childrenOf(tasks, task.id)}
               canCreate={canCreate}
@@ -319,6 +342,7 @@ function GroupSection({ projectId, group, tasks, position, total, canManageGroup
 }
 
 interface TaskRowProps {
+  projectId: string;
   task: ProjectTaskRow;
   subtasks: ProjectTaskRow[];
   canCreate: boolean;
@@ -326,18 +350,18 @@ interface TaskRowProps {
   onChanged: () => void;
 }
 
-function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
+function TaskRow({ projectId, task, subtasks, onEdit, onChanged }: TaskRowProps) {
   const sortable = useSortable({ id: task.id, data: { groupId: task.groupId } });
   const report = useErrorReporter();
 
-  const transition = async (kind: 'start' | 'complete' | 'cancel'): Promise<void> => {
-    try {
-      await api.transitionProjectTask(task.id, kind);
-    } catch (error) {
-      report(error);
-    }
-    onChanged();
-  };
+  // 24.10.2: the status pill flips without the round trip; a refusal restores the snapshot and the
+  // settled invalidation re-reads the truth either way.
+  const transition = useOptimisticProjectMutation<'start' | 'complete' | 'cancel', ProjectPlanView>(
+    [...projectQueryKey(projectId), 'plan'],
+    (kind) => api.transitionProjectTask(task.id, kind),
+    (data, kind) => planWithTaskStatus(data, task.id, TRANSITION_STATUS[kind]),
+    { onError: report, onSettled: onChanged },
+  );
 
   return (
     <div
@@ -360,13 +384,13 @@ function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
           {formatDay(task.dateStart)}
           {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}
         </Typography.Text>
-        <Button size="small" type="text" onClick={() => void transition('start')} disabled={task.status === 'Started'}>
+        <Button size="small" type="text" onClick={() => transition.mutate('start')} disabled={task.status === 'Started' || transition.isPending}>
           {t('web.projects.actionStart')}
         </Button>
-        <Button size="small" type="text" onClick={() => void transition('complete')} disabled={task.status === 'Completed'}>
+        <Button size="small" type="text" onClick={() => transition.mutate('complete')} disabled={task.status === 'Completed' || transition.isPending}>
           {t('web.projects.actionComplete')}
         </Button>
-        <Button size="small" type="text" onClick={() => void transition('cancel')} disabled={task.status === 'Canceled'}>
+        <Button size="small" type="text" onClick={() => transition.mutate('cancel')} disabled={task.status === 'Canceled' || transition.isPending}>
           {t('web.projects.actionCancel')}
         </Button>
       </div>

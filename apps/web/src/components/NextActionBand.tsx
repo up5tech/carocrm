@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, RowActions } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { enumValues } from '../state/metadata.js';
-
 /** The pipeline field names the record types in this product use, most specific first. */
 const NEXT_FIELD_CANDIDATES = ['status', 'stage', 'state'];
 
@@ -68,7 +68,7 @@ export function NextActionBand({ entity, id, definition, record, onChanged }: Ne
       await onChanged();
       void message.success(t('web.detail.nextActionDone', { value: next }));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.detail.nextActionFailed'));
+      void message.error(errorMessage(error, t('web.detail.nextActionFailed')));
     } finally {
       setBusy(false);
     }

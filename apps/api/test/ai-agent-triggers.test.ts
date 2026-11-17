@@ -381,6 +381,79 @@ describe('the domain-event trigger door (19-AI.17)', () => {
     expect(res.body['started']).toBe(0);
     expect(await countRuns(EVENT_CREATE)).toBe(before);
   });
+
+  it('sees a matching agent published beyond the old first-20 scan window (G95)', async () => {
+    // Regression for G95: the door used to read only the first 20 published agents ordered by a
+    // random UUID, so a matching agent could be invisible. These fillers sort below every real id
+    // (they start with 0x00…), so under the old query the matcher could never be in the window;
+    // their stored config is intentionally unparseable, so they are skipped by the scan itself.
+    const db = ctx.database.db;
+    for (let index = 0; index < 25; index += 1) {
+      const id = `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`;
+      await db
+        .insertInto('ai_agents')
+        .values({
+          id,
+          agent_key: `agent-test-${runId}-filler-${index}`,
+          name: `${MARKER} filler ${index}`,
+          visibility: 'organization',
+          status: 'published',
+          draft_config: JSON.stringify({}),
+          current_version: 1,
+          owner_user_id: adminUserId,
+          data_sensitivity: 'internal',
+          is_deleted: false,
+          created_at: new Date(),
+          modified_at: new Date(),
+        })
+        .execute();
+      const now = new Date();
+      await db
+        .insertInto('ai_agent_versions')
+        .values({
+          id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
+          agent_id: id,
+          version: 1,
+          config: JSON.stringify({}),
+          checksum: 'g95-filler',
+          provider_key: null,
+          model: null,
+          fallback_models: JSON.stringify([]),
+          input_schema: null,
+          output_schema: null,
+          limits: JSON.stringify({}),
+          memory_policy: JSON.stringify({}),
+          trigger_policy: JSON.stringify({}),
+          approval_policy: JSON.stringify({}),
+          published_by_id: adminUserId,
+          published_at: now,
+          publication_note: null,
+          created_at: now,
+        })
+        .execute();
+    }
+
+    const agentId = await publishAgent(`agent-test-${runId}-g95`, `${MARKER} g95 agent`, baseConfig([]));
+    const eventId = `evt-g95-${runId}`;
+    eventIds.push(eventId);
+
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+      eventId,
+      eventType: 'entity.created',
+      entityType: 'Account',
+      entityId: accountId,
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+
+    const run = await db
+      .selectFrom('ai_agent_runs')
+      .select('id')
+      .where('causation_id', '=', eventId)
+      .where('agent_id', '=', agentId)
+      .executeTakeFirst();
+    expect(run, 'the matching agent beyond the old scan window never fired').toBeDefined();
+    runIds.push(String(run?.id ?? ''));
+  });
 });
 
 function textConfig(triggers: Record<string, unknown>): Record<string, unknown> {

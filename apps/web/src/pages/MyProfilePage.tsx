@@ -7,6 +7,7 @@ import { api, ApiError } from '../api/client.js';
 import type { MySession } from '../api/types.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { timezoneOptions } from '../components/timezones.js';
+import { errorMessage } from '../lib/errors.js';
 import { activeLocaleName, formatDateTime, localesEnabled, t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 
@@ -61,7 +62,7 @@ export function MyProfilePage() {
       await loadPrincipal();
       void message.success(t('web.profile.saved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.saveFailed'));
+      void message.error(errorMessage(error, t('web.profile.saveFailed')));
     }
   };
 
@@ -71,7 +72,7 @@ export function MyProfilePage() {
       await loadPrincipal();
       void message.success(t('web.profile.saved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.saveFailed'));
+      void message.error(errorMessage(error, t('web.profile.saveFailed')));
     }
   };
 
@@ -88,7 +89,7 @@ export function MyProfilePage() {
         await loadPrincipal();
         void message.success(t('web.profile.avatarUploaded'));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.profile.avatarUploadFailed'));
+        void message.error(errorMessage(error, t('web.profile.avatarUploadFailed')));
       } finally {
         setUploading(false);
       }
@@ -103,7 +104,7 @@ export function MyProfilePage() {
       await loadPrincipal();
       void message.success(t('web.profile.avatarRemoved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.saveFailed'));
+      void message.error(errorMessage(error, t('web.profile.saveFailed')));
     }
   };
 
@@ -119,7 +120,7 @@ export function MyProfilePage() {
       if (error instanceof ApiError && error.status === 401) {
         void message.error(t('web.profile.passwordWrongCurrent'));
       } else {
-        void message.error(error instanceof Error ? error.message : t('web.profile.passwordChangeFailed'));
+        void message.error(errorMessage(error, t('web.profile.passwordChangeFailed')));
       }
     }
   };
@@ -132,7 +133,7 @@ export function MyProfilePage() {
       setRecoveryCodes(null);
       setTotpCode('');
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.totpSetupFailed'));
+      void message.error(errorMessage(error, t('web.profile.totpSetupFailed')));
     } finally {
       setTotpBusy(false);
     }
@@ -149,7 +150,7 @@ export function MyProfilePage() {
       await loadPrincipal();
       void message.success(t('web.profile.twoFactorEnabled'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.totpEnableFailed'));
+      void message.error(errorMessage(error, t('web.profile.totpEnableFailed')));
     } finally {
       setTotpBusy(false);
     }
@@ -166,7 +167,7 @@ export function MyProfilePage() {
       await loadPrincipal();
       void message.success(t('web.profile.twoFactorDisabled'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.totpDisableFailed'));
+      void message.error(errorMessage(error, t('web.profile.totpDisableFailed')));
     } finally {
       setTotpBusy(false);
     }
@@ -195,7 +196,7 @@ export function MyProfilePage() {
       await loadSessions();
       void message.success(t('web.profile.sessionRevoked'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.sessionRevokeFailed'));
+      void message.error(errorMessage(error, t('web.profile.sessionRevokeFailed')));
     } finally {
       setSessionRevoking(null);
     }
@@ -210,7 +211,7 @@ export function MyProfilePage() {
       setTotpCode('');
       void message.success(t('web.profile.recoveryRegenerated'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.profile.totpDisableFailed'));
+      void message.error(errorMessage(error, t('web.profile.totpDisableFailed')));
     } finally {
       setTotpBusy(false);
     }

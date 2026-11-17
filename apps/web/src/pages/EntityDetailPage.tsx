@@ -26,6 +26,7 @@ import { RecordHeader } from '../components/RecordHeader.js';
 import { type RelationAccess, RelationTabs } from '../components/RelationTabs.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
+import { errorMessage } from '../lib/errors.js';
 import { salesDocumentKind } from '../sales/documents.js';
 import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
 import { t } from '../state/i18n.js';
@@ -204,7 +205,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
                     await api.unlink(parent, parentId, name, String(row['id']));
                     await load(page, pageSize);
                   } catch (error) {
-                    void message.error(error instanceof Error ? error.message : t('web.detail.unlinkFailed'));
+                    void message.error(errorMessage(error, t('web.detail.unlinkFailed')));
                   }
                 }}
               >
@@ -340,7 +341,7 @@ export function EntityDetailPage() {
       // §20.11: 403 is an authorization decision, not a missing record — say so with the card.
       const refused = error instanceof ApiError && error.status === 403;
       setDenied(refused);
-      if (!refused) void message.error(error instanceof Error ? error.message : t('web.detail.notFound'));
+      if (!refused) void message.error(errorMessage(error, t('web.detail.notFound')));
       setRecord(undefined);
     } finally {
       setLoading(false);
@@ -489,7 +490,7 @@ export function EntityDetailPage() {
                           void message.success(t('web.detail.deleted'));
                           navigate(`${base}/${entity}`);
                         } catch (error) {
-                          void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
+                          void message.error(errorMessage(error, t('web.detail.deleteFailed')));
                         }
                       }}
                     >

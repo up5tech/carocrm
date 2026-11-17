@@ -6,10 +6,10 @@ import type { DocSearchHit } from '../../api/types.js';
 import { DocSearchInput } from '../../components/docs/DocSearchInput.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { useDocSearch,useDocsSettings, useDocsTree } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
 import { DocsLayout } from './DocsLayout.js';
-
 /**
  * `/docs/search?q=…` — the results page (§5.4).
  *
@@ -85,7 +85,7 @@ export function DocsSearchPage() {
 
       {search.isPending && query !== '' ? <LoadingSkeleton rows={5} /> : null}
       {search.isError ? (
-        <ErrorState message={search.error instanceof Error ? search.error.message : t('web.docs.loadFailed')} onRetry={() => void search.refetch()} />
+        <ErrorState message={errorMessage(search.error, t('web.docs.loadFailed')) } onRetry={() => void search.refetch() } />
       ) : null}
 
       {search.data !== undefined ? (

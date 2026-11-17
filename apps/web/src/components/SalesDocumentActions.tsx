@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { SalesDocumentAction, SalesDocumentView } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 
 interface SalesDocumentActionsProps {
@@ -68,7 +69,7 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
         void message.success(t('sales.document.actionDone', { action: action.label }));
         onChanged();
       } catch (failure) {
-        setError(failure instanceof Error ? failure.message : t('sales.document.actionFailed'));
+        setError(errorMessage(failure, t('sales.document.actionFailed')));
       } finally {
         setBusy(null);
       }
@@ -93,7 +94,7 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
         // does — pricing it, confirming it — happens there.
         navigate(`/${encodeURIComponent(created.descriptor.entity)}/${encodeURIComponent(created.id)}`);
       } catch (failure) {
-        setError(failure instanceof Error ? failure.message : t('sales.document.actionFailed'));
+        setError(errorMessage(failure, t('sales.document.actionFailed')));
         setBusy(null);
       }
     },
@@ -109,7 +110,7 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
         void message.success(t('sales.document.unlocked'));
         onChanged();
       } catch (failure) {
-        setError(failure instanceof Error ? failure.message : t('sales.document.actionFailed'));
+        setError(errorMessage(failure, t('sales.document.actionFailed')));
       } finally {
         setBusy(null);
       }

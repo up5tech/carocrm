@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 
 interface CsatForm {
@@ -41,7 +42,7 @@ export function PortalCsatPage() {
       });
       setSubmitted(true);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.portalCsat.failed'));
+      void message.error(errorMessage(error, t('web.portalCsat.failed')));
     } finally {
       setSaving(false);
     }

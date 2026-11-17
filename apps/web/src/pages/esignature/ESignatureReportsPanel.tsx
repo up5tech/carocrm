@@ -7,8 +7,8 @@ import { api } from '../../api/client.js';
 import type { ESignatureReportSection } from '../../api/types.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
-
 /**
  * Phase 19-ES.19 — the operational reporting screen (plans/PLAN_Phase_19_ESignature.md §14).
  *
@@ -82,7 +82,7 @@ export function ESignatureReportsPanel({ days, onDaysChange }: { readonly days: 
   if (report.isError || report.data === undefined) {
     return (
       <ErrorState
-        message={`${t('esignature.reports.loadFailed')} ${report.error instanceof Error ? report.error.message : ''}`}
+        message={`${t('esignature.reports.loadFailed') } ${errorMessage(report.error, '') }`}
         onRetry={() => void report.refetch()}
       />
     );

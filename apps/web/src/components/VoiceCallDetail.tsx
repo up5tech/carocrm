@@ -5,9 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { VoiceCallSessionView, VoiceMediaView, VoiceTranscriptView } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { EmptyState } from './EmptyState.js';
-
 /**
  * Phase 19-VC.15–19-VC.16 — one call's media and transcript
  * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.5–§7.6, §15 `19-VC.15`, `19-VC.16`).
@@ -40,7 +40,7 @@ function RecordingPlayer({ media }: { media: VoiceMediaView }) {
       urlRef.current = url;
       setSrc(url);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.mediaFailed'));
+      void message.error(errorMessage(error, t('voice.inbox.mediaFailed')));
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ function TranscriptBlock({ callId }: { callId: string }) {
       await action();
       await queryClient.invalidateQueries({ queryKey: ['voice', 'transcript', callId] });
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.transcriptFailed'));
+      void message.error(errorMessage(error, t('voice.inbox.transcriptFailed')));
     } finally {
       setBusy(undefined);
     }

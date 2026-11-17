@@ -6,9 +6,9 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { VoiceCallControlAction, VoiceCallerMatch, VoiceIncomingCallView } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { subscribeNotificationPush } from '../state/notifications.js';
-
 /**
  * Phase 19-VC.9 — the incoming-call banner
  * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.1–§7.2, §15 `19-VC.9`).
@@ -85,7 +85,7 @@ function IncomingCallCard({
     mutationFn: (action: VoiceCallControlAction) => api.voiceCallControl(call.id, action),
     onSuccess: refresh,
     onError: (error: unknown) =>
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.actionFailed')),
+      void message.error(errorMessage(error, t('voice.inbox.actionFailed'))),
   });
 
   const saveNote = useMutation({
@@ -96,7 +96,7 @@ function IncomingCallCard({
       refresh();
     },
     onError: (error: unknown) =>
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.actionFailed')),
+      void message.error(errorMessage(error, t('voice.inbox.actionFailed'))),
   });
 
   const associate = useMutation({
@@ -107,7 +107,7 @@ function IncomingCallCard({
       refresh();
     },
     onError: (error: unknown) =>
-      void message.error(error instanceof Error ? error.message : t('voice.inbox.actionFailed')),
+      void message.error(errorMessage(error, t('voice.inbox.actionFailed'))),
   });
 
   const matches = (context.data?.matches ?? []).slice(0, 3);

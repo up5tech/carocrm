@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { AIAgentsAgentsTab } from './ai-agents/AIAgentsAgentsTab.js';
 import { AIAgentsApprovalsTab } from './ai-agents/AIAgentsApprovalsTab.js';
@@ -15,7 +16,6 @@ import { AIAgentsProvidersTab } from './ai-agents/AIAgentsProvidersTab.js';
 import { AIAgentsRunsTab } from './ai-agents/AIAgentsRunsTab.js';
 import { AIAgentsSettingsTab } from './ai-agents/AIAgentsSettingsTab.js';
 import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
-
 /**
  * Phase 19-AI.5–19-AI.10 — the AI Agents workspace
  * (plans/PLAN_Phase_19_AI_Agents.md §15, §20).
@@ -54,7 +54,7 @@ export function AIAgentsPage() {
         type="error"
         showIcon
         message={t('web.aiAgents.loadFailed')}
-        description={capabilities.error instanceof Error ? capabilities.error.message : t('web.aiAgents.loadFailedHint')}
+        description={errorMessage(capabilities.error, t('web.aiAgents.loadFailedHint')) }
         action={<Button onClick={() => void capabilities.refetch()}>{t('core.common.reload')}</Button>}
       />
     );

@@ -8,6 +8,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { NavigationNode } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { prefetchRoute } from '../lib/prefetchRoute.js';
 import { useNavigation } from '../state/admin.js';
 import { useDocsSettings } from '../state/docs.js';
@@ -45,7 +46,7 @@ function useLanguageSwitch() {
         await activateLocale(locale);
         void message.success(t('web.language.switched'));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.language.changeFailed'));
+        void message.error(errorMessage(error, t('web.language.changeFailed')));
       }
     })();
   };
@@ -78,7 +79,7 @@ function useThemeSwitch() {
     },
     onError: (error) => {
       void client.invalidateQueries({ queryKey: ['preferences', 'theme'] });
-      void message.error(error instanceof Error ? error.message : t('web.theme.changeFailed'));
+      void message.error(errorMessage(error, t('web.theme.changeFailed')));
     },
   });
   return (next: ThemePreference) => writer.mutate(next);

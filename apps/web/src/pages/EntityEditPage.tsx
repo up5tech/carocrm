@@ -9,6 +9,7 @@ import type { SalesLine, SalesLineTotals } from '../components/LineItemEditor.js
 import { LineItemEditor, linePayload, SalesTotalsPanel } from '../components/LineItemEditor.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { useSalesPickers } from '../components/useSalesPickers.js';
+import { errorMessage } from '../lib/errors.js';
 import { serverFieldErrors } from '../lib/serverFieldErrors.js';
 import { salesDocumentDate, salesDocumentKind } from '../sales/documents.js';
 import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
@@ -241,7 +242,7 @@ export function EntityEditPage() {
         setDenied(true);
         return;
       }
-      void message.error(error instanceof Error ? error.message : t('web.edit.notFound'));
+      void message.error(errorMessage(error, t('web.edit.notFound')));
     }
   }, [entity, id, form, message]);
 
@@ -407,7 +408,7 @@ export function EntityEditPage() {
               instance?.focus?.();
               void message.error(t('web.edit.cannotSave'));
             } else {
-              void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
+              void message.error(errorMessage(error, t('web.edit.saveFailed')));
             }
           } finally {
             setSaving(false);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime,t } from '../state/i18n.js';
 import { fieldLabel } from '../state/metadata.js';
 import { EmptyState } from './EmptyState.js';
@@ -103,7 +104,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       setItems(stream.list);
       setFollowed(status.followed);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.stream.panelLoadFailed'));
+      void message.error(errorMessage(error, t('web.stream.panelLoadFailed')));
       setItems([]);
     } finally {
       setLoading(false);
@@ -123,7 +124,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       setDraft('');
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.stream.postFailed'));
+      void message.error(errorMessage(error, t('web.stream.postFailed')));
     } finally {
       setPosting(false);
     }
@@ -139,7 +140,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
         setFollowed(true);
       }
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.stream.followFailed'));
+      void message.error(errorMessage(error, t('web.stream.followFailed')));
     }
   };
 
@@ -148,7 +149,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       await api.deleteNote(itemId);
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.stream.deleteFailed'));
+      void message.error(errorMessage(error, t('web.stream.deleteFailed')));
     }
   };
 

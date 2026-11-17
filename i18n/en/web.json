@@ -500,7 +500,8 @@
     "recordAnswer": "Record answer",
     "chooseAnswer": "Choose the answer, then add a comment if the next step needs one:",
     "commentPlaceholder": "Why? (kept on the task for the audit trail)",
-    "signIn": "Sign in to see your tasks."
+    "signIn": "Sign in to see your tasks.",
+    "answerFailed": "Could not record the answer — the task is unchanged."
   },
   "recordProcess": {
     "title": "Approvals",

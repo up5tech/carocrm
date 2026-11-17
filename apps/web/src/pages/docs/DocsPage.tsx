@@ -10,10 +10,10 @@ import { DocTocRail } from '../../components/docs/DocTocRail.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../../components/PermissionDenied.js';
+import { errorMessage } from '../../lib/errors.js';
 import { useDocPage, useDocsPageKeys, useDocsTree } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
 import { DocsFallbackNotice, DocsLayout } from './DocsLayout.js';
-
 /**
  * `/docs/:section/:slug` — the page reader (§5.3).
  *
@@ -67,7 +67,7 @@ export function DocsPage() {
             </Space>
           </div>
         ) : (
-          <ErrorState message={page.error instanceof Error ? page.error.message : t('web.docs.loadFailed')} onRetry={() => void page.refetch()} />
+          <ErrorState message={errorMessage(page.error, t('web.docs.loadFailed')) } onRetry={() => void page.refetch() } />
         )}
       </DocsLayout>
     );

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import type { ModuleSettingsView, SettingsDocumentWarning } from '../api/types.js';
-
+import { errorMessage } from '../lib/errors.js';
 /**
  * A module settings document (`sales`, `serviceDesk`, `customerSuccess`) edited as a draft
  * (plans/PLAN_Phase_20_Settings_UX.md §8.3, §9.1).
@@ -105,7 +105,7 @@ export function useModuleDocument<T extends object>(input: {
       } catch (error) {
         // The module answers a refused policy change with its own reason; that reason is the whole
         // diagnostic, so it is shown rather than replaced by a generic failure string.
-        setFailed(error instanceof Error ? error.message : input.failedMessage);
+        setFailed(errorMessage(error, input.failedMessage));
         return false;
       } finally {
         setSaving(false);

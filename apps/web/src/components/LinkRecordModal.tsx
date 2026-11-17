@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { api, type WhereClause } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, layoutFieldEntries, recordLabel } from '../state/metadata.js';
 import { FieldValue, linkLabelsOf } from './fields.js';
@@ -77,7 +78,7 @@ export function LinkRecordModal({
           if (!active) return;
           setRows([]);
           setTotal(0);
-          void message.error(error instanceof Error ? error.message : t('web.detail.linkFailed'));
+          void message.error(errorMessage(error, t('web.detail.linkFailed')));
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -98,7 +99,7 @@ export function LinkRecordModal({
       await onLinked();
       onClose();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.detail.linkFailed'));
+      void message.error(errorMessage(error, t('web.detail.linkFailed')));
     } finally {
       setLinking(false);
     }

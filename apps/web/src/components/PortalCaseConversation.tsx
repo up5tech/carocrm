@@ -12,6 +12,7 @@ import { Alert, App as AntApp, Button, Card, Input, List, Space, Spin, Tag, Typo
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime,t } from '../state/i18n.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -42,7 +43,7 @@ export function PortalCaseConversation({ caseId }: { readonly caseId: string }) 
     } catch (error) {
       const status = (error as { status?: number }).status;
       if (status === 403 || status === 404) setDenied(true);
-      else void message.error(error instanceof Error ? error.message : t('web.portalCase.loadFailed'));
+      else void message.error(errorMessage(error, t('web.portalCase.loadFailed')));
       setItems([]);
     } finally {
       setLoading(false);
@@ -67,7 +68,7 @@ export function PortalCaseConversation({ caseId }: { readonly caseId: string }) 
       setDraft('');
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.portalCase.postFailed'));
+      void message.error(errorMessage(error, t('web.portalCase.postFailed')));
     } finally {
       setPosting(false);
     }

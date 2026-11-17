@@ -19,6 +19,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, type WhereClause } from '../api/client.js';
 import type { FieldDefinition } from '../api/types.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import {
   boardGroupFields,
@@ -32,7 +33,6 @@ import {
 } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
 import { useSession } from '../state/session.js';
-
 /**
  * Board (Kanban) view of a record list — one column per value of an enum field, one card per
  * record, dragging a card between columns writes the field.
@@ -153,7 +153,7 @@ export function EntityBoardPage() {
       setData(Object.fromEntries(results));
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : t('web.board.loadFailed'));
+      setLoadError(errorMessage(error, t('web.board.loadFailed')));
       setData({});
     } finally {
       setLoading(false);
@@ -236,7 +236,7 @@ export function EntityBoardPage() {
       void message.success(t('web.board.moved', { value: target.value ?? t('web.board.noValue') }));
     } catch (error) {
       setData(previousData);
-      void message.error(error instanceof Error ? error.message : t('web.board.moveFailed'));
+      void message.error(errorMessage(error, t('web.board.moveFailed')));
     }
   };
 

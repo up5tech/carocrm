@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentsSettings } from '../../api/types.js';
+import { errorMessage } from '../../lib/errors.js';
 import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
@@ -59,7 +60,7 @@ function errorText(error: unknown): string {
     if (typeof reason === 'string' && reason.trim() !== '') return reason;
     return error.message;
   }
-  return String(error);
+  return errorMessage(error, String(error));
 }
 
 export function AIAgentsSettingsTab({ capabilities }: { readonly capabilities: Record<string, boolean> }) {

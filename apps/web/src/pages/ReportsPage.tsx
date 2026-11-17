@@ -8,6 +8,7 @@ import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult, Rep
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatNumber, t } from '../state/i18n.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -86,7 +87,7 @@ export function ReportsPage() {
       setReports(items);
       setReportId((current) => (items.some((item) => item.id === current) ? current : null));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.loadFailed'));
+      void message.error(errorMessage(error, t('web.reports.loadFailed')));
     }
   }, [message]);
 
@@ -144,7 +145,7 @@ export function ReportsPage() {
       setSchedule(current);
       if (current) setScheduleCron(current.cron);
     }).catch((error: unknown) => {
-      void message.error(error instanceof Error ? error.message : t('web.reports.scheduleLoadFailed'));
+      void message.error(errorMessage(error, t('web.reports.scheduleLoadFailed')));
     });
   }, [message]);
 
@@ -179,7 +180,7 @@ export function ReportsPage() {
       const response = await api.previewReport(definition());
       setResult(response.result);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.previewFailed'));
+      void message.error(errorMessage(error, t('web.reports.previewFailed')));
     } finally {
       setLoading(false);
     }
@@ -199,7 +200,7 @@ export function ReportsPage() {
       await load();
       void message.success(t('web.reports.saved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.saveFailed'));
+      void message.error(errorMessage(error, t('web.reports.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -215,7 +216,7 @@ export function ReportsPage() {
       const response = await api.runReport(reportId);
       setResult(response.result);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.runFailed'));
+      void message.error(errorMessage(error, t('web.reports.runFailed')));
     } finally {
       setLoading(false);
     }
@@ -239,7 +240,7 @@ export function ReportsPage() {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       if (file.truncated) void message.warning(t('web.reports.exportTruncated', { rows: String(file.rows) }));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.exportFailed'));
+      void message.error(errorMessage(error, t('web.reports.exportFailed')));
     }
   }, [message, reportId]);
 
@@ -253,7 +254,7 @@ export function ReportsPage() {
       setSchedule(updated);
       void message.success(t('web.reports.scheduleSaved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.scheduleSaveFailed'));
+      void message.error(errorMessage(error, t('web.reports.scheduleSaveFailed')));
     }
   }, [message, reportId, scheduleCron]);
 
@@ -264,7 +265,7 @@ export function ReportsPage() {
       setSchedule(updated);
       void message.success(updated.enabled ? t('web.reports.scheduleEnabled') : t('web.reports.schedulePaused'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.scheduleUpdateFailed'));
+      void message.error(errorMessage(error, t('web.reports.scheduleUpdateFailed')));
     }
   }, [message, reportId, schedule]);
 
@@ -275,7 +276,7 @@ export function ReportsPage() {
       setSchedule(null);
       void message.success(t('web.reports.scheduleRemoved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.scheduleRemoveFailed'));
+      void message.error(errorMessage(error, t('web.reports.scheduleRemoveFailed')));
     }
   }, [message, reportId, schedule]);
 
@@ -287,7 +288,7 @@ export function ReportsPage() {
       await load();
       void message.success(t('web.reports.deleted'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.reports.deleteFailed'));
+      void message.error(errorMessage(error, t('web.reports.deleteFailed')));
     }
   }, [load, message, reportId, resetBuilder]);
 

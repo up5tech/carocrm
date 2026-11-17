@@ -20,13 +20,13 @@ import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { usePageTitle } from '../components/PageHeader.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
 import { CRMChatComposer } from './crm-chat/CRMChatComposer.js';
 import { CRMChatDiagnosticsDrawer } from './crm-chat/CRMChatDiagnosticsDrawer.js';
 import { CRMChatMessageList } from './crm-chat/CRMChatMessageList.js';
 import { CRMChatSettingsModal } from './crm-chat/CRMChatSettingsModal.js';
 import { CRMChatSuggestions } from './crm-chat/CRMChatSuggestions.js';
-
 /**
  * The server state is kebab-case (`not-configured`); the catalog forbids hyphens in a key segment
  * (`KEY_RE` in `apps/api/src/i18n/i18n.service.ts`), so the label key uses underscores.
@@ -158,7 +158,7 @@ export function CRMChatPage() {
     }
     return (
       <ErrorState
-        message={capabilities.error instanceof Error ? capabilities.error.message : undefined}
+        message={errorMessage(capabilities.error) }
         onRetry={() => void capabilities.refetch()}
       />
     );
@@ -304,7 +304,7 @@ export function CRMChatPage() {
             ) : null}
             {conversations.isError ? (
               <ErrorState
-                message={conversations.error instanceof Error ? conversations.error.message : undefined}
+                message={errorMessage(conversations.error) }
                 onRetry={() => void conversations.refetch()}
               />
             ) : null}
@@ -397,7 +397,7 @@ export function CRMChatPage() {
             ) : null}
             {selectedId !== undefined && detail.isError ? (
               <ErrorState
-                message={detail.error instanceof Error ? detail.error.message : undefined}
+                message={errorMessage(detail.error) }
                 onRetry={() => void detail.refetch()}
               />
             ) : null}

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { SalesRenderResult } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 
 const { Text } = Typography;
@@ -59,7 +60,7 @@ export function DocumentSendModal({ open, kind, entity, id, onClose, onSent }: D
         setSubject(rendered.subject);
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('sales.document.sendFailed'));
+        setError(errorMessage(err, t('sales.document.sendFailed')));
       }
     },
     [id, kind],
@@ -119,7 +120,7 @@ export function DocumentSendModal({ open, kind, entity, id, onClose, onSent }: D
       onSent?.(String(result.email['id']));
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('sales.document.sendFailed'));
+      setError(errorMessage(err, t('sales.document.sendFailed')));
     } finally {
       setSending(false);
     }

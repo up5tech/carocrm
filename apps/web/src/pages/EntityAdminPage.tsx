@@ -10,6 +10,7 @@ import { EmptyState } from '../components/EmptyState.js';
 import { defaultIconName,ENTITY_ICONS } from '../components/entityIcons.js';
 import { LayoutEditor, memberFieldNames } from '../components/LayoutEditor.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { useNavigationGroupKeys } from '../state/admin.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, fieldLabel, useMetadata } from '../state/metadata.js';
@@ -396,7 +397,7 @@ function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: 
                   title={t('web.entityAdmin.disableFieldConfirm', { name: row.name })}
                   description={t('web.entityAdmin.disableFieldHint')}
                   okText={t('web.entityAdmin.disable')}
-                  onConfirm={() => void api.disableField(entity.name, row.name).then(() => metadata.refetch()).catch((error: unknown) => message.error(error instanceof Error ? error.message : t('web.entityAdmin.failed')))}
+                  onConfirm={() => void api.disableField(entity.name, row.name).then(() => metadata.refetch()).catch((error: unknown) => message.error(errorMessage(error, t('web.entityAdmin.failed')))) }
                 >
                   <Button danger type="text" icon={<DeleteOutlined />} aria-label={t('web.entityAdmin.disableFieldAria', { name: row.name })} />
                 </Popconfirm>
@@ -709,7 +710,7 @@ function AccessTab({ entity }: { entity: EntityDefinition }) {
       await queryClient.invalidateQueries({ queryKey: ['roles'] });
       void message.success(okText);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.entityAdmin.failed'));
+      void message.error(errorMessage(error, t('web.entityAdmin.failed')));
     }
   };
 
@@ -738,7 +739,7 @@ function AccessTab({ entity }: { entity: EntityDefinition }) {
           {t('web.entityAdmin.recordAccess', { entity: entity.name })}
         </Typography.Title>
         <Typography.Text type="secondary">{t('web.entityAdmin.recordAccessHint')}</Typography.Text>
-        {roles.isError ? <Alert type="error" showIcon style={{ marginTop: 8 }} message={t('web.adminPortals.rolesLoadFailed')} description={roles.error instanceof Error ? roles.error.message : t('web.entityAdmin.unknownError')} /> : null}
+        {roles.isError ? <Alert type="error" showIcon style={{ marginTop: 8 }} message={t('web.adminPortals.rolesLoadFailed') } description={errorMessage(roles.error, t('web.entityAdmin.unknownError')) } /> : null}
         <Table
           rowKey="id"
           size="small"
@@ -925,7 +926,7 @@ export function EntityAdminPage() {
       void message.success(okText);
       await metadata.refetch();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.entityAdmin.changeFailed'));
+      void message.error(errorMessage(error, t('web.entityAdmin.changeFailed')));
     }
   };
 

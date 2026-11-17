@@ -33,10 +33,10 @@ import type {
   VoiceProviderInfo,
 } from '../../api/types.js';
 import { timezoneOptions } from '../../components/timezones.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 import { useModuleDocument } from '../module-document.js';
 import { usePublishTabActions } from '../shell.js';
-
 /**
  * Phase 19-VC.18 — the Voice & Communications administration screen.
  *
@@ -469,7 +469,7 @@ function ProviderAccountsSection({ accounts, loading }: { accounts: readonly Voi
     void client.invalidateQueries({ queryKey: ['voiceCommunications', 'accounts'] });
   };
   const failed = (error: unknown): void => {
-    void message.error(error instanceof Error ? error.message : t('voice.settings.accountFailed'));
+    void message.error(errorMessage(error, t('voice.settings.accountFailed')));
   };
 
   const saveAccount = useMutation({
@@ -850,7 +850,7 @@ function EndpointsPanel({ accountKey }: { accountKey: string }) {
     void client.invalidateQueries({ queryKey: ['voiceCommunications', 'endpoints', accountKey] });
   };
   const failed = (error: unknown): void => {
-    void message.error(error instanceof Error ? error.message : t('voice.settings.endpointFailed'));
+    void message.error(errorMessage(error, t('voice.settings.endpointFailed')));
   };
 
   const add = useMutation({

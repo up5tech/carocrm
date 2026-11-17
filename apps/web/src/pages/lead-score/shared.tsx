@@ -3,8 +3,8 @@ import { Alert, Button, List, Space, Tag, Typography } from 'antd';
 
 import { api, ApiError } from '../../api/client.js';
 import type { LeadScoreEditorCatalog, LeadScoreEditorField, LeadScoreValidationIssue, LeadScoreValidationReport } from '../../api/types.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
-
 /**
  * Phase 19-LS.8 — the shared vocabulary of the model editor
  * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §12, §16 `19-LS.8`).
@@ -82,7 +82,7 @@ export function errorText(error: unknown): string {
     }
     return error.code.startsWith('LEADSCORE_') ? `${error.code}: ${error.message}` : error.message;
   }
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error, String(error));
 }
 
 /**

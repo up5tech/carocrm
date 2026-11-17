@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Col, Descriptions, List, Row, Skeleton, Space, Statistic, Tag, Typography } from 'antd';
 
 import { api } from '../../api/client.js';
+import { errorMessage } from '../../lib/errors.js';
 import { formatDateTime,t } from '../../state/i18n.js';
-
 /**
  * Phase 19-AI.2–19-AI.4 — the module's diagnostic overview, unchanged in substance: it reports what
  * the running platform actually has, not what the settings claim. The agent, run and approval
@@ -26,7 +26,7 @@ export function AIAgentsOverview() {
         type="error"
         showIcon
         message={t('web.aiAgents.loadFailed')}
-        description={health.error instanceof Error ? health.error.message : t('web.aiAgents.loadFailedHint')}
+        description={errorMessage(health.error, t('web.aiAgents.loadFailedHint')) }
         action={
           <Button size="small" icon={<ReloadOutlined />} onClick={() => void health.refetch()}>
             {t('core.common.reload')}

@@ -3,6 +3,7 @@ import { App as AntApp, Button, Card, Descriptions, Drawer, Form, Input, Modal, 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, type JobLogLine, type JobRow, type ScheduleRow } from '../api/client.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 
 const JOB_STATUSES = ['pending', 'running', 'completed', 'failed', 'cancelled'];
@@ -65,7 +66,7 @@ export function AdminJobsPage() {
       setTotal(result.total);
       setQueue(result.queue ?? {});
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.adminJobs.loadFailed'));
+      void message.error(errorMessage(error, t('web.adminJobs.loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ export function AdminJobsPage() {
     try {
       setSchedules((await api.schedules()).list);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.adminJobs.schedulesLoadFailed'));
+      void message.error(errorMessage(error, t('web.adminJobs.schedulesLoadFailed')));
     }
   }, [message]);
 
@@ -94,7 +95,7 @@ export function AdminJobsPage() {
         setLogs((await api.jobLogs(job.id)).lines);
       } catch (error) {
         setLogs([]);
-        void message.error(error instanceof Error ? error.message : t('web.adminJobs.logsLoadFailed'));
+        void message.error(errorMessage(error, t('web.adminJobs.logsLoadFailed')));
       }
     },
     [message],
@@ -113,7 +114,7 @@ export function AdminJobsPage() {
         void message.success(t('web.adminJobs.cancelRequested'));
         await loadJobs();
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.adminJobs.cancelFailed'));
+        void message.error(errorMessage(error, t('web.adminJobs.cancelFailed')));
       }
     },
     [message, loadJobs],
@@ -255,7 +256,7 @@ export function AdminJobsPage() {
                       await api.setScheduleEnabled(row.id, checked);
                       await loadSchedules();
                     } catch (error) {
-                      void message.error(error instanceof Error ? error.message : t('web.adminJobs.scheduleUpdateFailed'));
+                      void message.error(errorMessage(error, t('web.adminJobs.scheduleUpdateFailed')));
                     }
                   }}
                 />
@@ -275,7 +276,7 @@ export function AdminJobsPage() {
                       void message.success(t('web.adminJobs.queued', { job: job.job }));
                       await Promise.all([loadJobs(), loadSchedules()]);
                     } catch (error) {
-                      void message.error(error instanceof Error ? error.message : t('web.adminJobs.runFailed'));
+                      void message.error(errorMessage(error, t('web.adminJobs.runFailed')));
                     }
                   }}
                 >
@@ -297,7 +298,7 @@ export function AdminJobsPage() {
               scheduleForm.resetFields();
               await loadSchedules();
             } catch (error) {
-              void message.error(error instanceof Error ? error.message : t('web.adminJobs.scheduleSaveFailed'));
+              void message.error(errorMessage(error, t('web.adminJobs.scheduleSaveFailed')));
             }
           }}
         >
@@ -348,7 +349,7 @@ export function AdminJobsPage() {
             runForm.resetFields();
             await loadJobs();
           } catch (error) {
-            void message.error(error instanceof Error ? error.message : t('web.adminJobs.runFailed'));
+            void message.error(errorMessage(error, t('web.adminJobs.runFailed')));
           }
         }}
       >

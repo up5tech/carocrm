@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { CRMChatPromptView } from '../../api/types.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 
 const { Text } = Typography;
@@ -226,7 +227,7 @@ export function CRMChatPromptTemplates(props: CRMChatPromptTemplatesProps) {
           </Text>
           {save.isError ? (
             <Text type="danger" style={{ fontSize: 12 }}>
-              {save.error instanceof Error ? save.error.message : t('web.crmChat.prompts.saveFailed')}
+              {errorMessage(save.error, t('web.crmChat.prompts.saveFailed')) }
             </Text>
           ) : null}
         </Space>

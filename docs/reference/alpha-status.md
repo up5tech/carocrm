@@ -42,7 +42,7 @@ see the portals status section below and PLAN §72 for the remaining priority ma
 | Workflows working | done | `packages/workflow` engine, worker execution + run history, `/api/v1/Workflow`, `/admin/workflows` |
 | BPM (process approval) working | done | `packages/bpm` engine, `/api/v1/Process[Instance\|Task]`, worker timers + service tasks, `/admin/processes` + `/tasks` |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
-| API integration tests working | done | 300 vitest tests in `apps/api/test` (+193 package unit tests) |
+| API integration tests working | done | vitest suites in `apps/api/test` (246 files on disk, 2026-11-17) + package unit tests; authoritative pass counts are recorded per run in `docs/quality/phase-24-test-evidence.md` |
 | Playwright login/CRUD tests working | done | `e2e/crud.spec.ts` (`npx playwright test`) |
 | Docker deployment working | partial | `docker-compose.yml` provides postgres/redis/api; images not built yet. It is development-only; the production requirements are in `docs/security/deployment-baseline.md` |
 | Backup and restore documented | done | `docs/operations/backup-restore.md` |
@@ -55,9 +55,9 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 493 tests: 300 API/integration (apps/api/test) + 193 package unit; runs on the configured DATABASE_URL, no extra database
-bash scripts/e2e-smoke.sh   # 142 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards, extensions, workflows
-bash scripts/worker-smoke.sh # 34 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup, system.sendEmail
+npx vitest run        # API/integration (apps/api/test) + package unit tests; runs on the configured DATABASE_URL, no extra database; counts drift per suite — see docs/quality/phase-24-test-evidence.md
+bash scripts/e2e-smoke.sh   # ~190 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards, extensions, workflows
+bash scripts/worker-smoke.sh # ~34 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup, system.sendEmail
 npx playwright test    # browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email/phase-12 search+csv+dashboards/extensions/workflows); starts API+SPA itself
 pnpm --filter @carocrm/worker test  # 143 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers, extension config, workflow engine)
 ```

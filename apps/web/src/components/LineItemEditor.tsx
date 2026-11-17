@@ -29,6 +29,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../api/client.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 
 const { Text } = Typography;
@@ -289,7 +290,7 @@ export function LineItemEditor({
         if (patched.some((line, index) => line !== latest.current[index])) onChange(patched);
       } catch (error) {
         // The refusal reason is the useful part: it is the same message the save would produce.
-        onPreviewError?.(error instanceof Error ? error.message : String(error));
+        onPreviewError?.(errorMessage(error, String(error)));
       } finally {
         setPreviewing(false);
       }
@@ -343,7 +344,7 @@ export function LineItemEditor({
         });
       } catch (error) {
         // "no price applies" is a state of the catalog, not a failure of the editor.
-        update(key, { priceSource: error instanceof Error ? error.message : String(error) });
+        update(key, { priceSource: errorMessage(error, String(error)) });
         setUnresolved((previous) => new Set(previous).add(key));
       }
     },

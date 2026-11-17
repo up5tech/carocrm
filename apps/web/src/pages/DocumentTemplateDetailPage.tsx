@@ -19,6 +19,7 @@ import type { DocumentPreviewView } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { DOCUMENT_SAMPLE_DATA } from '../document/template-catalog.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { fieldLabel, useEntity, useMetadata } from '../state/metadata.js';
 
@@ -60,7 +61,7 @@ export function DocumentTemplateDetailPage() {
     try {
       setRecord(await api.get('DocumentTemplate', id));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.detail.notFound'));
+      void message.error(errorMessage(error, t('web.detail.notFound')));
       setRecord(undefined);
     } finally {
       setLoading(false);
@@ -90,7 +91,7 @@ export function DocumentTemplateDetailPage() {
       .catch((error: unknown) => {
         if (!active) return;
         setPreview(null);
-        setPreviewError(error instanceof Error ? error.message : t('web.documentTemplate.previewFailed'));
+        setPreviewError(errorMessage(error, t('web.documentTemplate.previewFailed')));
       })
       .finally(() => {
         if (active) setPreviewing(false);
@@ -165,7 +166,7 @@ export function DocumentTemplateDetailPage() {
                   void message.success(t('web.detail.deleted'));
                   navigate('/DocumentTemplate');
                 } catch (error) {
-                  void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
+                  void message.error(errorMessage(error, t('web.detail.deleteFailed')));
                 }
               }}
             >

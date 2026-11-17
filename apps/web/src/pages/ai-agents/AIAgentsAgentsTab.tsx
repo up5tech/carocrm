@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client.js';
 import type { AIAgentConfigShape, AIAgentTemplate, AIAgentValidationReport, AIAgentVersionView,AIAgentView } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 import { AgentStatusTag, EffectTag, formatTimestamp, shortChecksum } from './shared.js';
 
@@ -65,7 +66,7 @@ export function errorText(error: unknown): string {
     if (parts.length > 0) return parts.join('\n');
     return error.message;
   }
-  return String(error);
+  return errorMessage(error, String(error));
 }
 
 interface AgentFormValues {

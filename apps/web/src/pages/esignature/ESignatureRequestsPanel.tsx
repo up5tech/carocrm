@@ -15,8 +15,8 @@ import type {
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { formatDateTime,t } from '../../state/i18n.js';
-
 /**
  * Phase 19-ES.6 — the signature request list and draft editor
  * (`plans/PLAN_Phase_19_ESignature.md` §8.2, §13.2, §13.3, §18 `19-ES.6`).
@@ -164,7 +164,7 @@ export function ESignatureRequestsPanel(props: {
   if (requests.isError || requests.data === undefined) {
     return (
       <ErrorState
-        message={`${t('esignature.requests.loadFailed')} ${requests.error instanceof Error ? requests.error.message : ''}`}
+        message={`${t('esignature.requests.loadFailed') } ${errorMessage(requests.error, '') }`}
         onRetry={() => void requests.refetch()}
       />
     );
@@ -335,7 +335,7 @@ function RequestDetail(props: {
   const detail = useQuery({ queryKey: ['eSignature', 'request', props.id], queryFn: () => api.eSignatureRequest(props.id) });
   if (detail.isLoading) return <LoadingSkeleton rows={8} />;
   if (detail.isError || detail.data === undefined) {
-    return <ErrorState message={`${t('esignature.requests.loadFailed')} ${detail.error instanceof Error ? detail.error.message : ''}`} onRetry={() => void detail.refetch()} />;
+    return <ErrorState message={`${t('esignature.requests.loadFailed') } ${errorMessage(detail.error, '') }`} onRetry={() => void detail.refetch() } />;
   }
   const request = detail.data;
   if (props.mode === 'edit') {
@@ -492,7 +492,7 @@ function RequestEditor(props: {
       if (recipients.length > 0) await api.saveESignatureRequestRecipients(saved.id, recipients);
       props.onSaved(saved);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.requests.saveFailed'));
+      message.error(errorMessage(error, t('esignature.requests.saveFailed')));
     } finally {
       setPending(false);
     }
@@ -640,7 +640,7 @@ function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boo
       props.onPrepared();
       await preview.refetch();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.preview.failed'));
+      message.error(errorMessage(error, t('esignature.preview.failed')));
     } finally {
       setPending(false);
     }
@@ -761,7 +761,7 @@ function EnvelopeSection(props: { request: ESignatureRequestView; canPrepare: bo
       message.success(result.envelope.created ? t('esignature.preview.envelopeCreated') : t('esignature.preview.envelopeExisting'));
       props.onChanged();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.preview.envelopeFailed'));
+      message.error(errorMessage(error, t('esignature.preview.envelopeFailed')));
     } finally {
       setPending(false);
     }
@@ -774,7 +774,7 @@ function EnvelopeSection(props: { request: ESignatureRequestView; canPrepare: bo
       message.success(t('esignature.preview.envelopeAbandoned'));
       props.onChanged();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.preview.envelopeFailed'));
+      message.error(errorMessage(error, t('esignature.preview.envelopeFailed')));
     } finally {
       setPending(false);
     }
@@ -835,7 +835,7 @@ function SendSection(props: { request: ESignatureRequestView; canSend: boolean; 
       message.success(success);
       props.onChanged();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : fail);
+      message.error(errorMessage(error, fail));
     } finally {
       setPending(false);
     }
@@ -923,7 +923,7 @@ function RecipientsTable(props: {
       window.open(view.url, '_blank', 'noopener,noreferrer');
       message.success(t('esignature.requests.embeddedOpened'));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.requests.embeddedFailed'));
+      message.error(errorMessage(error, t('esignature.requests.embeddedFailed')));
     } finally {
       setBusy(null);
     }
@@ -1025,7 +1025,7 @@ function ApprovalSection(props: { request: ESignatureRequestView; canApprove: bo
       setReason('');
       props.onChanged();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.approval.failed'));
+      message.error(errorMessage(error, t('esignature.approval.failed')));
     } finally {
       setPending(false);
     }
@@ -1174,7 +1174,7 @@ function LifecycleActions(props: {
       message.success(success);
       props.onChanged();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : fail);
+      message.error(errorMessage(error, fail));
     } finally {
       setPending(false);
     }
@@ -1360,7 +1360,7 @@ function DocumentsList(props: {
       message.success(t('esignature.requests.documentAttached'));
       props.onChanged();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.requests.documentFailed'));
+      message.error(errorMessage(error, t('esignature.requests.documentFailed')));
     } finally {
       setBusy(false);
     }
@@ -1445,7 +1445,7 @@ function DocumentsList(props: {
                         void api
                           .detachESignatureRequestDocument(props.requestId, row.id)
                           .then(() => props.onChanged())
-                          .catch((error: unknown) => message.error(error instanceof Error ? error.message : t('esignature.requests.documentFailed')));
+                          .catch((error: unknown) => message.error(errorMessage(error, t('esignature.requests.documentFailed'))));
                       }}
                     >
                       <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('esignature.requests.removeDocument')} />

@@ -15,13 +15,13 @@ import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, type FieldEntry, fieldLabel, filterEntries, layoutPanelsFor, listEntries, massUpdateEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
 import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import type { FilterDraft } from '../types/views.js';
-
 /** How many filter controls the panel shows before the disclosure (19-LS.7). */
 const DEFAULT_FILTER_SLOTS = 5;
 
@@ -314,7 +314,7 @@ export function EntityListPage() {
           Number.isFinite(seconds) && seconds > 0 ? t('web.list.rateLimitedRetry', { seconds: String(seconds) }) : error.message,
         );
       } else {
-        setLoadError(error instanceof Error ? error.message : t('web.edit.notFound'));
+        setLoadError(errorMessage(error, t('web.edit.notFound')));
         setRows([]);
         setTotal(0);
       }
@@ -358,7 +358,7 @@ export function EntityListPage() {
       setSelected(ids);
       if (total > 1000) void message.warning(t('web.list.selectAllCapped', { count: 1000 }));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.selectAllFailed'));
+      void message.error(errorMessage(error, t('web.list.selectAllFailed')));
     } finally {
       setSelectingAll(false);
     }
@@ -444,7 +444,7 @@ export function EntityListPage() {
       setFilterNameDraft('');
       void message.success(t('web.list.saved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.saveFailed'));
+      void message.error(errorMessage(error, t('web.list.saveFailed')));
     }
   }, [drafts, entityName, filterNameDraft, message]);
 
@@ -461,7 +461,7 @@ export function EntityListPage() {
       setImportText('');
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.importFailed'));
+      void message.error(errorMessage(error, t('web.list.importFailed')));
     } finally {
       setImportBusy(false);
     }
@@ -489,7 +489,7 @@ export function EntityListPage() {
       URL.revokeObjectURL(url);
       void message.success(t('web.list.exportDownloaded'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.exportFailed'));
+      void message.error(errorMessage(error, t('web.list.exportFailed')));
     }
   }, [drafts, entityName, message]);
 
@@ -522,7 +522,7 @@ export function EntityListPage() {
       void load();
       setTimeout(() => setShowUndo(false), 8000);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
+      void message.error(errorMessage(error, t('web.list.deleteFailed')));
     }
   }, [entityName, rows, load, message, reportOutcome]);
 
@@ -543,7 +543,7 @@ export function EntityListPage() {
       await load();
       setTimeout(() => setShowUndo(false), 8000);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.bulkFailed'));
+      void message.error(errorMessage(error, t('web.list.bulkFailed')));
     } finally {
       setBulkBusy(false);
     }
@@ -579,7 +579,7 @@ export function EntityListPage() {
       setShowUndo(false);
       void load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.undoFailed'));
+      void message.error(errorMessage(error, t('web.list.undoFailed')));
     }
   }, [undoStack, entityName, load, message]);
 
@@ -599,7 +599,7 @@ export function EntityListPage() {
       await api.follow(entityName, id);
       void message.success(t('web.list.followed'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.list.followFailed'));
+      void message.error(errorMessage(error, t('web.list.followFailed')));
     }
   }, [entityName, message]);
 

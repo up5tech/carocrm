@@ -3,6 +3,7 @@ import { Alert, Button, Card, Select, Space, Table, Tag, Typography } from 'antd
 import { useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 import { useMetadata } from '../../state/metadata.js';
 
@@ -190,7 +191,7 @@ function ExplainCard() {
           style={{ marginTop: 12 }}
           type="error"
           showIcon
-          message={explain.error instanceof Error ? explain.error.message : t('web.adminPermissions.explainFailed')}
+          message={errorMessage(explain.error, t('web.adminPermissions.explainFailed')) }
         />
       ) : null}
       {explain.data === undefined ? null : (

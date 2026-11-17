@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime,t } from '../state/i18n.js';
 import { EmptyState } from './EmptyState.js';
 import { updateSummary } from './StreamPanel.js';
@@ -92,7 +93,7 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
       if (status === 403 || status === 404) {
         setDenied(true);
       } else {
-        void message.error(error instanceof Error ? error.message : t('web.serviceDesk.conversation.loadFailed'));
+        void message.error(errorMessage(error, t('web.serviceDesk.conversation.loadFailed')));
       }
       setItems([]);
     } finally {
@@ -136,7 +137,7 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
       const info = await api.uploadAttachment(file, { parentType: 'Case', parentId: caseId, field: 'attachment' });
       setPending((prev) => [...prev, { id: info.id, name: info.name }]);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.serviceDesk.conversation.uploadFailed'));
+      void message.error(errorMessage(error, t('web.serviceDesk.conversation.uploadFailed')));
     } finally {
       setUploading(false);
     }
@@ -159,7 +160,7 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
       await load();
       if (onChanged) await onChanged();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.serviceDesk.conversation.postFailed'));
+      void message.error(errorMessage(error, t('web.serviceDesk.conversation.postFailed')));
     } finally {
       setPosting(false);
     }

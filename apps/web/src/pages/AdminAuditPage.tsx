@@ -6,6 +6,7 @@ import { api } from '../api/client.js';
 import type { ListResult } from '../api/types.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 
 interface AuditRow {
@@ -57,7 +58,7 @@ export function AdminAuditPage() {
     } catch (cause) {
       setRows([]);
       setTotal(0);
-      setError(cause instanceof Error ? cause.message : t('web.adminAudit.loadFailed'));
+      setError(errorMessage(cause, t('web.adminAudit.loadFailed')));
     } finally {
       setLoading(false);
     }

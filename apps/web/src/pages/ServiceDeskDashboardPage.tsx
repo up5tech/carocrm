@@ -1,11 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { Alert, App as AntApp, Card, Col, Row, Statistic, Table, Typography } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
-import type { ServiceDeskMetrics } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime,t } from '../state/i18n.js';
-
 /**
  * Phase 19-SD.15 — the agent/team-lead dashboard (PLAN §13).
  *
@@ -15,27 +15,25 @@ import { formatDateTime,t } from '../state/i18n.js';
  */
 export function ServiceDeskDashboardPage() {
   const { message } = AntApp.useApp();
-  const [metrics, setMetrics] = useState<ServiceDeskMetrics | undefined>(undefined);
-  const [recent, setRecent] = useState<Record<string, unknown>[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
+  // 24.10.3: the aggregate and the recent list are one dashboard read — one query, one cache entry.
+  const dashboard = useQuery({
+    queryKey: ['serviceDesk', 'dashboard'],
+    queryFn: async () => {
       const [aggregate, rec] = await Promise.all([
         api.serviceDeskMetrics(),
         api.list('Case', { orderBy: 'modifiedAt', offset: 0, maxSize: 10 }),
       ]);
-      setMetrics(aggregate);
-      setRecent(rec.list);
-    } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.serviceDesk.dashboard.loadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [message]);
+      return { metrics: aggregate, recent: rec.list };
+    },
+  });
+  const metrics = dashboard.data?.metrics;
+  const recent = dashboard.data?.recent ?? [];
+  const loading = dashboard.isLoading;
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (dashboard.isError) void message.error(errorMessage(dashboard.error, t('web.serviceDesk.dashboard.loadFailed')));
+  }, [dashboard.isError, dashboard.error, message]);
 
   const cards = metrics === undefined
     ? []

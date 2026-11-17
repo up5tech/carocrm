@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 
 import { ApiError } from '../api/client.js';
 import type { SettingsDocumentWarning } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { useSettingsDocument, useSettingsDocumentResetter, useSettingsDocumentWriter } from '../state/admin.js';
 import { t } from '../state/i18n.js';
-
 /**
  * One settings document, edited as a draft (plans/PLAN_Phase_20_Settings_UX.md §9.2).
  *
@@ -81,7 +81,7 @@ export function useDocumentForm<T extends object>(name: string): DocumentForm<T>
           setConflict(true);
           setFailed(t('web.adminShell.conflict'));
         } else {
-          setFailed(error instanceof Error ? error.message : t('web.adminShell.saveFailed'));
+          setFailed(errorMessage(error, t('web.adminShell.saveFailed')));
         }
       } finally {
         setSaving(false);
@@ -105,7 +105,7 @@ export function useDocumentForm<T extends object>(name: string): DocumentForm<T>
         setDraft(restored.value as unknown as T);
         void message.success(t('web.adminShell.restored'));
       } catch (error) {
-        setFailed(error instanceof Error ? error.message : t('web.adminShell.saveFailed'));
+        setFailed(errorMessage(error, t('web.adminShell.saveFailed')));
       } finally {
         setSaving(false);
       }

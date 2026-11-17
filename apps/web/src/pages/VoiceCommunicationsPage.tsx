@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { VoiceProviderAccountView } from '../api/types.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime,t } from '../state/i18n.js';
-
 /**
  * Phase 19-VC.2–19-VC.5 — the Voice & Communications workspace (first surface).
  *
@@ -42,7 +42,7 @@ export function VoiceCommunicationsPage() {
         type="error"
         showIcon
         message={t('voice.page.loadFailed')}
-        description={health.error instanceof Error ? health.error.message : t('voice.page.loadFailedHint')}
+        description={errorMessage(health.error, t('voice.page.loadFailedHint')) }
         action={<Button onClick={() => void health.refetch()}>{t('voice.page.reload')}</Button>}
       />
     );

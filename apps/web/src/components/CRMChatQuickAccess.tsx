@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import { errorMessage } from '../lib/errors.js';
 import { useCrmChatStream } from '../pages/crm-chat/useCrmChatStream.js';
 import { t } from '../state/i18n.js';
 
@@ -230,7 +231,7 @@ export function CRMChatQuickAccess({
         setPhase('queued');
       })
       .catch((submitError: unknown) => {
-        setError(submitError instanceof Error ? submitError.message : t('web.crmChat.errorTitle'));
+        setError(errorMessage(submitError, t('web.crmChat.errorTitle')));
         // Drop the placeholder for the answer that never arrived.
         setMessages((previous) => previous.filter((message) => !(message.role === 'assistant' && message.content === '')));
       })

@@ -14,8 +14,8 @@ import type {
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
-
 /**
  * Phase 19-ES.7 — the template catalog and mapping screen
  * (`plans/PLAN_Phase_19_ESignature.md` §6.7, §13.1, §18 `19-ES.7`).
@@ -90,7 +90,7 @@ export function ESignatureTemplatesPanel() {
       setCatalog(await api.eSignatureTemplateCatalog(selected));
       await queryClient.invalidateQueries({ queryKey: ['eSignature', 'templateMappings', selected] });
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.templates.refreshFailed'));
+      message.error(errorMessage(error, t('esignature.templates.refreshFailed')));
     } finally {
       setRefreshing(false);
     }
@@ -107,7 +107,7 @@ export function ESignatureTemplatesPanel() {
       const detail = await api.eSignatureTemplateDetail(selected, template.templateId);
       setDrawer({ mode: 'create', template, detail });
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.templates.detailFailed'));
+      message.error(errorMessage(error, t('esignature.templates.detailFailed')));
     }
   };
 
@@ -116,7 +116,7 @@ export function ESignatureTemplatesPanel() {
       const detail = await api.eSignatureTemplateDetail(mapping.connectionId, mapping.providerTemplateId);
       setDrawer({ mode: 'edit', mapping, detail });
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('esignature.templates.detailFailed'));
+      message.error(errorMessage(error, t('esignature.templates.detailFailed')));
     }
   };
 
@@ -382,7 +382,7 @@ function MappingEditor(props: { drawer: DrawerState; onSaved: () => void }) {
         if (Array.isArray(raw)) setProblems(raw as { code: string; message: string; where: string }[]);
         else message.error(error.message);
       } else {
-        message.error(error instanceof Error ? error.message : t('esignature.templates.saveFailed'));
+        message.error(errorMessage(error, t('esignature.templates.saveFailed')));
       }
     } finally {
       setPending(false);

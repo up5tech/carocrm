@@ -4,13 +4,13 @@ import { useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { IntegrationsCatalogTab } from './advanced-integrations/IntegrationsCatalogTab.js';
 import { IntegrationsConflictsTab } from './advanced-integrations/IntegrationsConflictsTab.js';
 import { IntegrationsConnectionsTab } from './advanced-integrations/IntegrationsConnectionsTab.js';
 import { IntegrationsMappingTab } from './advanced-integrations/IntegrationsMappingTab.js';
 import { IntegrationsRunsTab } from './advanced-integrations/IntegrationsRunsTab.js';
-
 /**
  * Phase 19-INT.14 / 19-INT.15 — the Advanced Integrations workspace
  * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15; `19-INT.14`, `19-INT.15`).
@@ -43,9 +43,7 @@ export function AdvancedIntegrationsPage() {
         showIcon
         message={t('advancedintegrations.page.loadFailed')}
         description={
-          capabilities.error instanceof Error
-            ? capabilities.error.message
-            : t('advancedintegrations.page.loadFailedHint')
+          errorMessage(capabilities.error, t('advancedintegrations.page.loadFailedHint'))
         }
         action={<Button onClick={() => void capabilities.refetch()}>{t('core.common.reload')}</Button>}
       />

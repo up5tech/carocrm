@@ -9,8 +9,8 @@ import type { ESignatureConnectionTest, ESignatureConnectionView } from '../../a
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
-
 /**
  * Phase 19-ES.4 — the provider connections panel
  * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §13.4).
@@ -150,7 +150,7 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
   if (connections.isError || connections.data === undefined) {
     return (
       <ErrorState
-        message={`${t('esignature.connections.loadFailed')} ${connections.error instanceof Error ? connections.error.message : ''}`}
+        message={`${t('esignature.connections.loadFailed') } ${errorMessage(connections.error, '') }`}
         onRetry={() => void connections.refetch()}
       />
     );

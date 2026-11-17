@@ -23,10 +23,10 @@ import { Link } from 'react-router-dom';
 import { api, type CalendarEvent } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { activeLocaleName, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
-
 // Phase 19 adds ProjectTask: a project task with a date shows on the calendar, read-only (§4.13).
 const ACTIVITY_ENTITIES = ['Task', 'Call', 'Meeting', 'ProjectTask'] as const;
 
@@ -190,7 +190,7 @@ export function CalendarPage() {
       });
       setEvents(result.list);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.calendar.loadFailed'));
+      void message.error(errorMessage(error, t('web.calendar.loadFailed')));
       setEvents([]);
     } finally {
       setLoading(false);
@@ -250,7 +250,7 @@ export function CalendarPage() {
       void message.success(t('web.calendar.moved', { date: target.format('YYYY-MM-DD HH:mm') }));
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.calendar.moveFailed'));
+      void message.error(errorMessage(error, t('web.calendar.moveFailed')));
     }
   };
 
@@ -277,7 +277,7 @@ export function CalendarPage() {
       createForm.resetFields();
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.calendar.createTaskFailed'));
+      void message.error(errorMessage(error, t('web.calendar.createTaskFailed')));
     } finally {
       setCreating(false);
     }

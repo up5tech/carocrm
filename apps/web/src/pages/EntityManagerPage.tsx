@@ -6,9 +6,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
-
 /**
  * Entity Manager index (PLAN §8): the list of every entity definition in the workspace.
  *
@@ -36,7 +36,7 @@ export function EntityManagerPage() {
       void message.success(t('web.entityManager.updated'));
       await metadata.refetch();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.entityManager.changeFailed'));
+      void message.error(errorMessage(error, t('web.entityManager.changeFailed')));
     }
   };
 
@@ -121,7 +121,7 @@ export function EntityManagerPage() {
             await metadata.refetch();
             navigate(`/admin/entity-manager/${values.name}`);
           } catch (error) {
-            void message.error(error instanceof Error ? error.message : t('web.entityManager.createFailed'));
+            void message.error(errorMessage(error, t('web.entityManager.createFailed')));
           }
         }}
       >

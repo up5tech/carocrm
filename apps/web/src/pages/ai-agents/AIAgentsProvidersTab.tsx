@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentProviderCheckResult, AIAgentsHealthView, AIAgentsProviderConnection } from '../../api/types.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 
 /**
@@ -54,7 +55,7 @@ function errorText(error: unknown): string {
     if (typeof reason === 'string' && reason.trim() !== '') return reason;
     return error.message;
   }
-  return String(error);
+  return errorMessage(error, String(error));
 }
 
 interface ProviderFormValues {

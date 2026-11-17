@@ -15,6 +15,17 @@ partly fixed — sub-phases 20.22 and 20.23 shipped. F11 (no token layer) is add
 and F13 are addressed by the shipped sub-phases **20.24, 20.25, 20.26 and 20.27**, and the dark-mode
 decision **20.21** shipped 2026-10-26 — Phase 20 is complete as of 2026-10-26.
 
+**Re-measurement (Phase 24.10, 2026-11-17):** the numbers below were re-run against the current tree;
+the audit's own findings stand as the 2026-10-25 record, and §7 now carries both columns. Since the
+audit: the token layer shipped (F11 resolved — zero hex literals remain in `carocrm.css`), routes are
+lazy-loaded (F4 resolved — the largest initial chunk is ~1.2 MB, not 2.62 MB), optimistic writes
+landed for board drag, task transitions and the Projects plan/board drags (F10 partially resolved —
+`onMutate` is in use and `EntityBoardPage` already moved cards optimistically), four more
+`useEffect`-fetch pages converged to React Query (F13 still open — ~40 pages remain), cell-level
+inline editing does **not** exist (the list-view doc's claim was corrected in `docs/ux/list-view.md`),
+i18n is `en`/`vi` at exact parity (5 179 keys each), and the raw-`error.message` pattern (G64) is now
+gated by `scripts/check-ui-conventions.mjs` rule 9.
+
 ---
 
 ## 1. Scope and method
@@ -191,7 +202,8 @@ Worth stating explicitly so the upgrade list does not turn into a rewrite:
   next action, relation tabs arranged by the entity's layout, unsaved-changes guard.
 - **Keyboard coverage** is real: palette, `⌘/Ctrl+Enter` save, `Enter`/`Esc` inline edit, dnd-kit
   keyboard sensor in the layout editor, "move up/down" buttons instead of drag in the column manager.
-- **i18n is nearly complete** (4 666 / 4 668 keys, `en` + `vi`) and dates, numbers and clocks are
+- **i18n is nearly complete** (4 666 / 4 668 keys at audit time; `en`/`vi` are at exact parity —
+  5 179 keys each — as of the 2026-11-17 re-measurement) and dates, numbers and clocks are
   locale- and timezone-aware — which is exactly what makes F2 a bug rather than a gap.
 - **Responsive work is deliberate**: 260 px rail → off-canvas drawer under 768, two separate state
   variables so a resize cannot open the drawer, `prefers-reduced-motion`, `pointer: coarse` targets,
@@ -235,27 +247,35 @@ or a mobile app. The design language holds up; what it lacks is a foundation und
 
 ## 7. Measurement appendix
 
-Re-runnable, from the repository root:
+Re-runnable, from the repository root. The **audit** column is the 2026-10-25 reading; the **now**
+column was re-measured on 2026-11-17 (Phase 24.10).
 
 ```bash
 # design system
-wc -l apps/web/src/styles/carocrm.css                      # 7972
-grep -cE '#[0-9a-fA-F]{3,8}\b' apps/web/src/styles/carocrm.css   # 733
-grep -c 'var(--' apps/web/src/styles/carocrm.css           # 27
-grep -c '^\.carocrm-' apps/web/src/styles/carocrm.css      # 717 selectors
-grep -c '@media' apps/web/src/styles/carocrm.css           # 49 queries, 16 distinct breakpoints
-grep -rc 'style={{' apps/web/src --include=*.tsx           # 986 inline style objects
+wc -l apps/web/src/styles/carocrm.css                      # audit 7972 → now 8175
+grep -cE '#[0-9a-fA-F]{3,8}\b' apps/web/src/styles/carocrm.css   # audit 733 → now 0 (tokens.css owns them)
+grep -c 'var(--' apps/web/src/styles/carocrm.css           # audit 27 → now 769
+grep -c '^\.carocrm-' apps/web/src/styles/carocrm.css      # audit 717 → now 1078 selectors
+grep -c '@media' apps/web/src/styles/carocrm.css           # audit 49 → now 50 queries
+grep -rc 'style={{' apps/web/src --include=*.tsx           # audit 986 → now 1087 inline style objects
 
 # states
-grep -rn '<Empty' apps/web/src --include=*.tsx | wc -l     # 54 raw, 9 files use EmptyState
-grep -rn 'ErrorBoundary\|componentDidCatch' apps/web/src   # 0
-grep -rn "slice(0, 19)" apps/web/src                       # 14 call sites, 10 files
+grep -rn '<Empty[ />]' apps/web/src --include=*.tsx | grep -v EmptyState | wc -l   # audit 54 raw → now 0
+grep -rln 'EmptyState' apps/web/src --include=*.tsx | wc -l                     # now 43 files
+grep -rn 'ErrorBoundary\|componentDidCatch\|getDerivedStateFromError' apps/web/src  # audit 0 → now 9
+grep -rn "slice(0, 19)" apps/web/src                       # audit 14 → now 0 (gated by lint:ui)
 
 # output
-ls -l apps/web/dist/assets/index-*.js                      # 2.62 MB, 27 chunks total
+ls apps/web/dist/assets/*.js | wc -l                      # now 148 asset files
+ls -lS apps/web/dist/assets/index-*.js | head -1          # now ~1.2 MB initial chunk (was 2.62 MB)
 
 # i18n parity
-# compare flattened key sets of i18n/en/*.json and i18n/vi/*.json → 4668 / 4666 (2 missing)
+# flattened key sets of i18n/en/*.json and i18n/vi/*.json → audit 4668/4666 (2 missing) → now 5179/5179
+grep -rn 'onMutate' apps/web/src | wc -l                  # audit 0 → now 3 (React Query optimistic writes)
+
+# data fetching
+grep -rln 'useQuery\|useInfiniteQuery\|useMutation' apps/web/src --include='*.tsx' --include='*.ts' | wc -l  # now 96 files
+grep -rln 'useEffect' apps/web/src/pages --include='*.tsx' | wc -l   # now 45 files still carry effects
 ```
 
 ## 8. Unverified in this review

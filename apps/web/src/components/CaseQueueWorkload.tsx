@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ServiceDeskQueueWorkload } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { t } from '../state/i18n.js';
 import { EmptyState } from './EmptyState.js';
 import { linkLabelsOf,LinkValue } from './fields.js';
@@ -35,7 +36,7 @@ export function CaseQueueWorkload({ queueId }: CaseQueueWorkloadProps) {
       // 403 is a legitimate state for this panel; anything else is worth a message.
       const status = (error as { status?: number }).status;
       if (status === 403) setDenied(true);
-      else void message.error(error instanceof Error ? error.message : t('web.serviceDesk.workloadFailed'));
+      else void message.error(errorMessage(error, t('web.serviceDesk.workloadFailed')));
       setWorkload(undefined);
     } finally {
       setLoading(false);

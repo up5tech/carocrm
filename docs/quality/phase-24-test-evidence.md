@@ -517,3 +517,57 @@ their evidence sections above; no production-ready or parity claim was added.
   schema-backed typed-client operation (bounded client coverage remains a 24.4 follow-up); live
   delivery against a real receiver is exercised only by the fake-fetch contract tests, which is
   the intended CI posture.
+
+## Phase 24.10 + 24.11 — UX completion and quality debt / single-tenant scale — delivered 2026-11-17
+
+### 24.10/24.11.1 Delivered changes
+
+- **G64 closed.** ~150 SPA `error.message` render sites now go through the shared code-aware
+  `errorMessage()` helper (`apps/web/src/lib/errors.ts`); `check-ui-conventions.mjs` rule 9 rejects the
+  old pattern. `admin/tabs/identity.ts` delegates to the shared helper.
+- **Optimistic writes.** Project plan drag-and-drop, board column moves and task transitions use a shared
+  React Query `onMutate` helper (`apps/web/src/pages/projects/projectShared.tsx`) with cancel/snapshot/
+  rollback/invalidate; the process-task toggle in `TasksPage.tsx` already had the pattern. SPA has no
+  cell-inline-edit surface (record editing is a guarded form), documented in the phase doc.
+- **React Query migration (incremental).** `SearchPage`, `StreamPage` (`useInfiniteQuery`) and
+  `ServiceDeskDashboardPage` migrated; the `useEffect` tail remains tracked debt.
+- **Decisions recorded, no new dependencies.** No chart library (the only chart surface is a grouped-bar
+  dashlet); no rich-text dependency (no rich-text field type, zero `dangerouslySetInnerHTML`); no new
+  locales (`en`/`vi` at exact parity, 5 179 keys each).
+- **G95 fixed.** AI-agent event and integration trigger doors scanned only the first 20 published agents
+  by random UUID; both now scan all published agents via one join (`publishedTriggerAgents`). Regression
+  test seeds 25 low-sorting filler agents.
+- **Single-tenant assertion.** `scripts/check-single-tenant.mjs` fails `pnpm lint` on any
+  `getTenantId`/`tenantId`/`tenant_id` caller outside the allowlisted Entra/Graph mail files.
+- **Perf harness.** `scripts/perf-jsonb-scale.ts` — marked synthetic records, timings, EXPLAIN, marker-scoped
+  cleanup; results in `docs/quality/phase-24-11-quality-debt-scale.md` §2.3.
+
+### 24.10/24.11.2 Tests added
+
+- `apps/web/src/components/fields.test.tsx` — text escaping + XSS-payload regression (no live markup).
+- `apps/web/src/pages/projects/projectShared.test.ts` — optimistic cache transforms (plan + board).
+- `apps/api/test/ai-agent-triggers.test.ts` — +1 test (G95 beyond-window regression; file now 16 tests).
+- `e2e/optimistic-writes.spec.ts` — refused transition rolls the optimistic status back (real API + browser).
+
+### 24.10/24.11.3 Test evidence (all run 2026-11-17)
+
+- `pnpm --filter @carocrm/web typecheck` → clean; `pnpm --filter @carocrm/web lint` → clean.
+- `pnpm --filter @carocrm/api typecheck` → clean.
+- `node scripts/check-ui-conventions.mjs` → clean, 5 179 keys, 9 rules.
+- `node scripts/check-single-tenant.mjs` → clean.
+- `pnpm --filter @carocrm/web test` → **17 files / 98 tests passed**.
+- `pnpm exec vitest run apps/api/test/ai-agent-triggers.test.ts` → **16/16 passed**.
+- `pnpm exec playwright test e2e/optimistic-writes.spec.ts` → **1/1 passed** (chromium).
+- `PERF_CONTACTS=12000 PERF_ITERATIONS=15 pnpm tsx scripts/perf-jsonb-scale.ts` → two runs completed;
+  12 000 marked rows inserted and deleted per run; numbers in the 24.11 doc.
+
+### 24.10/24.11.4 Not run / limitations
+
+- `pnpm verify` and `pnpm ci:gate` were **not** re-run in this pass; authoritative final counts remain the
+  24.8 gate run (`test:ci` 94 files / 1 462 tests, worker 24 / 248, web 15 / 86) plus this pass's deltas
+  (web now 17 files / 98 tests; api triggers +1 test). 24.12 must re-run the gate before quoting numbers.
+- Browser coverage for denied/empty/error states relies on the existing `e2e/critical-paths.spec.ts`
+  (not re-executed this pass); rich-text sanitisation is covered at component level because no
+  browser-reachable rich-text surface exists.
+- The earlier `24.2` note about one timing-sensitive journey cancellation flake (`canceled` vs `succeeded`)
+  was not re-observed; G69/G75/G79 remain Fixed per `known-gaps.md`.

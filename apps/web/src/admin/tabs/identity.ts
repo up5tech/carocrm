@@ -79,8 +79,4 @@ export function errorIssues(error: unknown): string[] {
   });
 }
 
-export function errorMessage(error: unknown, fallback: string): string {
-  const issues = errorIssues(error);
-  if (issues.length > 0) return `${error instanceof ApiError ? error.message : fallback} (${issues.join(', ')})`;
-  return error instanceof Error && error.message !== '' ? error.message : fallback;
-}
+export { errorMessage } from '../../lib/errors.js';

@@ -4,10 +4,10 @@ import { useSearchParams } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
 import { LayoutEditor, type LayoutEditorState } from '../../components/LayoutEditor.js';
+import { errorMessage } from '../../lib/errors.js';
 import { t } from '../../state/i18n.js';
 import { useMetadata } from '../../state/metadata.js';
 import { usePublishTabActions } from '../shell.js';
-
 /**
  * Layout tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 3, §20.8): the per-entity layout manager hosted in
  * the settings shell. The editor itself is the same component the Entity Manager uses — one editing
@@ -40,7 +40,7 @@ export function LayoutSettingsTab() {
         void message.success(okText);
         await metadata.refetch();
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.adminLayout.saveFailed'));
+        void message.error(errorMessage(error, t('web.adminLayout.saveFailed')));
       } finally {
         setSaving(false);
       }

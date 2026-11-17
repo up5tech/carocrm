@@ -20,6 +20,7 @@ import type {
   ServiceDeskCapabilities,
   ServiceDeskTransitionRow,
 } from '../api/types.js';
+import { errorMessage } from '../lib/errors.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { linkLabelsOf,LinkValue } from './fields.js';
 
@@ -129,7 +130,7 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
       await load();
       onChanged?.();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.serviceDesk.commandFailed'));
+      void message.error(errorMessage(error, t('web.serviceDesk.commandFailed')));
     } finally {
       setBusy(false);
     }
@@ -147,7 +148,7 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
       await load();
       onChanged?.();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.serviceDesk.commandFailed'));
+      void message.error(errorMessage(error, t('web.serviceDesk.commandFailed')));
     } finally {
       setAssigning(false);
     }
@@ -165,7 +166,7 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
       await load();
       onChanged?.();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.serviceDesk.commandFailed'));
+      void message.error(errorMessage(error, t('web.serviceDesk.commandFailed')));
     } finally {
       setAssigning(false);
     }

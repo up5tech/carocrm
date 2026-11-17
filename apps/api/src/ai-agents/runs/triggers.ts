@@ -11,6 +11,14 @@ import { aiAgentScheduleId } from '../ai-agents-module.js';
 import { AIAgentRunLifecycle } from './lifecycle.js';
 import { type AIAgentRunView,type RunCreateInput } from './shared.js';
 
+/** The agent fields a trigger door needs, plus the published version's stored config. */
+interface PublishedTriggerAgent {
+  readonly id: string;
+  readonly agent_key: string;
+  readonly owner_user_id: string | null;
+  readonly version_config: unknown;
+}
+
 export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
   /**
    * Phase 19-AI.11 — a safe retry of a run whose fate is fully known.
@@ -95,6 +103,34 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
   }
 
   /**
+   * Every published agent joined to its current published version, in one query.
+   *
+   * G95 fix: the doors used to scan an arbitrary first-20 window of published agents (ordered by a
+   * random UUID), so a matching agent could be invisible. The scan now sees the whole catalogue —
+   * bounded in practice by how many agents an admin publishes — while the fan-out below stays
+   * capped at five starts per event.
+   */
+  private async publishedTriggerAgents(): Promise<readonly PublishedTriggerAgent[]> {
+    return this.database.db
+      .selectFrom('ai_agents')
+      .innerJoin('ai_agent_versions', (join) =>
+        join
+          .onRef('ai_agent_versions.agent_id', '=', 'ai_agents.id')
+          .onRef('ai_agent_versions.version', '=', 'ai_agents.current_version'),
+      )
+      .select([
+        'ai_agents.id',
+        'ai_agents.agent_key',
+        'ai_agents.owner_user_id',
+        'ai_agent_versions.config as version_config',
+      ])
+      .where('ai_agents.status', '=', 'published')
+      .where('ai_agents.is_deleted', '=', false)
+      .orderBy('ai_agents.id', 'asc')
+      .execute();
+  }
+
+  /**
    * The worker's door for committed domain events (P1, 19-AI.17; `plans/PLAN_Phase_19_AI_Agents.md` §13.1, §13.8).
    *
    * An event-triggered run executes as the **publishing user**, never wider: the agent can only do
@@ -123,27 +159,9 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
       // A disabled feature is a quiet no-op, not a retry storm for the outbox poller.
       return { disabled: true, matched: 0, started: 0, skipped: [], errors: [] };
     }
-    const db = this.database.db;
-    const published = await db
-      .selectFrom('ai_agents')
-      .selectAll()
-      .where('status', '=', 'published')
-      .where('is_deleted', '=', false)
-      .orderBy('id', 'asc')
-      .limit(20)
-      .execute();
-
-    const candidates: { readonly agent: (typeof published)[number] }[] = [];
-    for (const agent of published) {
-      if (agent.current_version === null) continue;
-      const version = await db
-        .selectFrom('ai_agent_versions')
-        .selectAll()
-        .where('agent_id', '=', agent.id)
-        .where('version', '=', agent.current_version)
-        .executeTakeFirst();
-      if (!version) continue;
-      const parsed = parseAgentConfig(version.config);
+    const candidates: { readonly agent: PublishedTriggerAgent }[] = [];
+    for (const row of await this.publishedTriggerAgents()) {
+      const parsed = parseAgentConfig(row.version_config);
       if (!parsed.ok) continue;
       const triggers = parsed.config.triggers;
       if (!triggers.event) continue;
@@ -151,7 +169,7 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
       if (!triggers.eventEntities.includes(input.entityType)) continue;
       // A record-context agent is the only shape an event can feed; it names the entity it reads.
       if (parsed.config.input.mode !== 'record' || parsed.config.input.entity !== input.entityType) continue;
-      candidates.push({ agent });
+      candidates.push({ agent: row });
     }
 
     const skipped: { agent: string; reason: string }[] = [];
@@ -338,27 +356,9 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
       return { matched: 0, started: 0, skipped: [], errors: [] };
     }
 
-    const db = this.database.db;
-    const published = await db
-      .selectFrom('ai_agents')
-      .selectAll()
-      .where('status', '=', 'published')
-      .where('is_deleted', '=', false)
-      .orderBy('id', 'asc')
-      .limit(20)
-      .execute();
-
-    const candidates: { readonly agent: (typeof published)[number] }[] = [];
-    for (const agent of published) {
-      if (agent.current_version === null) continue;
-      const version = await db
-        .selectFrom('ai_agent_versions')
-        .selectAll()
-        .where('agent_id', '=', agent.id)
-        .where('version', '=', agent.current_version)
-        .executeTakeFirst();
-      if (!version) continue;
-      const parsed = parseAgentConfig(version.config);
+    const candidates: { readonly agent: PublishedTriggerAgent }[] = [];
+    for (const row of await this.publishedTriggerAgents()) {
+      const parsed = parseAgentConfig(row.version_config);
       if (!parsed.ok) continue;
       const triggers = parsed.config.triggers;
       if (!triggers.integration) continue;
@@ -366,7 +366,7 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
       // Same rule as event triggers: the payload can only feed a record-context agent for exactly
       // this entity.
       if (parsed.config.input.mode !== 'record' || parsed.config.input.entity !== entityType) continue;
-      candidates.push({ agent });
+      candidates.push({ agent: row });
     }
 
     const skipped: { agent: string; reason: string }[] = [];

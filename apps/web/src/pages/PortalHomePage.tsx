@@ -1,5 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
 import { Alert, Card, Col, Descriptions, Row, Skeleton, Space, Typography } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
@@ -15,30 +15,27 @@ import { DashletResult } from './DashletResult.js';
  */
 export function PortalHomePage() {
   const context = usePortalContext();
-  const [results, setResults] = useState<Record<string, Record<string, unknown>>>({});
-  const [running, setRunning] = useState(false);
 
   const dashboard = context.data?.dashboard ?? null;
-  const runAll = useCallback(async () => {
-    if (!dashboard || dashboard.dashlets.length === 0) return;
-    setRunning(true);
-    try {
-      const entries = await Promise.all(
-        dashboard.dashlets.map(async (dashlet) => [dashlet.id, await api.runPortalDashlet(dashlet.id)] as const),
-      );
-      setResults(Object.fromEntries(entries));
-    } catch {
-      // A dashlet the user may not read fails on the server; showing the others is better
-      // than failing the whole dashboard.
-    } finally {
-      setRunning(false);
-    }
-  }, [dashboard]);
-
-  useEffect(() => {
-    setResults({});
-    if (dashboard && dashboard.dashlets.length > 0) void runAll();
-  }, [dashboard, runAll]);
+  // 24.10.3: dashlet execution is a query keyed by the dashboard — and allSettled, so a dashlet the
+  // portal ACL refuses fails alone instead of emptying the whole dashboard (the comment's intent,
+  // which Promise.all never actually delivered).
+  const dashlets = useQuery({
+    queryKey: ['portal', 'dashlets', dashboard?.id ?? ''],
+    queryFn: async () => {
+      if (dashboard === null) return {};
+      const settled = await Promise.allSettled(dashboard.dashlets.map((dashlet) => api.runPortalDashlet(dashlet.id)));
+      const out: Record<string, Record<string, unknown>> = {};
+      settled.forEach((result, index) => {
+        const dashlet = dashboard.dashlets[index];
+        if (result.status === 'fulfilled' && dashlet !== undefined) out[dashlet.id] = result.value;
+      });
+      return out;
+    },
+    enabled: dashboard !== null && dashboard.dashlets.length > 0,
+  });
+  const results = dashlets.data ?? {};
+  const running = dashlets.isFetching;
 
   if (context.isLoading) {
     return <Skeleton active paragraph={{ rows: 6 }} />;

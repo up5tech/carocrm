@@ -26,13 +26,13 @@ import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
+import { errorMessage } from '../lib/errors.js';
 import { pickDefaultDashboard } from '../state/dashboard-default.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import { DashletResult } from './DashletResult.js';
-
 /** The mark and the label a dashlet header shows for its kind. */
 const DASHLET_ICONS: Record<string, React.ReactNode> = {
   list: <TableOutlined />,
@@ -329,7 +329,7 @@ export function DashboardsPage() {
         setDenied(true);
         return [];
       }
-      void message.error(error instanceof Error ? error.message : t('web.dashboards.loadFailed'));
+      void message.error(errorMessage(error, t('web.dashboards.loadFailed')));
       return [];
     } finally {
       setLoading(false);
@@ -388,7 +388,7 @@ export function DashboardsPage() {
         const entries = await Promise.all(dash.dashlets.map(async (dashlet) => [dashlet.id, await api.runDashlet(dash.id, dashlet.id)] as const));
         setResults(Object.fromEntries(entries));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.dashboards.runFailed'));
+        void message.error(errorMessage(error, t('web.dashboards.runFailed')));
       }
     },
     [message],
@@ -412,7 +412,7 @@ export function DashboardsPage() {
         const ran = await api.runDashlet(active.id, dashletId);
         setResults((prev) => ({ ...prev, [dashletId]: ran }));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.dashboards.runOneFailed'));
+        void message.error(errorMessage(error, t('web.dashboards.runOneFailed')));
       }
     },
     [active, message],
@@ -465,7 +465,7 @@ export function DashboardsPage() {
         await Promise.all(changed.map((dashlet) => api.updateDashlet(active.id, dashlet.id, { position: dashlet.position })));
       } catch (error) {
         await load();
-        void message.error(error instanceof Error ? error.message : t('web.dashboards.reorderFailed'));
+        void message.error(errorMessage(error, t('web.dashboards.reorderFailed')));
       }
     },
     [active, load, message],
@@ -669,7 +669,7 @@ export function DashboardsPage() {
       setResults({});
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.dashboards.deleteFailed'));
+      void message.error(errorMessage(error, t('web.dashboards.deleteFailed')));
     }
   }, [active, defaultDashboard, load, message]);
 
@@ -680,7 +680,7 @@ export function DashboardsPage() {
         await api.deleteDashlet(active.id, dashletId);
         await load();
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.dashboards.deleteDashletFailed'));
+        void message.error(errorMessage(error, t('web.dashboards.deleteDashletFailed')));
       }
     },
     [active, load, message],
