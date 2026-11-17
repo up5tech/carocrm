@@ -1,7 +1,7 @@
 # API endpoint registry (PLAN §58)
 
 > **Started:** 2026-11-13
-> **Completed:** 2026-11-16 — every `/api` route is documented (920 endpoints across 29 files) and
+> **Completed:** 2026-11-17 — every `/api` route is documented (927 endpoints across 30 files) and
 > `pnpm ci:api-spec` runs the checker in `--strict` mode inside `pnpm ci:gate`: a newly added
 > undocumented route now fails the nightly gate.
 > **Plan:** `plans/PLAN.md` §58 — “Create a machine-readable endpoint registry.”
@@ -82,7 +82,7 @@ The generator **fails** on a missing schema file, an unresolvable `$ref`, an uns
 path parameter, or an `operationId` collision; it never falls back to `any` or to the prose fields.
 `pnpm ci:api-client` (`--check`) runs inside `pnpm ci:gate` and fails when the committed
 `generated.ts` is stale. `apps/api/test/api-spec-client-contract.test.ts` proves the JSON Schemas and
-the controller Zod schemas agree on a fixture corpus. Registry coverage (all 920 routes) and
+the controller Zod schemas agree on a fixture corpus. Registry coverage (all 927 routes) and
 typed-client coverage (the operations carrying schemas — currently the five session operations) are
 reported separately on purpose.
 
@@ -108,8 +108,10 @@ The checker fails when:
 - a file has no `group`, `basePath` or `endpoints`;
 - an endpoint is missing a required field, has an unknown `method`/`auth`, a path not starting with `/`,
   or a path that does not start with the file's `basePath`;
-- a documented `method + path` does not exist in `apps/api/src/**/*.controller.ts` (path parameters are
-  compared by position, so `:id` and `:sessionId` match);
+- a documented `method + path` does not exist in `apps/api/src/**/*.controller.ts` or
+  `modules/*/src/**/*.controller.ts` (path parameters are compared by position, so `:id` and
+  `:sessionId` match) — Phase 24.8 added the module scan so extension-contributed routes such as
+  `/api/v1/WebhookEndpoint` are held to the same contract;
 - the same endpoint is documented twice.
 
 It is part of `pnpm ci:gate` (so the nightly lane runs it) **in `--strict` mode since 2026-11-16**:
@@ -151,10 +153,11 @@ committed registry passes it.
 | Voice communications | `voice-communications.yaml` | documented (2026-11-16) — 66 routes |
 | Customer success | `customer-success.yaml` | documented (2026-11-16) — 54 routes |
 | Platform misc (i18n, audit log, formula, hooks, setup checklist) | `platform.yaml` | documented (2026-11-16) — 7 routes |
+| Outbound webhook endpoints (webhook-integration extension) | `webhook-endpoints.yaml` | documented (2026-11-17) — 6 routes |
 
 `pnpm ci:api-spec` prints the current counts (documented, matched, missing, undocumented) on every run, so
-the coverage row above can be checked instead of trusted. Since 2026-11-16 it reports **29 files, 920
-documented endpoints, 920 matched, 0 problems, 0 undocumented** — strict coverage is complete.
+the coverage row above can be checked instead of trusted. Since 2026-11-17 it reports **30 files, 927
+documented endpoints, 927 matched, 0 problems, 0 undocumented** — strict coverage is complete.
 
 ## 5. Adding a group
 

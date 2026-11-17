@@ -462,3 +462,58 @@ their evidence sections above; no production-ready or parity claim was added.
   the five session operations is future work — the yaml prose contract covers all 920 routes but only
   the bounded set has JSON Schema + generated types; `apps/web/src/api/client.ts` migration to the
   generated client is staged, not done.
+
+## Phase 24.8 — Outbound Events and Developer Surface (P1) — delivered 2026-11-17
+
+### 24.8.1 Delivered changes
+
+- **Connector confirmed and closed out.** The generic outbound connector is the opt-in
+  `webhook-integration` extension (`modules/webhook-integration`): admin-only
+  `/api/v1/WebhookEndpoint` CRUD + delivery ledger, `webhook.deliver` worker job, HMAC-SHA256
+  signatures, per-attempt SSRF re-validation, `extension_webhook_deliveries` ledger. The
+  provider-matrix row moved from `not started` to `implemented`.
+- **Event catalogue pinned to source.** `SUPPORTED_EVENTS` is `entity.created`,
+  `entity.updated`, `entity.deleted`, `entity.restored` — exactly `DOMAIN_EVENT_TYPES` in
+  `packages/core/src/domain-events`. `docs/outbound-events.md` was rewritten to match the real
+  contract: envelope `{id, eventType, payload{entityType, entityId, changed, userId, version}}`,
+  headers `x-caro-event` / `x-caro-delivery` / `x-caro-signature`, receiver-side verification
+  snippet with a 5-minute replay window, and the true retry boundary (transport failure → BullMQ
+  retry; any HTTP response → ledgered `failed`, no automatic retry).
+- **Registry covers extension routes.** `scripts/check-api-spec.mjs` now scans
+  `modules/*/src/**/*.controller.ts` in addition to `apps/api/src`, so extension-contributed
+  routes are held to the same strict contract. Seven routes were documented:
+  `api-spec/webhook-endpoints.yaml` (6 `WebhookEndpoint` routes, administrator-only) and the
+  `project-domain` `GET /api/v1/Project/:id/summary` entry in `projects.yaml`. Registry is now
+  **30 files / 927 endpoints / 927 matched / 0 undocumented** under `--strict`.
+- **D6 deferral recorded.** No metadata `plan/apply` CLI and no GraphQL; rationale in
+  `docs/outbound-events.md` §D6 and the plan's D6 row. The typed client from 24.4 already has a
+  real consumer (`apps/web/src/api/types.ts`); broader `operationId` coverage remains incremental.
+
+### 24.8.2 Tests added
+
+- `apps/api/test/webhook-outbound-contract.test.ts` (8 tests, DB-free, added to
+  `vitest.ci.config.ts`): event catalogue equals `DOMAIN_EVENT_TYPES`; `entityEventType` mapping;
+  `parseEvents` jsonb form; delivery envelope + headers + HMAC verification over the exact body
+  bytes + fresh `x-caro-delivery`; unsubscribed endpoints skipped; HTTP 500 ledgered without
+  throw; transport failure rethrown for BullMQ retry; missing `eventType` fails loudly.
+
+### 24.8.3 Test evidence
+
+- `node scripts/check-api-spec.mjs --strict` → **exit 0** — 30 files, 927 documented, 927
+  matched, 0 problems, 0 undocumented (previously 920; +7 module routes).
+- `npx vitest run --config vitest.ci.config.ts apps/api/test/webhook-outbound-contract.test.ts`
+  → **8/8 passed**.
+- `pnpm ci:api-spec` → same strict result inside the gate (see ci:gate run below).
+- `pnpm typecheck` → clean; `pnpm lint:changed` → 0 errors.
+- `pnpm test:ci` → **94 files / 1 462 tests passed** (includes the new 8-test suite).
+
+### 24.8.4 Acceptance and outstanding work
+
+- **Met:** an integrator can subscribe to a documented event and verify a signed delivery using
+  only `docs/outbound-events.md` + the api-spec contract; no GraphQL, no second webhook
+  framework, no parallel CLI; every public endpoint including extension-contributed ones is
+  documented and strict-checked; D6 deferral recorded with rationale.
+- **Outstanding:** none blocking for 24.8. The webhook administration API is not yet a
+  schema-backed typed-client operation (bounded client coverage remains a 24.4 follow-up); live
+  delivery against a real receiver is exercised only by the fake-fetch contract tests, which is
+  the intended CI posture.

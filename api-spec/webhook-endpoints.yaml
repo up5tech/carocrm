@@ -1,0 +1,83 @@
+# PLAN §58/§24.8 — outbound webhook endpoint administration, contributed by the
+# `webhook-integration` extension package (modules/webhook-integration).
+# Source: modules/webhook-integration/src/endpoint.controller.ts and endpoint.service.ts.
+# These routes exist only while the extension is installed and enabled; every action calls
+# requireAdmin() on EXTENSION_PRINCIPAL, so a non-administrator gets AUTHORIZATION_DENIED.
+# Secrets are write-only: reads answer hasSecret, never the secret. Delivery itself runs in the
+# worker as the `webhook.deliver` job — these endpoints never send a request inline.
+# Format and required fields: api-spec/README.md §2.
+group: webhook-endpoints
+basePath: /api/v1
+endpoints:
+  - method: GET
+    path: /api/v1/WebhookEndpoint
+    auth: authenticated
+    permissions: administrator (WebhookEndpointService.requireAdmin via EXTENSION_PRINCIPAL)
+    request: none
+    response: "200 { list: WebhookEndpointView[], total } — WebhookEndpointView { id, name, url, events, enabled, hasSecret, createdAt, modifiedAt }; events are drawn from entity.created|entity.updated|entity.deleted|entity.restored"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: none (full list, ordered by name)
+    sorting: fixed name ASC
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/WebhookEndpoint/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 WebhookEndpointView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/WebhookEndpoint/:id/deliveries
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { list: DeliveryView[], total } — DeliveryView { id, endpointId, eventType, status (delivered|failed|skipped), attempts, responseCode, error, createdAt }; newest 100 rows"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    pagination: fixed LIMIT 100, ordered created_at DESC
+    sorting: fixed created_at DESC
+    filtering: fixed to the path endpoint id
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/WebhookEndpoint
+    auth: authenticated
+    permissions: administrator
+    request: "body { name (required, <=120 chars), url (required, https only, no credentials, must resolve to public addresses — SSRF guard), events (required, non-empty subset of entity.created|entity.updated|entity.deleted|entity.restored), secret? (write-only, AES-256-GCM at rest, never returned), enabled? (default true) }"
+    response: "201 WebhookEndpointView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [extension_webhook_endpoints row; future entity mutations enqueue webhook.deliver jobs for this endpoint]
+    idempotency: not idempotent — each call creates a new endpoint row
+  - method: PUT
+    path: /api/v1/WebhookEndpoint/:id
+    auth: authenticated
+    permissions: administrator
+    request: "body same shape as create; every field optional — omitted fields keep current values; a supplied secret replaces the stored one (write-only), an empty string leaves the existing secret unchanged"
+    response: "200 WebhookEndpointView"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND, VALIDATION_FAILED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [extension_webhook_endpoints row update; secret_encrypted rotated only when a new secret is supplied]
+    idempotency: safe to repeat with the same body
+  - method: DELETE
+    path: /api/v1/WebhookEndpoint/:id
+    auth: authenticated
+    permissions: administrator
+    request: none
+    response: "200 { id, removed: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [extension_webhook_endpoints row deleted; its extension_webhook_deliveries ledger rows deleted with it]
+    idempotency: safe to repeat in effect — a second call answers NOT_FOUND

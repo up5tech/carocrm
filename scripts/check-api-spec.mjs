@@ -20,7 +20,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const SPEC_DIR = 'api-spec';
-const SRC_DIR = 'apps/api/src';
+// Phase 24.8: extension packages under modules/*/src contribute controllers too (e.g. the
+// webhook-integration WebhookEndpoint API and project-domain's Project summary). Their routes
+// are public /api surface, so the registry must cover them as well.
+const SRC_DIRS = ['apps/api/src', ...moduleSourceDirs('modules')];
 const REQUIRED_FIELDS = [
   'method',
   'path',
@@ -108,6 +111,22 @@ function parseSpec(text, file) {
   return doc;
 }
 
+function moduleSourceDirs(root) {
+  try {
+    return readdirSync(root)
+      .map((name) => join(root, name, 'src'))
+      .filter((dir) => {
+        try {
+          return statSync(dir).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
 function controllerFiles(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
@@ -129,19 +148,21 @@ const ROUTE_RE = /^\s*@(Get|Post|Put|Patch|Delete)\(\s*(?:'([^']*)'|"([^"]*)")?\
 /** Static route inventory from the controllers. */
 function sourceRoutes() {
   const routes = [];
-  for (const file of controllerFiles(SRC_DIR)) {
-    let prefix = '';
-    for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-      const controller = CONTROLLER_RE.exec(line);
-      if (controller) {
-        prefix = controller[1] ?? controller[2] ?? '';
-        continue;
+  for (const dir of SRC_DIRS) {
+    for (const file of controllerFiles(dir)) {
+      let prefix = '';
+      for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+        const controller = CONTROLLER_RE.exec(line);
+        if (controller) {
+          prefix = controller[1] ?? controller[2] ?? '';
+          continue;
+        }
+        const route = ROUTE_RE.exec(line);
+        if (!route) continue;
+        const suffix = route[2] ?? route[3] ?? '';
+        const path = `/${[prefix, suffix].filter((part) => part !== '').join('/')}`.replace(/\/{2,}/g, '/');
+        routes.push({ method: route[1].toUpperCase(), path, file: relative(process.cwd(), file) });
       }
-      const route = ROUTE_RE.exec(line);
-      if (!route) continue;
-      const suffix = route[2] ?? route[3] ?? '';
-      const path = `/${[prefix, suffix].filter((part) => part !== '').join('/')}`.replace(/\/{2,}/g, '/');
-      routes.push({ method: route[1].toUpperCase(), path, file: relative(process.cwd(), file) });
     }
   }
   return routes;

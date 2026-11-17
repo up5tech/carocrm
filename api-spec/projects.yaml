@@ -373,3 +373,15 @@ endpoints:
     filtering: none
     sideEffects: [ProjectTaskCollaborator entity record removal(s) for the task+user pair]
     idempotency: safe to repeat — a second call answers { removed: false }
+  - method: GET
+    path: /api/v1/Project/:id/summary
+    auth: authenticated
+    permissions: "authenticated plus entity-level Project read ACL and record-level Project read ACL, evaluated through the extension host's EXTENSION_ACL facade (project-domain extension)"
+    request: none
+    response: "200 ProjectSummary { id, name, dateStart, dateEnd, boardId, ownerUserId, budget, progress, label, fieldCount, ownership { assignedUserId, createdById, teams } } — derived aggregate; counts respect ACL by construction"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat

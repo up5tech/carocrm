@@ -72,6 +72,9 @@ const PURE_API_TESTS = [
   'service-desk-domain.test.ts',
   'voice-communications-domain.test.ts',
   'voice-provider-twilio-asterisk.test.ts',
+  // Phase 24.8: the outbound webhook contract suite is DB-free — it stubs fetch and drives
+  // deliverWebhook with a fake port, pinning the published event/envelope/signature contract.
+  'webhook-outbound-contract.test.ts',
 ].map((file) => `apps/api/test/${file}`);
 
 export default defineConfig({

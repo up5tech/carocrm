@@ -39,7 +39,7 @@ updated accordingly.
 | # | Provider | Tier | Auth model | CRM direction | First release? | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 0 | **Generic REST API** connector | 0 | API key / bearer token, or none | Inbound → CRM | **Yes — 1st** | `implemented` — read-only |
-| 0 | **Generic outbound event/webhook** connector | 0 | n/a (the CRM is the sender) | CRM → external endpoint | No | `not started` — deliberately: outbound needs a reviewed decision about which data may leave the CRM |
+| 0 | **Generic outbound event/webhook** connector | 0 | n/a (the CRM is the sender) | CRM → external endpoint | No | `implemented` — opt-in `webhook-integration` extension: HMAC-signed deliveries, SSRF guard, delivery ledger, worker retries; contract in `docs/outbound-events.md` |
 | 1 | **Google Workspace** — Calendar, Contacts | 1 | OAuth 2.0 | Inbound → CRM; outbound for writes | **Yes — 2nd** | `implemented` |
 | 2 | **Microsoft 365** — Outlook/365, People | 1 | OAuth 2.0 | Inbound → CRM; outbound for writes | No | `implemented` |
 | 3 | **Zoom** | 1 | OAuth 2.0 | Outbound (CRM → Zoom) + inbound webhooks | No | `implemented` — meetings only, no recordings |
