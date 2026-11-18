@@ -34,8 +34,18 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   inside it (circular → `UndefinedDependencyException`); import `./ai-agent-tools.js`.
 - Raw-SQL tools must translate record ACL themselves (`recordPredicate()` returns a predicate; SQL
   translation is private in `entity-record.store.ts`). No grant/`*` → denyAll.
-- `stream_items` uses `entity_type`/`entity_id`/`is_deleted`. Catalogue after 19-CHAT.23 = 20 keys;
-  19-CHAT.24 owns chip `requiresTool` data, eval cases, `docs/architecture/crm-chat-contract.md`.
+- `stream_items` uses `entity_type`/`entity_id`/`is_deleted`. 19-CHAT.24 owns chip `requiresTool`
+  data, eval cases, `docs/architecture/crm-chat-contract.md`. Catalogue was 20 keys after
+  19-CHAT.23; **25 now** (15 built-in + 10 domain contributions), authoritative enumeration in
+  `apps/api/test/ai-agent-runs.test.ts`; docs saying 20/21 are stale. Per-agent `MAX_TOOLS` = 24.
+- Runtime: `runs/executor.ts` ~1,491 lines (near the 1,500 ceiling in the 19-AI plan) — split before
+  growing it. Bounded JSON output via `ai-agent-config.ts`; Anthropic adapter has **no** structured
+  output (`ai-provider-anthropic.ts:30,241`). Only OpenAI-compatible + Anthropic adapters are
+  registered; the other 24 presets are configuration, not adapters.
+- AI parity boundary (Phase 25, planned 2026-11-18): single-tenant only — no workspace/credits/
+  billing/personal AI allowance; Twenty's alpha skills/agents and beta MCP are not parity gates.
+  CaroCRM already ships MCP-compatible tools and stronger fail-closed ACL/injection evals. Plan:
+  `plans/PLAN_Phase_25_AI_Capability_Parity.md`.
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial

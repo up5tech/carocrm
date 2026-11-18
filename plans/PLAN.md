@@ -2941,6 +2941,33 @@ recovered from documented artifacts; and the final review records an honest go/n
 
 ---
 
+## Phase 25 — AI Capability Parity (Single-Tenant)
+
+Status: **Planned** (2026-11-18); no code, migration, database or release action has been taken. Scope,
+work order, owner decisions and acceptance criteria live in
+`plans/PLAN_Phase_25_AI_Capability_Parity.md`. This phase follows Phase 24 (`docs/quality/phase-24-12-release-review.md`
+still records an open production gate) and does **not** reopen that gate: its own review is AI-capability only and
+permits alpha/pilot evidence while 24.12 stays open.
+
+Phase 25 turns the existing AIAgents / CRM Chat engine into a parity-level product surface: an evidence-based
+capability matrix against Twenty v2.59, an explicit least-privilege agent principal, reusable versioned skills, a
+bounded AI action inside the workflow engine, watched-field and condition triggers, bounded multimodal input,
+grounded web search, page-aware chat, installation-level cost visibility and a deterministic golden evaluation gate.
+
+**Product decision (owner, 2026-11-13, reaffirmed here): still single-tenant — one deployment serves one
+organisation.** No workspace, tenant id, per-tenant retrieval, credits, billing, personal AI allowance or
+hosted multi-tenant AI. Twenty's alpha skills/agents and beta MCP declarations are not treated as shipped
+parity requirements; CaroCRM's MCP-compatible adapter and fail-closed ACL remain the stronger side.
+
+Acceptance:
+
+Every matrix row is verified by an executed test or an owner-accepted skip; a published agent can run from chat,
+trigger and workflow under one pinned least-privilege principal; the golden tool-routing gate detects a deliberate
+regression in the existing nightly lane; and the final review records an honest AI-only go/no-go without claiming
+production readiness or full Twenty/EspoCRM parity.
+
+---
+
 # 58. API Endpoint Inventory Plan
 
 Status (2026-11-16): **registry complete, strict gate enabled** — `api-spec/` now holds 29 files

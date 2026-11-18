@@ -109,6 +109,7 @@
 | G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
 | G97 | Dependency-vulnerability audit is manual, not in the mandatory gate | platform | Low | Accepted (23.6) |
 | G98 | The three sample extension packages in `modules/` are unsigned | extensions | Low | Accepted (23.6) |
+| G99 | AI documentation drift: SPEC `MAX_TOOLS` 24 vs code 32; "schedule/integration triggers not implemented" vs shipped gated doors; chat contract status line stale | ai-agents / crm-chat (docs) | Low | Open (25.0) — correct in 25.1 |
 
 **Phase 23.11 status note (2026-11-13).** The Phase 23 security workstream is finished and its release review is
 recorded in `docs/quality/phase-23-security-release-review.md` with a **NO-GO** decision. Two rows block a
@@ -122,7 +123,8 @@ the authoritative list of what is accepted. No new finding was raised by 23.11.
 24.0 audit, 24.1 charter, 24.2 blocker records and 24.3 production artifacts are delivered; 24.4 (`api-spec/`
 to `--strict` + typed client) is in flight; 24.5 reconciled this summary; 24.6 delivered real inbound mail
 (IMAP + Microsoft Graph adapters, per-connection cursors, scoped dedupe, encrypted connection credentials —
-`docs/runbooks/inbound-mail.md`). New findings continue from **G99**;
+`docs/runbooks/inbound-mail.md`). New findings continue from **G100** (G99 was filed by the Phase 25.0
+baseline, 2026-11-18);
 history is not renumbered. Rows labelled "exception" above mirror live rows in
 `docs/security/exception-register.md` §2 — where this table and the register disagree, the register wins, and
 review dates there (2026-12-09 / 2026-12-13) govern reopening. The release decision is unchanged: **NO-GO for
@@ -1194,3 +1196,30 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
   a release-key workflow; neither belongs in this phase. The module guide and
   `docs/extension-sdk.md` §8 document the signing procedure, and `warn` is the development default so
   the fixtures still load locally. Revisit when the sample packages become release artifacts (23.9).
+
+## G99 — AI documentation drift found by the Phase 25.0 baseline
+
+- **Module / contract:** ai-agents, crm-chat — documentation only; no runtime defect was found.
+- **Evidence (25.0, 2026-11-18):**
+  - `plans/SPEC.md:268` documents `MAX_TOOLS` 24 ("nâng từ 20 lên 24"); the code allows 32
+    (`apps/api/src/ai-agents/ai-agent-config.ts:50`). The registry holds 25 keys (15 built-ins +
+    10 module contributions); `plans/SPEC.md:8` and `apps/api/test/ai-agent-runs.test.ts:351-387`
+    correctly describe 24 Chat-facing tools + `omnichannel.send_message`.
+  - `plans/SPEC.md:8` ("Schedule triggers và integration triggers vẫn chưa triển khai") and
+    `docs/reference/compatibility-matrix.md:362` ("schedule/integration triggers not implemented")
+    are stale: the event, schedule and integration doors shipped in 19-AI.25
+    (`apps/api/src/ai-agents/runs/triggers.ts:2,50,85-87,296`), gated by
+    `features.eventTriggers` / `features.scheduledTriggers`, both default `false`
+    (`apps/api/src/ai-agents/ai-agents-settings.service.ts:30-42`). Implemented-but-off is not
+    "not implemented".
+  - `docs/architecture/crm-chat-contract.md:5` still says "implemented in full through 19-CHAT.24"
+    although the same document records the 1.3.0 hardening (19-CHAT.25 → 19-CHAT.29) and the
+    contract serves 27 implemented routes at version 1.3.0
+    (`apps/api/src/crm-chat/crm-chat-contract.ts:19`).
+- **Impact:** an operator or coding agent reading these docs underestimates the tool ceiling,
+  believes trigger doors are absent, or misdates the chat contract surface. Parity claims built
+  on them would be wrong. No security or data impact.
+- **Severity:** Low — documentation only; runtime behaviour is correct and fail-closed.
+- **Status:** Open (25.0, 2026-11-18). Disposition: correct in 25.1
+  (`plans/PLAN_Phase_25_AI_Capability_Parity.md` §7). Filed by
+  `docs/quality/phase-25-ai-parity-baseline.md` §3.
