@@ -50,6 +50,37 @@ describe('parseAgentConfig legacy shape', () => {
   });
 });
 
+describe('parseAgentConfig execution principal (25.2)', () => {
+  it('defaults to the requesting user, including for legacy drafts', () => {
+    const fresh = parseAgentConfig({});
+    expect(fresh.ok).toBe(true);
+    if (fresh.ok) expect(fresh.config.principal.mode).toBe('requesting_user');
+
+    const legacy = parseAgentConfig({
+      model: { provider: 'openai', model: 'gpt-4o-mini' },
+      tools: [],
+      instructions: 'Legacy instructions.',
+    });
+    expect(legacy.ok).toBe(true);
+    if (legacy.ok) expect(legacy.config.principal.mode).toBe('requesting_user');
+  });
+
+  it('accepts the publisher rule for automated trigger doors', () => {
+    const parsed = parseAgentConfig({ principal: { mode: 'publisher' } });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.config.principal.mode).toBe('publisher');
+  });
+
+  it('refuses a service identity or an unknown principal rule', () => {
+    for (const mode of ['service', 'sysAdmin', 'workflow']) {
+      const parsed = parseAgentConfig({ principal: { mode } });
+      expect(parsed.ok, mode).toBe(false);
+    }
+    const extra = parseAgentConfig({ principal: { mode: 'requesting_user', userId: 'u_fake' } });
+    expect(extra.ok).toBe(false);
+  });
+});
+
 describe('parseAgentConfig tool ceiling', () => {
   const grant = (n: number) => ({ tools: Array.from({ length: n }, (_, i) => ({ key: `tool_${String(i)}` })) });
 

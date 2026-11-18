@@ -1,6 +1,9 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0 delivered 2026-11-18 (`docs/quality/phase-25-ai-parity-baseline.md`, `docs/quality/phase-25-priority-decisions.md`; D1–D7 defaults applied, owner override window open until 25.1). No code, migration, database, provider account or release action is authorised by this document. Work continues at Phase 25.1.
+> **Status:** 25.0, 25.1 and 25.2 delivered 2026-11-18 (canonical claims:
+> `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
+> 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
+> JSONB — no migration, schema change, provider account or release action. Work continues at 25.3.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -153,7 +156,7 @@ Files created in Phase 25 may be incomplete; record them in `docs/quality/known-
 |---|---|---|---|
 | 25.0 | Baseline audit and parity reconciliation | P0 | **Delivered 2026-11-18** — `docs/quality/phase-25-ai-parity-baseline.md`, D1–D7 defaults in `docs/quality/phase-25-priority-decisions.md`, G99 filed; no code changes |
 | 25.1 | AI charter and documentation truthfulness | P0 | Canonical parity doc, corrected versions/counts, explicit skips |
-| 25.2 | Agent principal and least privilege | P0 | Pinned execution principal, role binding, permission matrix, tests |
+| 25.2 | Agent principal and least privilege | P0 | **Delivered 2026-11-18** — `principal.mode` pinned in published config; least-privilege matrix in the canonical matrix; 25.2 + regression tests pass; no migration |
 | 25.3 | Provider capability parity | P1 | Adapter/preset capability table, Anthropic structured-output fallback, no new SDK |
 | 25.4 | Reusable versioned skills | P1 | Skill metadata, admin API/UI, agent binding, no code execution |
 | 25.5 | Workflow AI action | P1 | Bounded `runAgent` action in `WORKFLOW_ACTIONS`, worker port, approval path |

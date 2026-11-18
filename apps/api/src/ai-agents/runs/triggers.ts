@@ -216,6 +216,9 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
                   ? 'not_found'
                   : 'internal_error';
         errors.push({ agent: agent.agent_key, category });
+        if (category === 'internal_error') {
+          log.warn({ agentId: agent.id, err: error instanceof Error ? error.message : String(error) }, 'trigger run failed');
+        }
       }
     }
     return { matched: candidates.length, started, skipped, errors };
@@ -410,6 +413,9 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
                   ? 'not_found'
                   : 'internal_error';
         errors.push({ agent: agent.agent_key, category });
+        if (category === 'internal_error') {
+          log.warn({ agentId: agent.id, err: error instanceof Error ? error.message : String(error) }, 'trigger run failed');
+        }
       }
     }
     return { matched: candidates.length, started, skipped, errors };

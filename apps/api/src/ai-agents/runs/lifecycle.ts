@@ -68,6 +68,20 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     if (agentConfigChecksum(version.config) !== version.checksum) {
       throw new ValidationError('The published version checksum does not match its configuration; republish the agent.');
     }
+    // 25.2 — the principal rule is pinned in this immutable version. Manual, Chat and workflow
+    // doors always act as the authenticated initiator; an automated door may pin the publisher,
+    // but only when the door is already running as that owner. There is no service identity.
+    const trigger = input.trigger ?? 'manual';
+    if (config.principal.mode === 'publisher') {
+      if (trigger === 'manual') {
+        throw new ValidationError('This version pins the publisher as principal and cannot be started manually or from Chat.');
+      }
+      if (agent.owner_user_id === null || agent.owner_user_id !== principal.userId) {
+        throw new ValidationError('This version pins the publisher as principal; only the publisher may start it.');
+      }
+    } else if (config.principal.mode !== 'requesting_user') {
+      throw new ValidationError('The published principal rule is not recognised; republish the agent.');
+    }
     if (!allowTrigger && input.trigger !== undefined && input.trigger !== 'manual') {
       // Non-interactive triggers arrive with their own service identity in AI.15–AI.17. Refusing is
       // safer than accepting a trigger no principal model enforces.
@@ -201,7 +215,8 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     }
     await this.appendEvent(id, 'run', 'run.queued', `Run queued for agent "${agent.name}".`, {
       agentVersion: version.version,
-      trigger: input.trigger ?? 'manual',
+      principalMode: config.principal.mode,
+      trigger,
       ...(conversation === undefined ? {} : { conversationId: conversation.id }),
     });
     await this.enqueue(id);

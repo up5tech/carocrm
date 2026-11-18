@@ -43,11 +43,14 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   growing it. Bounded JSON output via `ai-agent-config.ts`; Anthropic adapter has **no** structured
   output (`ai-provider-anthropic.ts:30,241`). Only OpenAI-compatible + Anthropic adapters are
   registered; the other 24 presets are configuration, not adapters.
-- AI parity boundary (Phase 25, **in progress; 25.0 + 25.1 docs delivered 2026-11-18**): single-tenant
+- AI parity boundary (Phase 25, **in progress; 25.0/25.1/25.2 delivered 2026-11-18**): single-tenant
   only — no workspace/credits/billing/personal AI allowance; Twenty's alpha skills/agents and beta MCP
   are not parity gates. CaroCRM already ships MCP-compatible tools and stronger fail-closed
   ACL/injection evals. Canonical claim source: `docs/architecture/ai-capability-matrix.md`; plan:
-  `plans/PLAN_Phase_25_AI_Capability_Parity.md`; G99 doc drift Fixed in 25.1.
+  `plans/PLAN_Phase_25_AI_Capability_Parity.md`; G99 doc drift Fixed in 25.1. Published versions pin
+  `config.principal.mode` (`requesting_user` default; `publisher` automated doors only, owner-only);
+  service principals are refused and `service_principal` remains NULL. Every run event carries
+  effective principal + pinned version. 25.2 is implemented and verified but left uncommitted.
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial

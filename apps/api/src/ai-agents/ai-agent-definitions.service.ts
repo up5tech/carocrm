@@ -1093,6 +1093,7 @@ export class AIAgentDefinitionService {
               { key: 'crm_list_related' },
               { key: 'crm_record_summary' },
             ],
+            principal: { mode: 'requesting_user' },
             limits: {
               maxSteps: 6,
               maxModelCalls: 6,
@@ -1130,6 +1131,7 @@ export class AIAgentDefinitionService {
             },
             input: { mode: 'text' },
             tools: [{ key: 'docs_search' }, { key: 'docs_read_page' }],
+            principal: { mode: 'requesting_user' },
             limits: {
               maxSteps: 6,
               maxModelCalls: 6,
@@ -1187,6 +1189,7 @@ function parsedFallbackConfig(): AgentConfig {
     prompt: { system: '' },
     input: { mode: 'text' },
     tools: [],
+    principal: { mode: 'requesting_user' },
     limits: {
       maxSteps: 6,
       maxModelCalls: 6,

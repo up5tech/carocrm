@@ -135,6 +135,20 @@ const ToolGrantSchema = z
   })
   .strict();
 
+/**
+ * Phase 25.2 — the execution principal is part of the immutable published config, not an ambient
+ * switch. `requesting_user` is the default for manual, Chat and workflow-initiated runs: the
+ * authenticated user at the door. `publisher` is allowed only for automated trigger doors, which
+ * must already be running as the agent owner; it makes that attribution part of the version rather
+ * than a convention. A service identity is not a mode — `ai_agent_runs.service_principal` stays NULL.
+ */
+const AgentPrincipalSchema = z
+  .object({
+    mode: z.enum(['requesting_user', 'publisher']).default('requesting_user'),
+  })
+  .strict()
+  .prefault({});
+
 const AgentLimitsSchema = z
   .object({
     maxSteps: z.number().int().min(1).max(HARD_LIMIT_CEILINGS.maxSteps).default(DEFAULT_AGENT_LIMITS.maxSteps),
@@ -203,6 +217,7 @@ export const AgentConfigSchema = z
       .strict()
       .prefault({}),
     tools: z.array(ToolGrantSchema).max(MAX_TOOLS).default([]),
+    principal: AgentPrincipalSchema,
     limits: AgentLimitsSchema,
     output: AgentOutputSchema,
     /**
@@ -313,6 +328,7 @@ export function blankAgentConfig(): AgentConfig {
     prompt: { system: '' },
     input: { mode: 'text' },
     tools: [],
+    principal: { mode: 'requesting_user' },
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { appendRunEvent } from '../src/ai-agents/ai-agent-run-events.js';
 import type { AIProviderResponse } from '../src/ai-agents/ai-provider.js';
 import { AIProviderGateway } from '../src/ai-agents/ai-provider-gateway.service.js';
 
@@ -46,7 +47,10 @@ function stubDb(failLedger: boolean): { db: never; captured: Captured } {
       };
       return { execute: exec };
     };
-    b['executeTakeFirst'] = async () => ({ seq: 0 });
+    b['executeTakeFirst'] = async () =>
+      b['__table'] === 'ai_agent_runs'
+        ? { initiated_by_user_id: 'u_25_2_principal', agent_version: 7 }
+        : { seq: 0 };
     b['execute'] = async () => ({});
     return b;
   };
@@ -136,5 +140,27 @@ describe('provider ledger failure observability (19-AI.24)', () => {
     const { db, captured } = stubDb(true);
     await gatewayWith(db).complete({ connectionKey: 'fake', request: REQUEST });
     expect(captured.runEvents).toHaveLength(0);
+  });
+});
+
+describe('run event principal attribution (25.2)', () => {
+  it('stamps the effective user and pinned version from the run row, not the caller', async () => {
+    const { db, captured } = stubDb(false);
+    await appendRunEvent(db, {
+      runId: 'run-3',
+      category: 'run',
+      type: 'run.queued',
+      summary: 'Queued.',
+      payload: { agentVersion: 1, principalMode: 'requesting_user' },
+    });
+    expect(captured.runEvents).toHaveLength(1);
+    const event = captured.runEvents[0] as Record<string, unknown> | undefined;
+    expect(event).toBeDefined();
+    if (event === undefined) return;
+    expect(event['actor_type']).toBe('user');
+    expect(event['actor_id']).toBe('u_25_2_principal');
+    const payload = JSON.parse(String(event['payload'])) as Record<string, unknown>;
+    expect(payload['effectivePrincipalUserId']).toBe('u_25_2_principal');
+    expect(payload['pinnedAgentVersion']).toBe(7);
   });
 });

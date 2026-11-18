@@ -12,6 +12,11 @@ import type { Db } from '../database/database.service.js';
  * dropped — the operator-visible signal that keeps a missing ledger row from silently reading
  * as a known zero cost. The seq allocation retries on the `(run_id, seq)` unique constraint,
  * exactly as the service path always has.
+ *
+ * Phase 25.2 — every event is stamped with the run's effective principal and pinned agent version.
+ * The values come from the immutable run row, not from the caller's current scope, so a timeline
+ * cannot be rewritten by a later role or policy change. No service identity is recorded: the row's
+ * `service_principal` stays NULL for every path.
  */
 export async function appendRunEvent(
   db: Db,
@@ -25,6 +30,16 @@ export async function appendRunEvent(
   },
 ): Promise<void> {
   const visibility = input.visibility ?? 'operator';
+  const run = await db
+    .selectFrom('ai_agent_runs')
+    .select(['initiated_by_user_id', 'agent_version'])
+    .where('id', '=', input.runId)
+    .executeTakeFirst();
+  const attributedPayload: Record<string, unknown> = {
+    ...input.payload,
+    effectivePrincipalUserId: run?.initiated_by_user_id ?? null,
+    pinnedAgentVersion: run?.agent_version ?? null,
+  };
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const id = randomUUID();
     const now = new Date();
@@ -43,12 +58,12 @@ export async function appendRunEvent(
           seq,
           category: input.category,
           event_type: input.type,
-          actor_type: 'system',
-          actor_id: null,
+          actor_type: run?.initiated_by_user_id == null ? 'system' : 'user',
+          actor_id: run?.initiated_by_user_id ?? null,
           correlation_id: null,
           causation_id: null,
           summary: input.summary.slice(0, 500),
-          payload: JSON.stringify(boundPayload(input.payload)),
+          payload: JSON.stringify(boundPayload(attributedPayload)),
           visibility,
           redaction: 'summary',
           created_at: now,

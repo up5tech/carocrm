@@ -1,7 +1,7 @@
 # AI capability matrix — CaroCRM vs Twenty (Phase 25)
 
-> **Status:** 25.1 (AI charter and documentation truthfulness) delivered 2026-11-18. Phase 25 as a whole
-> is **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
+> **Status:** 25.1 (AI charter and documentation truthfulness) and 25.2 (agent principal and least
+> privilege) delivered 2026-11-18. Phase 25 as a whole is **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
 > (`docs/quality/phase-25-ai-parity-baseline.md`) and the decision record
 > (`docs/quality/phase-25-priority-decisions.md`) are evidence inputs, not parallel matrices.
 > **Evidence rule:** CaroCRM claims carry a repository path and, where it matters, a line; Twenty claims
@@ -25,7 +25,8 @@ declarations **beta, "not live yet"**; CaroCRM compares against shipped value, n
 
 No owner override was recorded before 25.1, so all D1–D7 defaults stand. D2 is a deliberate, stricter
 deviation: Twenty lets an autonomous run keep the agent's role (`runAsWorkspaceMemberId`); CaroCRM pins
-the publisher/initiator so every run is attributable to a real user (25.2 makes this a pinned field).
+the publisher/initiator so every run is attributable to a real user. Since 25.2 that rule is pinned in
+the published version as `config.principal.mode` and stamped on every run event.
 
 **Keep these stronger-than-Twenty properties while adding parity:** fail-closed tool grants and
 `MAX_TOOLS` validation at publish (`apps/api/src/ai-agents/ai-agent-config.ts:50,205`), bounded JSON
@@ -46,7 +47,7 @@ version-pinned approvals, a deterministic fake provider, and trigger recursion/i
 | 5 | Multimodal input | **Missing** in chat and run input: zero attachment references in `apps/api/src/crm-chat` (25.0 absence scan). Voice transcription is a separate module (`apps/api/src/voice-communications/`) and is not a substitute. | `runAgent()` user messages accept ≤ 10 attachments from the `agent-chat` folder, fail-not-drop — Live-verified 25.0 (skills-and-agents.md). | Bounded image/PDF attachments, ACL-checked `fileId`, fake-provider tests — 25.7 (D5) | **Missing** — P2 |
 | 6 | Web grounding | **Missing**: `docs_search` searches the local handbook only; zero `web_search` hits in source (25.0 absence scan). | Model-native `webSearch` / `twitterSearch` via `modelConfiguration` — Live-verified 25.0; AI web search is metered (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, re-fetched 25.1). | One bounded, untrusted, cited search tool behind the existing SSRF guard; Twitter/X skipped — 25.8 (D6) | **Missing** — P2 |
 | 7 | Providers | **Partial**: 24 presets in `ai-provider-presets.ts` (configuration, not adapters); 2 real adapters plus a test-only fake registered in `apps/api/src/ai-agents/index.ts:98-105`; Anthropic structured output is explicitly refused (`ai-provider-anthropic.ts:30,242-245`). No second AI SDK. | Built-in OpenAI, Anthropic, Google, Mistral and xAI on every self-hosted plan, plus custom OpenAI-compatible/private endpoints — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/ai/how-tos/ai-faq.md`). 24 presets confirmed in our source; `key: '` count re-run 25.1. | Capability table per adapter/preset, Anthropic fallback, preset verification; no native adapters unless D4 is overridden — 25.3 | **Partial** — P1 |
-| 8 | Permissions | **Partial**: synthetic AI capability entities through ACL (`ai-agents-module.ts:30-41`); event-trigger principal is the publisher by convention (`plans/SPEC.md:8`); no pinned principal in the published version and no agent-role binding (25.0 absence scan). | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Explicit pinned execution principal, least-privilege profile and negative tests — 25.2 | **Partial** — P0 |
+| 8 | Permissions | **Partial → principal pinned in 25.2**: 11 synthetic AI capability entities through ACL (`ai-agents-module.ts:30-41`); published versions carry `principal.mode` (`ai-agent-config.ts:145-153,220`, strict schema, no service identity) and `runs/lifecycle.ts` enforces `requesting_user` for manual/Chat and publisher-attribution for automated doors. Every event carries effective principal + pinned version (`ai-agent-run-events.ts:16-31`). **Assignable agent roles are still missing** — the user identity is pinned, not a Twenty-style role assignment. | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Least-privilege mapping below; assignable roles remain a later owner decision — 25.2 delivered the principal half | **Partial** — P0 |
 | 9 | Cost control | **Partial**: scoped atomic budgets (`forUpdate()`, `ai-agent-quota.service.ts:203,228`), soft `warnPercent` warnings (`:25,43`), model rates (`ai-agent-pricing.service.ts`) and per-run ceilings; migrations 045/048/049. **No installation-wide cost view.** | Workspace credits (1 credit = $1), personal weekly AI allowance, token-priced model calls and a per-action breakdown including model in Settings → Billing — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, `https://docs.twenty.com/user-guide/billing/how-tos/billing-faq.md`). Corrected URL: the 25 plan's old `/billing/capabilities/credits.md` path 404s. | Installation-level usage/cost view and soft-limit warnings; **credits/billing are an explicit skip** — 25.10 | **Partial** — P1 |
 | 10 | Evaluation | **Implemented and verified** at source level: deterministic graders, 24 tool cases × 2 languages × 3 assistants (`TOOLS_PER_ASSISTANT = 8`), injection, ACL-masking and hallucinated-citation negatives (`crm-chat-evaluation.test.ts:761,934,958`); `human_review` pending by design, `model_review` advisory (`ai-agent-evaluations.service.ts:25-26,139,145`). | SDK testing guidance exists; **no comparable published golden suite was found** in the primary sources reviewed (overview, AI FAQ, skills-and-agents, credits, billing FAQ) — `Hypothesis` (an absence claim, not a verified negative). | Versioned dataset and tool-routing accuracy threshold in the nightly DB-free gate — 25.11 | **Implemented, insufficiently verified** (model routing unproven) — P0 |
 | 11 | MCP / extensions | **Implemented and verified**: shipped MCP-compatible tool door (`GET/POST /api/v1/AIAgents/action/mcp/tools|call`, `docs/reference/compatibility-matrix.md:364`), idempotent direct calls (19-AI.23), extension SDK with signed packages, and `modules/webhook-integration`. Model-backed retrieval stays deferred. | `defineMcpServer()` is **beta, "not live yet"** — Live-verified 25.0 (skills-and-agents.md). | Document the shipped adapter as an advantage; no new MCP surface without a live use case — 25.3 / 25.12 | **Implemented and verified** (protocol half) — P1 |
@@ -90,7 +91,36 @@ No Twenty source was copied; this repository remains a clean-room implementation
 Skipping a P2 row (25.7/25.8) still requires an explicit override note in the decision record and a
 matrix row here — never a silent omission. No such override exists as of 25.1.
 
-## 5. Drift register — G99 resolution and accepted exceptions
+## 5. Least-privilege profile (25.2)
+
+Source: `apps/api/src/ai-agents/ai-agents-module.ts:30-121`. These are the 11 existing capability keys
+and their synthetic ACL pairs. The module grants **no `*` by default**; a role that already has a
+wildcard entry inherits these pairs through the platform's normal ACL merge, which is an existing
+administrator choice, not an AI module default.
+
+| Capability | Synthetic ACL pair | Least-privilege profile | Why it is bounded |
+|---|---|---|---|
+| `use` | `AIAgent:read` | Any internal user who may start a run | Listing/starting only; never draft, publish or approval |
+| `manageDraft` | `AIAgent:edit` | Agent owner or owning-team editor | Drafts only; the published version is immutable |
+| `publish` | `AIAgentVersion:edit` | Owner/team publisher after validation and evaluation gate | Checksum + published version; no silent policy change |
+| `lifecycle` | `AIAgentLifecycle:edit` | Owner/team operator | Pause/resume/archive; no config rewrite |
+| `toolAdmin` | `AIAgentTool:edit` | Platform administrator | Named tool keys only; no arbitrary handler |
+| `policyAdmin` | `AIAgentPolicy:edit` | Platform administrator | Kill switch, limits, retention; instance-wide by design |
+| `providerAdmin` | `AIAgentProvider:edit` | Platform administrator | Credentials write-only and encrypted; no secret read path |
+| `approval` | `AIAgentApproval:edit` | Named human approver | Self-approval forbidden by default; second approver in permissive mode |
+| `audit` | `AIAgentAudit:read` | Auditor/administrator | Redaction preserved; no seat above the actor |
+| `usage` | `AIAgentUsage:read` | Administrator or cost viewer | Estimated-vs-authoritative cost labels retained |
+| `evaluation` | `AIAgentEvaluation:edit` | Evaluation owner | Deterministic graders cannot be overridden by review labels |
+
+**Principal rule (D2, pinned):** `config.principal.mode = 'requesting_user'` (default) means manual,
+CRM Chat and the future workflow AI step act as the authenticated initiator. `'publisher'` is accepted
+only for automated trigger doors and only when the ambient principal is the agent owner; it cannot be
+started from a manual/Chat door. A service identity is not a valid mode:
+`ai_agent_runs.service_principal` stays NULL on every path. Revoked or deleted principals fail closed:
+`auth.principalFromUser` refuses them at the door and the executor marks an already-queued run
+`principal_unavailable`.
+
+## 6. Drift register — G99 resolution and accepted exceptions
 
 | Item | 25.1 disposition |
 |---|---|
@@ -104,11 +134,24 @@ matrix row here — never a silent omission. No such override exists as of 25.1.
 | Anthropic structured output refused | Open capability gap, owner 25.3; fallback or a G100+ exception with deadline. Do not relax `validateBoundedJsonSchema()`. |
 | Twenty billing URL in the 25 plan | Corrected to `https://docs.twenty.com/user-guide/billing/capabilities/credits.md`; the old path returned Page Not Found on 2026-11-18. |
 
-## 6. Verification recorded by 25.1
+## 7. Verification recorded by 25.1 and 25.2
 
 Source inventory re-run on 2026-11-18: 43 AIAgents `.ts` files, 23 CRMChat `.ts` files, a 1,491-line
-executor, 24 presets, 27 chat routes, 24 eval tool cases, 97 migrations and `MAX_TOOLS = 32`. No
-source file, migration, database row, provider account or release was changed by this sub-phase.
-Documentation checks run and their results are recorded in `docs/quality/known-gaps.md` under G99.
+executor, 24 presets, 27 chat routes, 24 eval tool cases, 97 migrations and `MAX_TOOLS = 32`. The 25.1
+documentation checks and their results are recorded in `docs/quality/known-gaps.md` under G99.
+
+25.2 added executed evidence (no migration, no new provider, no release action):
+
+- `apps/api/test/ai-agent-config.test.ts` — 10/10: default rule, publisher rule, refusal of service
+  identities and unknown modes.
+- `apps/api/test/ai-agent-principal.test.ts` — 4/4: manual door refuses a publisher-pinned version;
+  an automated event runs as the pinned publisher with `service_principal = NULL` and every event
+  carries the effective user + pinned version; a revoked publisher is skipped before a run exists.
+- `apps/api/test/ai-agent-ledger-observability.test.ts` — 4/4: shared event ledger stamps principal
+  and version from the run row, not the caller.
+- Regression suites: `ai-agent-runs.test.ts` 48/48 (including ungranted/invented tool denial),
+  `ai-agent-self-approval.test.ts` 5/5, `ai-agent-triggers.test.ts` 16/16,
+  `phase22-journey-ai-controlled-actions.test.ts` 12/12 (field masking, no SQL/shell escalation),
+  `crm-chat-security.test.ts` 22/22 (citation re-authorization). `pnpm typecheck` passed.
 Runtime behaviour of feature-gated surfaces remains verified as code, not as enabled behaviour;
 executed parity evidence belongs to 25.11 and 25.12.

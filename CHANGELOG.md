@@ -22,8 +22,9 @@ compatibility for its internal APIs while it is in alpha.
 
 ### Phase 25 — AI capability parity (in progress, not a release)
 
-Documentation-only so far. Phase 25 produces **alpha/pilot evidence only** while the Phase 24.12
-production gate stays open; it is not a second production go/no-go.
+Documentation came first; 25.2 added the first code change in this phase. Phase 25 produces
+**alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
+production go/no-go.
 
 - **25.0** Read-only parity baseline and owner defaults D1–D7:
   `docs/quality/phase-25-ai-parity-baseline.md` and
@@ -33,8 +34,14 @@ production gate stays open; it is not a second production go/no-go.
   24 Chat-facing), trigger wording (implemented, feature-gated and default off) and CRM Chat contract
   status (v1.3.0, 27 routes). `plans/SPEC.md`, the compatibility matrix, alpha status, README and this
   changelog were reconciled. No code, migration, database row or provider account changed.
+- **25.2** Published agent versions now carry `config.principal.mode`: `requesting_user` (default for
+  manual, CRM Chat and the future workflow AI action) or `publisher` (automated triggers only, and
+  only when the door already runs as the agent owner). Service identities are refused; every run event
+  stamps the effective principal and pinned version; revoked principals fail closed. The 11-capability
+  least-privilege ACL profile is documented in `docs/architecture/ai-capability-matrix.md` §5. No
+  migration or schema change — the rule rides in the existing version-config JSONB.
 
-Not shipped by 25.1: agent principal (25.2), provider fallback (25.3), skills (25.4), workflow AI
+Not shipped by 25.2: assignable agent roles, provider fallback (25.3), skills (25.4), workflow AI
 (25.5), trigger filters (25.6), attachments (25.7), web grounding (25.8), chat page context (25.9),
 installation cost view (25.10) and the golden evaluation gate (25.11).
 
