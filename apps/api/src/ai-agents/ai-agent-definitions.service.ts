@@ -13,14 +13,18 @@ import { isValidCronExpression } from '../jobs/cron.js';
 import { JobsService } from '../jobs/jobs.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
+import { systemPrompt } from './ai-agent-actor.js';
 import {
   type AgentConfig,
   agentConfigChecksum,
   type AgentConfigIssue,
+  MAX_SYSTEM_PROMPT_CHARS,
   parseAgentConfig,
   publicationConfigIssues,
 } from './ai-agent-config.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
+import { assertPromptWithinLimit } from './ai-agent-skills.js';
+import { AIAgentSkillService } from './ai-agent-skills.service.js';
 import type { AIToolDefinition } from './ai-agent-tools.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AGENT_STATUSES, type AgentStatus, AI_AGENT_SCHEDULE_JOB, aiAgentScheduleId } from './ai-agents-module.js';
@@ -176,6 +180,7 @@ export class AIAgentDefinitionService {
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
     @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
+    @Inject(AIAgentSkillService) private readonly skills: AIAgentSkillService,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
     @Inject(JobsService) private readonly jobs: JobsService,
   ) {}
@@ -498,6 +503,37 @@ export class AIAgentDefinitionService {
           ? 'This agent uses no tools.'
           : `All ${String(config.tools.length)} tool grant(s) are registered, enabled and approval-safe.`
         : 'At least one tool grant cannot be published.',
+    });
+
+    // 25.4 — a published agent pins exact skill versions. Draft or invisible versions cannot be
+    // bound, and the composed system prompt must still fit the hard ceiling.
+    const resolved = await this.skills.resolveForPublication(config.skills);
+    const skillsOk = resolved.issues.length === 0;
+    for (const issue of resolved.issues) {
+      block('invalid-skill', `skills.${issue.key}:${String(issue.version)}`, issue.message);
+    }
+    let promptOk = true;
+    try {
+      assertPromptWithinLimit(
+        systemPrompt(row.name, config, undefined, resolved.skills),
+        MAX_SYSTEM_PROMPT_CHARS,
+      );
+    } catch (error) {
+      promptOk = false;
+      block(
+        'prompt-limit',
+        'prompt.system',
+        error instanceof Error ? error.message : 'The composed system prompt exceeds the hard ceiling.',
+      );
+    }
+    checks.push({
+      id: 'skills',
+      ok: skillsOk && promptOk,
+      detail: skillsOk && promptOk
+        ? config.skills.length === 0
+          ? 'This agent binds no shared skills.'
+          : `All ${String(config.skills.length)} pinned skill version(s) are published, visible and fit the prompt ceiling.`
+        : 'At least one skill binding cannot be published.',
     });
 
     if (config.triggers.event && !settings.features.eventTriggers) {
@@ -1093,6 +1129,7 @@ export class AIAgentDefinitionService {
               { key: 'crm_list_related' },
               { key: 'crm_record_summary' },
             ],
+            skills: [],
             principal: { mode: 'requesting_user' },
             limits: {
               maxSteps: 6,
@@ -1131,6 +1168,7 @@ export class AIAgentDefinitionService {
             },
             input: { mode: 'text' },
             tools: [{ key: 'docs_search' }, { key: 'docs_read_page' }],
+            skills: [],
             principal: { mode: 'requesting_user' },
             limits: {
               maxSteps: 6,
@@ -1189,6 +1227,7 @@ function parsedFallbackConfig(): AgentConfig {
     prompt: { system: '' },
     input: { mode: 'text' },
     tools: [],
+    skills: [],
     principal: { mode: 'requesting_user' },
     limits: {
       maxSteps: 6,

@@ -32,6 +32,7 @@ import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import { AIAgentRunService, hashArguments } from './ai-agent-runs.service.js';
+import { AIAgentSkillService, SKILL_STATUS_SET } from './ai-agent-skills.service.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
@@ -59,6 +60,9 @@ import {
   RunInputSchema,
   RunRetrySchema,
   RunTriggerSchema,
+  SkillCreateSchema,
+  SkillPublishSchema,
+  SkillUpdateSchema,
 } from './dto/ai-agents-shapes.js';
 
 /**
@@ -86,6 +90,7 @@ export class AIAgentsController {
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
     @Inject(AIProviderGateway) private readonly gateway: AIProviderGateway,
     @Inject(AIAgentDefinitionService) private readonly agents: AIAgentDefinitionService,
+    @Inject(AIAgentSkillService) private readonly skills: AIAgentSkillService,
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
     @Inject(AIAgentApprovalService) private readonly approvals: AIAgentApprovalService,
     @Inject(AIAgentMemoryService) private readonly memory: AIAgentMemoryService,
@@ -299,6 +304,74 @@ export class AIAgentsController {
   async restoreAgent(@Param('id') id: string, @Body() body: unknown) {
     parse(EmptyBodySchema, body);
     return this.agents.restore(id);
+  }
+
+  // -------------------------------------------------------------------------
+  // 25.4 — reusable versioned skills (text, never code)
+  // -------------------------------------------------------------------------
+
+  @Get('action/skills')
+  async listSkills(@Query() query: unknown) {
+    const q = asRecord(query);
+    const status = typeof q['status'] === 'string' ? q['status'] : undefined;
+    if (status !== undefined && !SKILL_STATUS_SET.has(status)) {
+      throw new InvalidQueryError('Unknown skill status.');
+    }
+    return this.skills.list({
+      offset: numberOrUndefined(q['offset']),
+      maxSize: numberOrUndefined(q['maxSize']),
+      ...(status === undefined ? {} : { status }),
+      ...(typeof q['key'] === 'string' ? { key: q['key'] } : {}),
+      ...(typeof q['q'] === 'string' ? { q: q['q'] } : {}),
+      ...(q['scope'] === 'mine' ? { scope: 'mine' as const } : {}),
+    });
+  }
+
+  /** Latest version of a stable skill key; the versioned routes are the authoritative ones. */
+  @Get('action/skills/:key')
+  async latestSkill(@Param('key') key: string) {
+    return this.skills.latest(key);
+  }
+
+  @Get('action/skills/:key/versions/:version')
+  async getSkill(@Param('key') key: string, @Param('version') version: string) {
+    return this.skills.get(key, skillVersion(version));
+  }
+
+  /** Create the next draft of a key. Publishing freezes it; edits always produce a new version. */
+  @Post('action/skills')
+  async createSkill(@Body() body: unknown) {
+    const input = parse(SkillCreateSchema, body);
+    return this.skills.create(input);
+  }
+
+  @Patch('action/skills/:key/versions/:version')
+  async updateSkill(@Param('key') key: string, @Param('version') version: string, @Body() body: unknown) {
+    const input = parse(SkillUpdateSchema, body);
+    return this.skills.update(key, skillVersion(version), input);
+  }
+
+  @HttpCode(200)
+  @Post('action/skills/:key/versions/:version/publish')
+  async publishSkill(
+    @Param('key') key: string,
+    @Param('version') version: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(SkillPublishSchema, body);
+    return this.skills.publish(key, skillVersion(version), input.note);
+  }
+
+  @HttpCode(200)
+  @Post('action/skills/:key/versions/:version/archive')
+  async archiveSkill(@Param('key') key: string, @Param('version') version: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.skills.archive(key, skillVersion(version));
+  }
+
+  @Delete('action/skills/:key/versions/:version')
+  async removeSkill(@Param('key') key: string, @Param('version') version: string) {
+    return this.skills.remove(key, skillVersion(version));
   }
 
   // -------------------------------------------------------------------------
@@ -917,6 +990,12 @@ function numberOrUndefined(value: unknown): number | undefined {
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
+}
+
+function skillVersion(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new InvalidQueryError('Invalid skill version.');
+  return parsed;
 }
 
 function parse<T extends ZodTypeAny>(schema: T, body: unknown): T['_output'] {

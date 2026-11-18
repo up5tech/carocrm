@@ -1,10 +1,12 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2 and 25.3 delivered 2026-11-18 (canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3 and 25.4 delivered 2026-11-18 (canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
-> JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback.
-> No migration, schema change, dependency, provider account or release action. Work continues at 25.4.
+> JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
+> 25.4 added versioned, non-executable skill text records through additive migration 098. Migration
+> 098 is the first schema change in Phase 25; no dependency, provider account or release action.
+> Work continues at 25.5.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -159,7 +161,7 @@ Files created in Phase 25 may be incomplete; record them in `docs/quality/known-
 | 25.1 | AI charter and documentation truthfulness | P0 | Canonical parity doc, corrected versions/counts, explicit skips |
 | 25.2 | Agent principal and least privilege | P0 | **Delivered 2026-11-18** — `principal.mode` pinned in published config; least-privilege matrix in the canonical matrix; 25.2 + regression tests pass; no migration |
 | 25.3 | Provider capability parity | P1 | **Delivered 2026-11-18** — capability table derived from registered adapters and published in health, Anthropic `json_schema` via bounded extraction tool, Gemini local-compatible seam verified, no new SDK/native adapter |
-| 25.4 | Reusable versioned skills | P1 | Skill metadata, admin API/UI, agent binding, no code execution |
+| 25.4 | Reusable versioned skills | P1 | **Delivered 2026-11-18** — additive migration 098, `skillAdmin` ACL capability, CRUD/publish/archive API + admin tab, exact published-version agent bindings, subordinate prompt block, `skill.applied` transcript, DB-free + API tests pass; no code execution |
 | 25.5 | Workflow AI action | P1 | Bounded `runAgent` action in `WORKFLOW_ACTIONS`, worker port, approval path |
 | 25.6 | Trigger parity: watched fields and conditions | P1 | Event filters and cron parity, loop guard, idempotency evidence |
 | 25.7 | Bounded multimodal input | P2 | Image/PDF attachments for chat and runs, ACL and fake-provider tests |
@@ -267,6 +269,11 @@ Match Twenty's *usable* provider breadth without adding a second AI framework, a
 ---
 
 ## 10. Phase 25.4 — Reusable Versioned Skills (P1)
+
+> **Delivered 2026-11-18.** Evidence: canonical matrix §6.1/§8, `ai-agent-skills.test.ts` 6/6,
+> `ai-agent-skills.integration.test.ts` 5/5, `ai-agent-config.test.ts` 12/12, `pnpm typecheck`,
+> `pnpm lint`, `pnpm ci:api-spec --strict`. No browser spec was added: publish/bind is exercised through
+> real HTTP routes and the UI uses existing page patterns only.
 
 ### Objective
 

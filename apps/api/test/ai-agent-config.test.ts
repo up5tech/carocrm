@@ -81,6 +81,31 @@ describe('parseAgentConfig execution principal (25.2)', () => {
   });
 });
 
+describe('parseAgentConfig skill bindings (25.4)', () => {
+  it('binds exact published skill versions by default and deterministically', () => {
+    const parsed = parseAgentConfig({
+      skills: [
+        { key: 'beta_skill', version: 2 },
+        { key: 'alpha_skill', version: 1 },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.config.skills).toEqual([
+        { key: 'alpha_skill', version: 1 },
+        { key: 'beta_skill', version: 2 },
+      ]);
+    }
+  });
+
+  it('rejects duplicate keys, invalid keys and more than eight bindings', () => {
+    expect(parseAgentConfig({ skills: [{ key: 'same_skill', version: 1 }, { key: 'same_skill', version: 2 }] }).ok).toBe(false);
+    expect(parseAgentConfig({ skills: [{ key: 'Bad-Key', version: 1 }] }).ok).toBe(false);
+    const tooMany = Array.from({ length: 9 }, (_, index) => ({ key: `skill_${String(index)}`, version: 1 }));
+    expect(parseAgentConfig({ skills: tooMany }).ok).toBe(false);
+  });
+});
+
 describe('parseAgentConfig tool ceiling', () => {
   const grant = (n: number) => ({ tools: Array.from({ length: n }, (_, i) => ({ key: `tool_${String(i)}` })) });
 

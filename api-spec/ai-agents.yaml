@@ -325,6 +325,102 @@ endpoints:
     sideEffects: [ai_agents row (status->draft, draft_config replaced); scheduled_jobs row reconciled]
     idempotency: a repeat on a draft agent answers 422
   - method: GET
+    path: /api/v1/AIAgents/action/skills
+    auth: authenticated
+    permissions: "capability use (AIAgent read); visibility limits rows to organization, owner or owning team; scope=mine narrows to owned rows"
+    request: "query: offset?, maxSize? (default 20, max 50), key?, status? (draft/published/archived), q?, scope? (mine)"
+    response: "200 { list: SkillView[], total, offset, count } newest version first within a key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY]
+    pagination: "offset/maxSize"
+    sorting: "fixed: skill_key asc, version desc"
+    filtering: "key, status, q (key/label/description), scope=mine"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/skills/:key
+    auth: authenticated
+    permissions: "capability use (AIAgent read) plus skill visibility"
+    request: "path :key is the stable lowercase skill key"
+    response: "200 SkillView for the highest version of that key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/skills/:key/versions/:version
+    auth: authenticated
+    permissions: "capability use (AIAgent read) plus skill visibility"
+    request: "path :key is a stable skill key; :version is a positive integer"
+    response: "200 SkillView { id,key,version,label,description,instructions,status,visibility,teamId,ownerUserId,publishedById,publishedAt,publicationNote,canEdit,createdAt,modifiedAt }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, INVALID_QUERY, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: POST
+    path: /api/v1/AIAgents/action/skills
+    auth: authenticated
+    permissions: "capability skillAdmin (AIAgentSkill edit) plus owner/owning-team/administrator; definitions feature must be enabled"
+    request: "SkillCreateSchema { key, label, description?, instructions, visibility?, teamId? } (strict, text only)"
+    response: "201 SkillView — a new draft at the next version of the key"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, DUPLICATE_RECORD, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_skills draft row inserted; instructions normalized and bounded]
+    idempotency: none; a second create while a draft exists answers 409
+  - method: PATCH
+    path: /api/v1/AIAgents/action/skills/:key/versions/:version
+    auth: authenticated
+    permissions: "capability skillAdmin (AIAgentSkill edit) plus owner/owning-team/administrator; drafts only"
+    request: "SkillUpdateSchema { label?, description?, instructions?, visibility?, teamId? } (strict)"
+    response: "200 SkillView — the same draft version, still unpublished"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_skills draft row updated; a published version is immutable]
+    idempotency: a repeat with the same body is a no-op
+  - method: POST
+    path: /api/v1/AIAgents/action/skills/:key/versions/:version/publish
+    auth: authenticated
+    permissions: "capability skillAdmin (AIAgentSkill edit) plus owner/owning-team/administrator; drafts only"
+    request: "SkillPublishSchema { note? } (strict)"
+    response: "200 SkillView — status published, immutable from this point on"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_skills status/publishedBy/publishedAt/publicationNote set; previous versions are not rewritten]
+    idempotency: a repeat on a published version answers 422
+  - method: POST
+    path: /api/v1/AIAgents/action/skills/:key/versions/:version/archive
+    auth: authenticated
+    permissions: "capability skillAdmin (AIAgentSkill edit) plus owner/owning-team/administrator; published versions only"
+    request: "EmptyBodySchema (strict empty object)"
+    response: "200 SkillView — status archived; still resolvable for agents that already pinned it"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_skills.status -> archived; no agent version config is changed]
+    idempotency: a repeat on an archived version answers 422
+  - method: DELETE
+    path: /api/v1/AIAgents/action/skills/:key/versions/:version
+    auth: authenticated
+    permissions: "capability skillAdmin (AIAgentSkill edit) plus owner/owning-team/administrator; drafts only"
+    request: none
+    response: "200 { success: true }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [ai_agent_skills.is_deleted set for an unpublished draft]
+    idempotency: a second delete answers 404
+  - method: GET
     path: /api/v1/AIAgents/action/runs
     auth: authenticated
     permissions: "capability use (AIAgent read); without the audit capability only runs the caller initiated are listed; scope=all widens to all runs for audit holders"

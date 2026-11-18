@@ -11,7 +11,6 @@ import type { Updateable } from 'kysely';
 import type { AuthenticatedPrincipal } from '../../common/request-scope.js';
 import type { AIAgentApprovalsTable, AIAgentRunsTable, AIAgentToolCallsTable } from '../../database/database.service.js';
 import type { AIAgentActorContext } from '../ai-agent-actor.js';
-import { systemPrompt } from '../ai-agent-actor.js';
 import type { AgentConfig } from '../ai-agent-config.js';
 import { agentConfigChecksum, parseAgentConfig, validateBoundedJsonSchema } from '../ai-agent-config.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from '../ai-agent-tools.js';
@@ -23,6 +22,7 @@ import { AIProviderError } from '../ai-provider.js';
 import type { AIProviderGateway } from '../ai-provider-gateway.service.js';
 import { AIAgentRunCore } from './base.js';
 import { asRecord, boundArguments, boundResult, escapeAttribute, hashArguments, hashText, parseRawArguments, type RunExecutionResult, safeJson, sleep, summaryFieldNames, withTimeout } from './shared.js';
+import { composeRunSystemPrompt } from './skill-prompt.js';
 
 interface GrantRow {
   readonly tool_key: string;
@@ -1119,7 +1119,12 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
     // The acting user is resolved once per attempt, not once per step: a run's initiator cannot
     // change, and the prompt must describe the person the ACL is actually enforcing.
     const actor = await this.actorContext(row.initiated_by_user_id);
-    const system = systemPrompt(agentName, config, actor);
+    const system = await composeRunSystemPrompt(this.skills, config.skills, agentName, config, actor, {
+      appendEvent: (category, type, summary, payload, visibility) =>
+        this.appendEvent(row.id, category, type, summary, payload, visibility),
+      finish: (status, options) => this.finish(row.id, status, options),
+    });
+    if (system === undefined) return undefined;
     const taskParts: string[] = [];
     if (typeof input['text'] === 'string' && input['text'] !== '') {
       taskParts.push(`The user's task:\n<task>\n${input['text']}\n</task>`);

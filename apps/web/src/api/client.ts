@@ -19,6 +19,8 @@ import type {
   AIAgentRunView,
   AIAgentsCapabilitiesView,
   AIAgentsHealthView,
+  AIAgentSkillListResult,
+  AIAgentSkillView,
   AIAgentsProviderConnection,
   AIAgentsSettingsView,
   AIAgentTemplate,
@@ -873,6 +875,40 @@ export const api = {
   aiAgentsVersion: (id: string, version: number) =>
     request<AIAgentVersionView & { config: AIAgentView['draftConfig'] }>(
       `/AIAgents/action/agents/${encodeURIComponent(id)}/versions/${String(version)}`,
+    ),
+  // Phase 25.4 — versioned, non-executable skills.
+  aiAgentsSkills: (params: { key?: string; status?: string; q?: string; scope?: 'mine' | 'all'; offset?: number; maxSize?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    if (params.key) query.set('key', params.key);
+    if (params.status) query.set('status', params.status);
+    if (params.q) query.set('q', params.q);
+    if (params.scope) query.set('scope', params.scope);
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    return request<AIAgentSkillListResult>(`/AIAgents/action/skills${suffix}`);
+  },
+  aiAgentsCreateSkill: (input: Record<string, unknown>) =>
+    request<AIAgentSkillView>('/AIAgents/action/skills', post(input)),
+  aiAgentsUpdateSkill: (key: string, version: number, input: Record<string, unknown>) =>
+    request<AIAgentSkillView>(
+      `/AIAgents/action/skills/${encodeURIComponent(key)}/versions/${String(version)}`,
+      patch(input),
+    ),
+  aiAgentsPublishSkill: (key: string, version: number, note?: string) =>
+    request<AIAgentSkillView>(
+      `/AIAgents/action/skills/${encodeURIComponent(key)}/versions/${String(version)}/publish`,
+      post({ note }),
+    ),
+  aiAgentsArchiveSkill: (key: string, version: number) =>
+    request<AIAgentSkillView>(
+      `/AIAgents/action/skills/${encodeURIComponent(key)}/versions/${String(version)}/archive`,
+      post({}),
+    ),
+  aiAgentsDeleteSkill: (key: string, version: number) =>
+    request<{ success: boolean }>(
+      `/AIAgents/action/skills/${encodeURIComponent(key)}/versions/${String(version)}`,
+      { method: 'DELETE' },
     ),
   aiAgentsRuns: (params: { offset?: number; maxSize?: number; status?: string; agentId?: string; scope?: 'mine' | 'all' } = {}) => {
     const query = new URLSearchParams();

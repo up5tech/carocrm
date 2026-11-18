@@ -15,6 +15,7 @@ import { AIAgentsOverview } from './ai-agents/AIAgentsOverview.js';
 import { AIAgentsProvidersTab } from './ai-agents/AIAgentsProvidersTab.js';
 import { AIAgentsRunsTab } from './ai-agents/AIAgentsRunsTab.js';
 import { AIAgentsSettingsTab } from './ai-agents/AIAgentsSettingsTab.js';
+import { AIAgentsSkillsTab } from './ai-agents/AIAgentsSkillsTab.js';
 import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
 /**
  * Phase 19-AI.5–19-AI.10 — the AI Agents workspace
@@ -130,6 +131,13 @@ export function AIAgentsPage() {
       key: 'settings',
       label: t('web.aiAgents.settingsTab'),
       children: <AIAgentsSettingsTab capabilities={granted} />,
+    });
+  }
+  if (granted['skillAdmin']) {
+    items.push({
+      key: 'skills',
+      label: t('web.aiAgents.skillsTab'),
+      children: <AIAgentsSkillsTab />,
     });
   }
 

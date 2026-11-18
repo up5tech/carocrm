@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+import {
+  MAX_SKILL_DESCRIPTION_CHARS,
+  MAX_SKILL_INSTRUCTIONS_CHARS,
+  MAX_SKILL_LABEL_CHARS,
+  SKILL_KEY_PATTERN,
+} from '../ai-agent-skills.js';
 import { MAX_RUN_RECORD_REFS } from '../ai-agents-module.js';
 
 /**
@@ -130,6 +136,49 @@ export const AgentPublishSchema = z
   .object({
     note: z.string().trim().max(1_000).optional(),
     checksum: z.string().trim().max(64).optional(),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// 25.4 — reusable versioned skills (text only, never code)
+// ---------------------------------------------------------------------------
+
+const SkillKeySchema = z
+  .string()
+  .trim()
+  .regex(SKILL_KEY_PATTERN, 'Skill keys start with a letter and contain lowercase letters, digits or underscores.');
+
+const SkillInstructionsSchema = z
+  .string()
+  .max(MAX_SKILL_INSTRUCTIONS_CHARS)
+  .refine((value) => value.trim() !== '', 'Skill instructions must not be empty.');
+
+const SkillVisibilitySchema = z.enum(['private', 'team', 'organization']);
+
+export const SkillCreateSchema = z
+  .object({
+    key: SkillKeySchema,
+    label: z.string().trim().min(1).max(MAX_SKILL_LABEL_CHARS),
+    description: z.string().trim().max(MAX_SKILL_DESCRIPTION_CHARS).optional(),
+    instructions: SkillInstructionsSchema,
+    visibility: SkillVisibilitySchema.default('team'),
+    teamId: z.string().trim().min(1).max(120).nullable().optional(),
+  })
+  .strict();
+
+export const SkillUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(MAX_SKILL_LABEL_CHARS).optional(),
+    description: z.string().trim().max(MAX_SKILL_DESCRIPTION_CHARS).nullable().optional(),
+    instructions: SkillInstructionsSchema.optional(),
+    visibility: SkillVisibilitySchema.optional(),
+    teamId: z.string().trim().min(1).max(120).nullable().optional(),
+  })
+  .strict();
+
+export const SkillPublishSchema = z
+  .object({
+    note: z.string().trim().max(1_000).optional(),
   })
   .strict();
 

@@ -1,8 +1,8 @@
 # AI capability matrix — CaroCRM vs Twenty (Phase 25)
 
 > **Status:** 25.1 (AI charter and documentation truthfulness), 25.2 (agent principal and least
-> privilege) and 25.3 (provider capability parity) delivered 2026-11-18. Phase 25 as a whole is
-> **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
+> privilege), 25.3 (provider capability parity) and 25.4 (reusable versioned skills) delivered
+> 2026-11-18. Phase 25 as a whole is **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
 > (`docs/quality/phase-25-ai-parity-baseline.md`) and the decision record
 > (`docs/quality/phase-25-priority-decisions.md`) are evidence inputs, not parallel matrices.
 > **Evidence rule:** CaroCRM claims carry a repository path and, where it matters, a line; Twenty claims
@@ -42,13 +42,13 @@ version-pinned approvals, a deterministic fake provider, and trigger recursion/i
 | # | Axis | CaroCRM — state and evidence | Twenty v2.59 — state and evidence | Target / owner | Status (25.1) / priority |
 |---|---|---|---|---|---|
 | 1 | Chat assistant | **Implemented and verified** at source level: contract v1.3.0, 27 implemented routes, 11 stream events and SSE resume (`apps/api/src/crm-chat/crm-chat-contract.ts:19,311-323`); 25 registered tool keys, 24 Chat-facing (`apps/api/test/ai-agent-runs.test.ts:351-387`); ACL revalidation and VI/EN evals. **No page context** (actor context only). | Chatbot with page context ("this company"/"this opportunity"), full data access and natural-language queries — **Live-verified 25.0/25.1** (`https://docs.twenty.com/user-guide/ai/capabilities/ai-chatbot.md`, `https://docs.twenty.com/user-guide/ai/overview.md`). Web search per model configuration — Live-verified 25.0. | Record/page context + grounded web results; keep the stronger eval/ACL story — 25.9 / 25.8 | **Partial** — P1 / P2 |
-| 2 | Agent definition | **Implemented and verified**: 43 `.ts` files in `apps/api/src/ai-agents`; drafts, immutable versions, publish/pause/resume, approvals, memory, bounded JSON output (`MAX_SYSTEM_PROMPT_CHARS = 12_000`, `ai-agent-config.ts:21`) and 11 capability keys (`ai-agents-module.ts:30-41`). **No reusable skill records.** | `defineAgent()` / `defineSkill()` as code, custom prompt, `modelId`, structured JSON and native model tools — **alpha**, Live-verified 25.0 (`https://docs.twenty.com/developers/extend/apps/logic/skills-and-agents.md`). | In-product versioned skills; no code-defined agents — 25.4 | **Partial** — P1 |
+| 2 | Agent definition | **Implemented and verified in 25.4**: drafts, immutable versions, publish/pause/resume, approvals, memory, bounded JSON output (`MAX_SYSTEM_PROMPT_CHARS = 12_000`, `ai-agent-config.ts`) and 12 capability keys (`ai-agents-module.ts` — `skillAdmin` added in 25.4). Reusable **versioned, non-executable** skills now live in `ai_agent_skills` (migration 098); a published agent pins exact `(key, version)` pairs, composes them under the operating rules, and records `skill.applied` in the run timeline. No Twenty-style code-defined agent (`defineAgent()`) was added, and no skill can execute code. | `defineAgent()` / `defineSkill()` as code, custom prompt, `modelId`, structured JSON and native model tools — **alpha**, Live-verified 25.0 (`https://docs.twenty.com/developers/extend/apps/logic/skills-and-agents.md`). | In-product versioned skills without code execution — **25.4 delivered**; code-defined agents remain an accepted skip. | **Partial-to-parity for skills; code-defined agents skipped** — P1 |
 | 3 | Agent triggers | **Partial**: `event` / `schedule` / `integration` / `record` kinds and idempotency/recursion/five-start guards exist (`apps/api/src/ai-agents/runs/triggers.ts:2,41,58,85-87,179,200,296,375`); event and schedule doors are feature-gated, both **default false** (`ai-agents-settings.service.ts:30-42`). **No watched-field or condition filters.** | `EVENT` with watched fields and `condition` including `previous.*`, plus `CRON` — Live-verified 25.0 (skills-and-agents.md). | Watched fields and conditions via the existing `@carocrm/formula` engine; document cron equivalence — 25.6 | **Partial** — P1 |
 | 4 | Workflow AI | **Missing**: `WORKFLOW_ACTIONS` has exactly five actions — `updateRecord`, `createRecord`, `createNotification`, `sendEmail`, `runJob` — and no AI step (`packages/workflow/src/actions/index.ts:62-98`). The DB-free port seam exists (`packages/workflow/src/execute/index.ts:25-30`). | AI actions and autonomous agents inside workflows, with system agents created for AI steps — Live-verified (skills-and-agents.md, `https://docs.twenty.com/user-guide/ai/overview.md`). | One bounded `runAgent` action, pinned version, approval and idempotent retry — 25.5 | **Missing** — P1 |
 | 5 | Multimodal input | **Missing** in chat and run input: zero attachment references in `apps/api/src/crm-chat` (25.0 absence scan). Voice transcription is a separate module (`apps/api/src/voice-communications/`) and is not a substitute. | `runAgent()` user messages accept ≤ 10 attachments from the `agent-chat` folder, fail-not-drop — Live-verified 25.0 (skills-and-agents.md). | Bounded image/PDF attachments, ACL-checked `fileId`, fake-provider tests — 25.7 (D5) | **Missing** — P2 |
 | 6 | Web grounding | **Missing**: `docs_search` searches the local handbook only; zero `web_search` hits in source (25.0 absence scan). | Model-native `webSearch` / `twitterSearch` via `modelConfiguration` — Live-verified 25.0; AI web search is metered (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, re-fetched 25.1). | One bounded, untrusted, cited search tool behind the existing SSRF guard; Twitter/X skipped — 25.8 (D6) | **Missing** — P2 |
 | 7 | Providers | **Implemented and verified for the declared contract in 25.3**: 24 presets in `ai-provider-presets.ts` (configuration, not adapters); 2 real adapters plus a test-only fake (`apps/api/src/ai-agents/index.ts:98-105`). Capability rows are derived from registered adapter objects (`ai-provider-capabilities.ts`) and published in the existing health view's `providers.capabilityTable`. All three registered adapters now serve `json_schema`: OpenAI-compatible natively, Anthropic through a bounded extraction tool, fake deterministically. Gemini is verified through a local-compatible OpenAI seam; the remaining presets are explicitly expected-but-untested. No second AI SDK and no new native adapter (D4 default). | Built-in OpenAI, Anthropic, Google, Mistral and xAI on every self-hosted plan, plus custom OpenAI-compatible/private endpoints — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/ai/how-tos/ai-faq.md`). 24 presets confirmed in our source; `key: '` count re-run 25.1. | Capability table per adapter/preset, Anthropic fallback, preset verification; no native adapters unless D4 is overridden — 25.3 | **Partial** — P1 |
-| 8 | Permissions | **Partial → principal pinned in 25.2**: 11 synthetic AI capability entities through ACL (`ai-agents-module.ts:30-41`); published versions carry `principal.mode` (`ai-agent-config.ts:145-153,220`, strict schema, no service identity) and `apps/api/src/ai-agents/runs/lifecycle.ts` enforces `requesting_user` for manual/Chat and publisher-attribution for automated doors. Every event carries effective principal + pinned version (`ai-agent-run-events.ts:16-31`). **Assignable agent roles are still missing** — the user identity is pinned, not a Twenty-style role assignment. | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Least-privilege mapping below; assignable roles remain a later owner decision — 25.2 delivered the principal half | **Partial** — P0 |
+| 8 | Permissions | **Partial → principal pinned in 25.2**: 12 synthetic AI capability entities through ACL (`ai-agents-module.ts`; 11 at 25.3, `skillAdmin` added in 25.4); published versions carry `principal.mode` (`ai-agent-config.ts:145-153,220`, strict schema, no service identity) and `apps/api/src/ai-agents/runs/lifecycle.ts` enforces `requesting_user` for manual/Chat and publisher-attribution for automated doors. Every event carries effective principal + pinned version (`ai-agent-run-events.ts:16-31`). **Assignable agent roles are still missing** — the user identity is pinned, not a Twenty-style role assignment. | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Least-privilege mapping below; assignable roles remain a later owner decision — 25.2 delivered the principal half | **Partial** — P0 |
 | 9 | Cost control | **Partial**: scoped atomic budgets (`forUpdate()`, `ai-agent-quota.service.ts:203,228`), soft `warnPercent` warnings (`:25,43`), model rates (`ai-agent-pricing.service.ts`) and per-run ceilings; migrations 045/048/049. **No installation-wide cost view.** | Workspace credits (1 credit = $1), personal weekly AI allowance, token-priced model calls and a per-action breakdown including model in Settings → Billing — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, `https://docs.twenty.com/user-guide/billing/how-tos/billing-faq.md`). Corrected URL: the 25 plan's old `/billing/capabilities/credits.md` path 404s. | Installation-level usage/cost view and soft-limit warnings; **credits/billing are an explicit skip** — 25.10 | **Partial** — P1 |
 | 10 | Evaluation | **Implemented and verified** at source level: deterministic graders, 24 tool cases × 2 languages × 3 assistants (`TOOLS_PER_ASSISTANT = 8`), injection, ACL-masking and hallucinated-citation negatives (`crm-chat-evaluation.test.ts:761,934,958`); `human_review` pending by design, `model_review` advisory (`ai-agent-evaluations.service.ts:25-26,139,145`). | SDK testing guidance exists; **no comparable published golden suite was found** in the primary sources reviewed (overview, AI FAQ, skills-and-agents, credits, billing FAQ) — `Hypothesis` (an absence claim, not a verified negative). | Versioned dataset and tool-routing accuracy threshold in the nightly DB-free gate — 25.11 | **Implemented, insufficiently verified** (model routing unproven) — P0 |
 | 11 | MCP / extensions | **Implemented and verified**: shipped MCP-compatible tool door (`GET/POST /api/v1/AIAgents/action/mcp/tools|call`, `docs/reference/compatibility-matrix.md:364`), idempotent direct calls (19-AI.23), extension SDK with signed packages, and `modules/webhook-integration`. Model-backed retrieval stays deferred. | `defineMcpServer()` is **beta, "not live yet"** — Live-verified 25.0 (skills-and-agents.md). | Document the shipped adapter as an advantage; no new MCP surface without a live use case — 25.3 / 25.12 | **Implemented and verified** (protocol half) — P1 |
@@ -148,6 +148,31 @@ The reserved name cannot be granted as an agent tool, prose instead of an extrac
 `invalid_response`, a domain tool turn is passed through without inventing an answer, and
 `validateBoundedJsonSchema()` still performs the only schema verdict in the run engine.
 
+### 6.1 Reusable versioned skills (25.4)
+
+Source of truth: `apps/api/src/ai-agents/ai-agent-skills.ts` (pure bounds/order/prompt composition),
+`ai-agent-skills.service.ts` (ACL, versions, publication), `ai-agent-config.ts` (`skills` bindings)
+and migration `database/migrations/098_phase25_agent_skills.sql`. A skill is **text only**: no script
+field, no dynamic import, no executable tool. `skill_key` is stable; each version is a snapshot.
+
+- **States:** `draft` is editable; `publish` freezes that version; `archive` removes it from the
+  picker but leaves it resolvable for an agent that already pinned it. Publishing a newer version
+  never rewrites an older one, and a draft edit can never change a running published agent.
+- **Binding:** a published agent version pins zero to eight exact `(key, version)` pairs
+  (`MAX_SKILLS_PER_AGENT`). Publication refuses draft, invisible or missing versions and rejects a
+  composed system prompt over `MAX_SYSTEM_PROMPT_CHARS`. A run re-resolves the pinned rows and emits
+  a user-visible `skill.applied` event with the exact versions used.
+- **Priority:** the composed block is explicitly subordinate to the operating rules and the agent's
+  instructions, sits between them and the schema reminder, and never changes tool grants, approval
+  policy or bounded output. Instructions are control-character-stripped and capped at 4,000 chars.
+- **ACL:** reads need capability `use` plus row visibility (organization/owner/team); writes need a
+  new capability `skillAdmin` (`AIAgentSkill` edit) plus the same ownership rule — no global
+  `*` grant is added by the migration or by default. The SPA has one Skills tab in the existing
+  AIAgents page and a published-version picker in the agent editor; both are presentation only.
+- **Deliberate skip:** Twenty's `defineSkill()` code-defined agents are not copied. CaroCRM's
+  equivalent is an in-product, ACL-checked, non-executable text record, which is the parity value
+  without an arbitrary code path (definition of done §7).
+
 ## 7. Drift register — G99 resolution and accepted exceptions
 
 | Item | 25.1 disposition |
@@ -162,11 +187,14 @@ The reserved name cannot be granted as an agent tool, prose instead of an extrac
 | Anthropic structured output refused | Closed in 25.3 with the adapter-side extraction-tool fallback; all registered adapters return a `structured` value for `json_schema`, still validated by `validateBoundedJsonSchema()`. No G100+ exception needed. |
 | Twenty billing URL in the 25 plan | Corrected to `https://docs.twenty.com/user-guide/billing/capabilities/credits.md`; the old path returned Page Not Found on 2026-11-18. |
 
-## 8. Verification recorded by 25.1, 25.2 and 25.3
+## 8. Verification recorded by 25.1, 25.2, 25.3 and 25.4
 
-Source inventory re-run on 2026-11-18: 43 AIAgents `.ts` files, 23 CRMChat `.ts` files, a 1,491-line
-executor, 24 presets, 27 chat routes, 24 eval tool cases, 97 migrations and `MAX_TOOLS = 32`. The 25.1
-documentation checks and their results are recorded in `docs/quality/known-gaps.md` under G99.
+Source inventory re-run on 2026-11-18 after 25.4: 47 AIAgents `.ts` files, 23 CRMChat `.ts` files, a
+1,496-line executor (skill prompt composition was extracted to
+`apps/api/src/ai-agents/runs/skill-prompt.ts` rather than
+growing the step loop), 24 presets, 27 chat routes, 24 eval tool cases, 98 migrations and
+`MAX_TOOLS = 32`. The 25.1 documentation checks and their results are recorded in
+`docs/quality/known-gaps.md` under G99.
 
 25.2 added executed evidence (no migration, no new provider, no release action):
 
@@ -197,3 +225,24 @@ executed parity evidence belongs to 25.11 and 25.12.
   `pnpm ci:api-spec --strict` passed (927/927 documented endpoints); `git diff --check` clean.   All 36 file-path references in this matrix resolve from the repository root.
 - The capability table is exposed through `AIAgentsModuleHealthView.providers.capabilityTable` and
   documented in `api-spec/ai-agents.yaml`; no provider secret appears in the table.
+
+25.4 added executed evidence (one additive migration, no new SDK, no code execution, no live call):
+
+- `apps/api/test/ai-agent-skills.test.ts` — 6/6: control-character stripping, text bounds,
+  deterministic key ordering, explicit subordinate/untrusted prompt block, placement below the
+  operating rules and above agent instructions/schema, and the caller's prompt ceiling.
+- `apps/api/test/ai-agent-config.test.ts` — 12/12 after adding 25.4 cases: exact version bindings
+  are ordered deterministically; duplicate keys, invalid keys and a ninth binding are refused.
+- `apps/api/test/ai-agent-skills.integration.test.ts` — 5/5: a published version is immutable, two
+  agents bind different versions of one key, a later draft edit does not change the pinned version
+  used by a run (`skill.applied` event carries the applied key/version), a draft binding blocks agent
+  publication, and skill writes need `skillAdmin` while a private draft stays invisible.
+- Regressions: `ai-agent-actor.test.ts` 10/10, `ai-agents.test.ts` 10/10,
+  `ai-agent-principal.test.ts` 4/4 and `ai-providers.test.ts` 25/25.
+- `pnpm typecheck` passed; `pnpm lint` passed (UI conventions 5,213 keys + single-tenant + ESLint);
+  `pnpm ci:api-spec --strict` passed (935/935 documented endpoints); `git diff --check` clean.
+- No Playwright spec was added: publish/bind is covered through the real HTTP routes in the
+  integration suite, and the two UI pieces use the page's existing tab/table/form patterns with no
+  new router, guard or authorization path. A browser spec would re-test presentation only. The SPA
+  was additionally built to a temporary outDir (`vite build`, success) to cover the new tab and
+  picker beyond typecheck.

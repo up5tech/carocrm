@@ -78,6 +78,7 @@ interface AgentFormValues {
   model?: string;
   systemPrompt: string;
   tools: string[];
+  skills: string[];
   memoryMode: 'none' | 'conversation' | 'checkpoint';
   maxSteps: number;
   maxToolCalls: number;
@@ -120,6 +121,12 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
       }),
   });
   const tools = useQuery({ queryKey: ['aiAgents', 'toolCatalogue'], queryFn: () => api.aiAgentsTools(), staleTime: 60_000 });
+  // 25.4 — an agent version may bind only published skill versions; the server re-checks this.
+  const skills = useQuery({
+    queryKey: ['aiAgents', 'skills', 'published'],
+    queryFn: () => api.aiAgentsSkills({ status: 'published', maxSize: 50 }),
+    staleTime: 30_000,
+  });
   const templates = useQuery({ queryKey: ['aiAgents', 'templates'], queryFn: () => api.aiAgentsTemplates(), staleTime: 60_000 });
   const providers = useQuery({
     queryKey: ['aiAgents', 'providers'],
@@ -463,6 +470,19 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
                 ))}
               </Space>
             </Checkbox.Group>
+          </Form.Item>
+          <Form.Item name="skills" label={t('web.aiAgents.skills')} extra={t('web.aiAgents.skillsBindingHint')}>
+            <Select
+              mode="multiple"
+              allowClear
+              maxTagCount="responsive"
+              placeholder={t('web.aiAgents.chooseSkills')}
+              options={(skills.data?.list ?? []).map((skill) => ({
+                value: `${skill.key}:${String(skill.version)}`,
+                label: `${skill.label} · v${String(skill.version)} (${skill.key})`,
+              }))}
+              notFoundContent={t('web.aiAgents.noSkills')}
+            />
           </Form.Item>
           <Form.Item name="memoryMode" label={t('web.aiAgents.memoryMode')} extra={t('web.aiAgents.memoryHint')} initialValue="none">
             <Select
@@ -852,6 +872,7 @@ function formValues(agent: AIAgentView | undefined, template: AIAgentTemplate | 
     ...(config?.provider?.model === undefined ? {} : { model: config.provider.model }),
     systemPrompt: config?.prompt.system ?? '',
     tools: config?.tools.map((tool) => tool.key) ?? [],
+    skills: config?.skills?.map((skill) => `${skill.key}:${String(skill.version)}`) ?? [],
     memoryMode: config?.memory.mode ?? 'none',
     maxSteps: limits.maxSteps,
     maxToolCalls: limits.maxToolCalls,
@@ -876,6 +897,13 @@ function buildConfig(base: AIAgentConfigShape | undefined, values: AgentFormValu
     ...(base ?? {}),
     prompt: { ...(base?.prompt ?? { system: '' }), system: values.systemPrompt },
     tools: values.tools.map((key) => ({ key })),
+    skills: values.skills.map((value) => {
+      const separator = value.lastIndexOf(':');
+      return {
+        key: value.slice(0, separator),
+        version: Number(value.slice(separator + 1)),
+      };
+    }),
     // Memory is opt-in: the mode is the administrator's choice, the sizing fields keep their
     // server defaults (maxMessages/retentionDays) unless the draft already set them.
     memory: { maxMessages: 12, retentionDays: 30, ...(base?.memory ?? {}), mode: values.memoryMode },

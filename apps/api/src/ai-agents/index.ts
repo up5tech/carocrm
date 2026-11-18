@@ -10,6 +10,7 @@ import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
+import { AIAgentSkillService } from './ai-agent-skills.service.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AIAgentsController } from './ai-agents.controller.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
@@ -42,6 +43,8 @@ export { AIAgentPricingService } from './ai-agent-pricing.service.js';
 export { AIAgentQuotaService } from './ai-agent-quota.service.js';
 export type { AIAgentRunView, RunCreateInput, RunExecutionResult } from './ai-agent-runs.service.js';
 export { AIAgentRunService } from './ai-agent-runs.service.js';
+export type { SkillView } from './ai-agent-skills.service.js';
+export { AIAgentSkillService } from './ai-agent-skills.service.js';
 export type { AIToolContext, AIToolDefinition, AIToolProposal, AIToolResult } from './ai-agent-tools.js';
 export { AIToolRegistry } from './ai-agent-tools.js';
 export type { EffectClass, RunStatus, RunTrigger } from './ai-agents-module.js';
@@ -76,6 +79,7 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentActorDirectoryService,
   AIToolRegistry,
   AIAgentDefinitionService,
+  AIAgentSkillService,
   AIAgentEvaluationService,
   AIAgentMemoryService,
   AIAgentPricingService,

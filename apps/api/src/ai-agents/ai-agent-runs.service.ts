@@ -13,6 +13,7 @@ import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
+import { AIAgentSkillService } from './ai-agent-skills.service.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
@@ -74,6 +75,7 @@ export class AIAgentRunService extends AIAgentRunTriggers {
     @Inject(AIAgentMemoryService) memory: AIAgentMemoryService,
     @Inject(AIAgentQuotaService) quotas: AIAgentQuotaService,
     @Inject(AIAgentActorDirectoryService) actors: AIAgentActorDirectoryService,
+    @Inject(AIAgentSkillService) skills: AIAgentSkillService,
   ) {
     super(
       database,
@@ -91,6 +93,7 @@ export class AIAgentRunService extends AIAgentRunTriggers {
       memory,
       quotas,
       actors,
+      skills,
     );
   }
 }

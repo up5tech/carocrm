@@ -22,7 +22,7 @@ compatibility for its internal APIs while it is in alpha.
 
 ### Phase 25 — AI capability parity (in progress, not a release)
 
-Documentation came first; 25.2 and 25.3 added code changes in this phase. Phase 25 produces
+Documentation came first; 25.2, 25.3 and 25.4 added code changes in this phase. Phase 25 produces
 **alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
 production go/no-go.
 
@@ -47,8 +47,16 @@ production go/no-go.
   now use a bounded host-defined extraction tool inside the adapter instead of being refused; the
   reserved tool name cannot be granted, prose fails closed, and `validateBoundedJsonSchema()` remains
   the schema authority. No dependency, migration, native adapter or live vendor call.
+- **25.4** Reusable, versioned **non-executable** skills: additive migration 098 creates
+  `ai_agent_skills` (stable key, version, draft/published/archived, visibility, owner, bounded text —
+  no script field). A new `skillAdmin` capability (`AIAgentSkill` edit) guards CRUD/publish/archive;
+  reading uses `use` plus row visibility. Published agent versions pin exact `(key, version)` pairs,
+  refuse draft/invisible bindings and an over-ceiling composed prompt, place skill text below the
+  operating rules, and record `skill.applied` in the run timeline. The AIAgents page gains a Skills
+  tab and the agent editor a published-version picker. Module version is now 1.5.0. No code
+  execution surface, new SDK, live call or destructive migration.
 
-Not shipped by 25.3: assignable agent roles, skills (25.4), workflow AI
+Not shipped by 25.4: assignable agent roles, code-defined agents, workflow AI
 (25.5), trigger filters (25.6), attachments (25.7), web grounding (25.8), chat page context (25.9),
 installation cost view (25.10) and the golden evaluation gate (25.11).
 

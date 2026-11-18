@@ -1733,6 +1733,7 @@ export interface AIAgentConfigShape {
   readonly prompt: { system: string; inputHint?: string };
   readonly input: { mode: 'text' | 'record'; entity?: string };
   readonly tools: readonly { key: string; constraints?: Record<string, unknown> }[];
+  readonly skills?: readonly { key: string; version: number }[];
   readonly limits: {
     maxSteps: number;
     maxModelCalls: number;
@@ -1795,6 +1796,33 @@ export interface AIAgentView {
 
 export interface AIAgentListResult {
   readonly list: readonly AIAgentView[];
+  readonly total: number;
+  readonly offset: number;
+  readonly count: number;
+}
+
+/** Phase 25.4 — reusable versioned skills. Text records; never executable code. */
+export interface AIAgentSkillView {
+  readonly id: string;
+  readonly key: string;
+  readonly version: number;
+  readonly label: string;
+  readonly description: string | null;
+  readonly instructions: string;
+  readonly status: 'draft' | 'published' | 'archived';
+  readonly visibility: 'private' | 'team' | 'organization';
+  readonly teamId: string | null;
+  readonly ownerUserId: string | null;
+  readonly publishedById: string | null;
+  readonly publishedAt: string | null;
+  readonly publicationNote: string | null;
+  readonly canEdit: boolean;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface AIAgentSkillListResult {
+  readonly list: readonly AIAgentSkillView[];
   readonly total: number;
   readonly offset: number;
   readonly count: number;

@@ -32,6 +32,7 @@ export type AIAgentsCapabilityKey =
   | 'manageDraft'
   | 'publish'
   | 'lifecycle'
+  | 'skillAdmin'
   | 'toolAdmin'
   | 'policyAdmin'
   | 'providerAdmin'
@@ -67,6 +68,13 @@ export const AI_AGENTS_CAPABILITIES: readonly AIAgentsCapabilityDefinition[] = [
     label: 'Pause, resume and archive',
     description: 'Change an agent lifecycle state without deleting history.',
     resource: 'AIAgentLifecycle',
+    action: 'edit',
+  },
+  {
+    key: 'skillAdmin',
+    label: 'Manage skills',
+    description: 'Create, edit, publish and archive reusable, non-executable agent skills.',
+    resource: 'AIAgentSkill',
     action: 'edit',
   },
   {
@@ -340,6 +348,7 @@ export const AI_AGENTS_TABLES = [
   'ai_agents',
   'ai_agent_versions',
   'ai_agent_tool_grants',
+  'ai_agent_skills',
   'ai_agent_runs',
   'ai_agent_run_events',
   'ai_agent_tool_calls',
@@ -373,7 +382,7 @@ export type AIAgentErrorCode = (typeof AI_AGENTS_ERROR_CODES)[number];
 export const AI_AGENTS_MODULE = {
   id: 'AIAgents',
   name: 'AI Agents',
-  version: '1.4.0',
+  version: '1.5.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; AI Agents runs after Marketing Automation (`380`). */
   loadOrder: 390,
@@ -412,6 +421,7 @@ export const AI_AGENTS_MODULE = {
     '19-AI.20',
     '19-AI.21',
     '19-AI.28',
+    '25.4',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

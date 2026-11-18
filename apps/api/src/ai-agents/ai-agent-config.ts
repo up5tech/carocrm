@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 
 import { z } from 'zod';
 
+import {
+  MAX_SKILLS_PER_AGENT,
+  orderSkillBindings,
+  SKILL_KEY_PATTERN,
+} from './ai-agent-skills.js';
 import { DATA_CLASSES, EFFECT_CLASSES } from './ai-agents-module.js';
 
 /**
@@ -135,6 +140,29 @@ const ToolGrantSchema = z
   })
   .strict();
 
+/** Phase 25.4 — a published agent pins an exact skill version, not a mutable skill key. */
+export const AgentSkillBindingSchema = z
+  .object({
+    key: z.string().trim().regex(SKILL_KEY_PATTERN),
+    version: z.number().int().min(1).max(10_000),
+  })
+  .strict();
+
+/** Duplicates are rejected before the deterministic ordering transform. */
+export const AgentSkillBindingsSchema = z
+  .array(AgentSkillBindingSchema)
+  .max(MAX_SKILLS_PER_AGENT)
+  .superRefine((bindings, ctx) => {
+    if (orderSkillBindings(bindings).length !== bindings.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['skills'],
+        message: 'A skill may be bound only once.',
+      });
+    }
+  })
+  .transform((bindings) => orderSkillBindings(bindings));
+
 /**
  * Phase 25.2 — the execution principal is part of the immutable published config, not an ambient
  * switch. `requesting_user` is the default for manual, Chat and workflow-initiated runs: the
@@ -217,6 +245,7 @@ export const AgentConfigSchema = z
       .strict()
       .prefault({}),
     tools: z.array(ToolGrantSchema).max(MAX_TOOLS).default([]),
+    skills: AgentSkillBindingsSchema.default([]),
     principal: AgentPrincipalSchema,
     limits: AgentLimitsSchema,
     output: AgentOutputSchema,
@@ -328,6 +357,7 @@ export function blankAgentConfig(): AgentConfig {
     prompt: { system: '' },
     input: { mode: 'text' },
     tools: [],
+    skills: [],
     principal: { mode: 'requesting_user' },
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },

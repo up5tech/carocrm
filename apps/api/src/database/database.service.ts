@@ -826,6 +826,28 @@ export interface AIAgentToolGrantsTable {
   created_at: Date;
 }
 
+/** Phase 25.4 — one immutable version of a reusable, non-executable skill. */
+export interface AIAgentSkillsTable {
+  id: string;
+  skill_key: string;
+  version: number;
+  label: string;
+  description: string | null;
+  instructions: string;
+  status: string;
+  visibility: string;
+  owner_user_id: string | null;
+  team_id: string | null;
+  published_by_id: string | null;
+  published_at: Date | null;
+  publication_note: string | null;
+  is_deleted: boolean;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+}
+
 /** Phase 19-AI — durable run record (§4.4, §8.2). Money is NUMERIC and arrives as a string. */
 export interface AIAgentRunsTable {
   id: string;
@@ -1789,6 +1811,7 @@ export interface Database {
   ai_agents: AIAgentsTable;
   ai_agent_versions: AIAgentVersionsTable;
   ai_agent_tool_grants: AIAgentToolGrantsTable;
+  ai_agent_skills: AIAgentSkillsTable;
   ai_agent_runs: AIAgentRunsTable;
   ai_agent_run_events: AIAgentRunEventsTable;
   ai_agent_tool_calls: AIAgentToolCallsTable;

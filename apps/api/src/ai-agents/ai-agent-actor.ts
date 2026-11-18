@@ -1,4 +1,5 @@
 import type { AgentConfig } from './ai-agent-config.js';
+import { composeSkillBlock, type ResolvedSkill } from './ai-agent-skills.js';
 
 /**
  * Phase 19-AI.21 / `plans/SPEC.md` §9.6 — who the run acts for
@@ -89,8 +90,17 @@ export function actorPromptLines(actor: AIAgentActorContext): string[] {
   ];
 }
 
-/** Build the system message for one model call. `actor` is absent only when the run has no user. */
-export function systemPrompt(agentName: string, config: AgentConfig, actor?: AIAgentActorContext): string {
+/**
+ * Build the system message for one model call. `actor` is absent only when the run has no user.
+ * `skills` are resolved from the agent version's exact pinned versions; they are placed below the
+ * operating rules so untrusted skill text cannot outrank them.
+ */
+export function systemPrompt(
+  agentName: string,
+  config: AgentConfig,
+  actor?: AIAgentActorContext,
+  skills: readonly ResolvedSkill[] = [],
+): string {
   const lines: string[] = [
     `You are "${agentName}", an assistant inside a CRM application.`,
     '',
@@ -105,6 +115,8 @@ export function systemPrompt(agentName: string, config: AgentConfig, actor?: AIA
   ];
   if (config.provider !== undefined) lines.push(`- Model: ${config.provider.model}.`);
   if (actor !== undefined) lines.push(...actorPromptLines(actor));
+  const skillBlock = composeSkillBlock(skills);
+  if (skillBlock.block !== '') lines.push('', skillBlock.block);
   lines.push('', 'Agent instructions:', config.prompt.system);
   if (config.output.mode === 'json' && config.output.schema !== undefined) {
     lines.push(

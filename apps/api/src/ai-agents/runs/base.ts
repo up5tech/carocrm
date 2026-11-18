@@ -15,6 +15,7 @@ import type { AIAgentActorDirectoryService } from '../ai-agent-directory.service
 import type { AIAgentMemoryService } from '../ai-agent-memory.service.js';
 import type { AIAgentQuotaService } from '../ai-agent-quota.service.js';
 import { appendRunEvent } from '../ai-agent-run-events.js';
+import type { AIAgentSkillService } from '../ai-agent-skills.service.js';
 import type { AIToolRegistry } from '../ai-agent-tools.js';
 import type { AgentStatus, RunStatus, RunTrigger } from '../ai-agents-module.js';
 import type { AIAgentsPermissionService } from '../ai-agents-permission.service.js';
@@ -40,6 +41,7 @@ export abstract class AIAgentRunCore {
     protected readonly memory: AIAgentMemoryService,
     protected readonly quotas: AIAgentQuotaService,
     protected readonly actors: AIAgentActorDirectoryService,
+    protected readonly skills: AIAgentSkillService,
   ) {}
 
   async list(query: RunListQuery = {}): Promise<{ list: AIAgentRunView[]; total: number; offset: number; count: number }> {
