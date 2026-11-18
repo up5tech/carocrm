@@ -4,8 +4,10 @@
 > the product contract is `docs/architecture/crm-chat-contract.md`, the audit is
 > `docs/modules/crm-chat/repository-audit.md`.
 > **Module:** `CRMChat` — registry key and route slug `crm-chat`, SPA route `/crm-chat`, no `Ua` prefix.
-> **Status:** 19-CHAT.0 → 19-CHAT.24 delivered (module v1.2.0, contract v1.2.0); P1 domain tools
-> delivered (module v1.3.0, contract unchanged) — as audited 2026-11-05.
+> **Status:** 19-CHAT.0 → 19-CHAT.24 delivered; 19-CHAT.25 → 19-CHAT.29 hardening shipped
+> 2026-11-08 (contract v1.3.0, 27 implemented routes, module v1.3.0). P1 domain tools shipped
+> 2026-11-05. Page context, web grounding and conversation sharing (D12) are not implemented — the
+> canonical claim source is `docs/architecture/ai-capability-matrix.md` (25.1).
 
 ---
 
@@ -95,7 +97,7 @@ workspace, quick-chat panel, citations, feedback, saved prompts and settings —
 | Surface | Status |
 | --- | --- |
 | `/api/v1/CRMChat/action/*` (conversations, turns, events SSE, query, help, prompts, feedback, actions, cross-module, usage, citations, settings, health, capabilities) | available; **no generated OpenAPI** (G1 deferred to Phase 22.22) — routes are pinned by `crm-chat-contract.test.ts` and the contract catalog |
-| Module version | `CRMChat` v1.3.0 (P1, 2026-11-05) / `AIAgents` v1.2.0; contract unchanged at v1.2.0; P2 (2026-11-06) is presentation-only — no contract, migration or module version change |
+| Module version | `CRMChat` v1.3.0 (P1, 2026-11-05) / `AIAgents` v1.2.0; contract v1.3.0 since 19-CHAT.25 → 29 (limits, all `contextRefs`, timeout and stream-id hardening; no route added or removed); see the canonical AI matrix |
 | Navigation key `crmChat`, route `/crm-chat`, quick-chat panel in the app header, inline instances on record headers + list bulk bar + email designer | available; gated by `CRMChatConversation:read` (`/crm-chat`); inline instances reuse the same turn API, ACL and SSE stream |
 | Home "Today's briefing" card | available; deterministic (tasks/agenda/approvals the user already sees), no provider call, no new endpoint |
 | `crmChat` settings row in `app_settings` | available; strict Zod validation; unknown keys refused |

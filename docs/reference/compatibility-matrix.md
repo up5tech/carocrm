@@ -8,6 +8,11 @@ reviews that produced this date are `docs/quality/phase-23-security-release-revi
 `docs/releases/2026-11-15-phase-24.md` (decision **NO-GO** for production — backup/restore, the
 licence question and unsigned exceptions remain open).
 
+**AI rows reconciled 2026-11-18 (Phase 25.1):** the single canonical claim source is
+`docs/architecture/ai-capability-matrix.md`; it supersedes the older AI wording in this table.
+Twenty comparisons there are alpha/beta-labelled and CaroCRM rows distinguish implemented code from
+feature-gated behaviour.
+
 **Not in this matrix because they are not built:** SAML, SCIM and enterprise directory sync (deferred with a
 rationale in `docs/runbooks/advanced-integrations.md` §15); a DTO-derived OpenAPI contract and the
 `api-spec/` registry completion to `--strict` (route inventory only, G1 — Phase 24.4 in flight); a
@@ -359,7 +364,7 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|
-| AI agents orchestration | no equivalent — upstream has no agent runtime | `apps/api/src/ai-agents` + `/ai-agents` workspace: definitions, immutable versions, durable runs, approvals, quotas, evaluations, kill switch. **New design, not a parity item** | P1 | implemented, deviations in `docs/compatibility/ai-agents.md`; P1 domain tools + event triggers shipped (2026-11-05/06); 19-AI.14 off by default; schedule/integration triggers not implemented |
+| AI agents orchestration | no equivalent — upstream has no agent runtime | `apps/api/src/ai-agents` + `/ai-agents` workspace: definitions, immutable versions, durable runs, approvals, quotas, evaluations, kill switch. **New design, not a parity item** | P1 | implemented, deviations in `docs/compatibility/ai-agents.md`; P1 domain tools shipped (2026-11-05/06); event, schedule and integration trigger doors shipped in 19-AI.25 and feature-gated (event/schedule default off); 25 tool keys (24 Chat-facing), `MAX_TOOLS = 32`; see the canonical AI matrix |
 | Conversational CRM assistant | no equivalent | `CRMChat` at `/crm-chat` (+ header quick-chat panel): workspace over the AIAgents run engine; citations re-authorized at render; ACL-everywhere; plain-text rendering | P1 | implemented, `docs/compatibility/crm-chat.md`; feature flags ship off, see `docs/runbooks/crm-chat-first-run.md` |
 | MCP-compatible tool door | no equivalent | `GET/POST /api/v1/AIAgents/action/mcp/tools|call`; session-authenticated, allowlisted registry, approval-class writes refused at this door | P1 | implemented (protocol half); model-backed retrieval deferred |
 | Product help in answers | no equivalent | assistant answers "how do I" from the in-app handbook (`docs_search`/`docs_read_page`) with numbered source chips; ACL of the reader applies | P1 | implemented |

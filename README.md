@@ -15,6 +15,12 @@ Customer Success (19-CS), Service Desk (19-SD), Marketing Automation (19-MA), Vo
 (19-ES) — plus Phase 20 (settings, administration and end-user UX) and Phase 21 (the in-app
 handbook).**
 
+Phase 25 (AI capability parity) is **in progress**: 25.0's read-only baseline and 25.1's documentation
+truthfulness are delivered, with the single canonical claim source at
+[`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md). No AI feature
+from Phase 25 is claimed as shipped by those documentation steps; all Phase 25 evidence is alpha/pilot
+only while the Phase 24.12 production gate remains open.
+
 _Roadmap_ — [plans/PLAN.md](plans/PLAN.md) for the kernel and module roadmap, plus the phase-level plans
 [Projects](plans/PLAN_Phase_19_Projects.md) · [Sales](plans/PLAN_Phase_19_Sales.md) ·
 [Customer Success](plans/PLAN_Phase_19_Customer_Success.md) · [Service Desk](plans/PLAN_Phase_19_ServiceDesk.md) ·
@@ -22,7 +28,9 @@ _Roadmap_ — [plans/PLAN.md](plans/PLAN.md) for the kernel and module roadmap, 
 [Voice & Communications](plans/PLAN_Phase_19_Voice_Communications.md) ·
 [AI Agents](plans/PLAN_Phase_19_AI_Agents.md) · [Advanced Integrations](plans/PLAN_Phase_19_Advanced_Integrations.md) ·
 [CRM Chat](plans/PLAN_Phase_19_CRM_Chat.md) · [E-Signature](plans/PLAN_Phase_19_ESignature.md) ·
-[Settings & UX](plans/PLAN_Phase_20_Settings_UX.md) · [In-app documentation](plans/PLAN_Phase_21_Documentation.md).
+[Settings & UX](plans/PLAN_Phase_20_Settings_UX.md) · [In-app documentation](plans/PLAN_Phase_21_Documentation.md) ·
+[AI capability parity (Phase 25)](plans/PLAN_Phase_25_AI_Capability_Parity.md) ·
+[AI capability matrix](docs/architecture/ai-capability-matrix.md).
 
 _Kernel_ — metadata engine with DB-backed overrides, generic entity/query/ACL engines, a
 metadata-driven React SPA and Entity Manager, stream, calendar, dynamic logic + sandboxed formula
@@ -76,7 +84,9 @@ _Phase 19_ —
   Microsoft 365, Meta Lead Ads, Zoom, Kit and a generic REST adapter (Phases 19-INT.0–19-INT.27).
 - **CRM Chat** — an assistant over your own CRM data: conversations with SSE turn streams, tool steps
   and usage, citations re-read under the reader's permission, prompt templates, answer ratings and
-  bounded cross-module analysis scenarios (v1.1, contract 1.2.0).
+  bounded cross-module analysis scenarios (contract v1.3.0, 27 routes, 25 registered tool keys;
+  24 Chat-facing). Page context, web grounding and conversation sharing are **not** shipped — see the
+  canonical AI capability matrix.
 - **E-Signature** — provider-neutral signing requests (DocuSign and Dropbox Sign adapters; a simulator
   outside production): provider connections with an encrypted credential vault, draft/preview/prepare
   with an approval policy, a deliberate send with double-submit protection, reconciliation and

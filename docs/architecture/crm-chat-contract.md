@@ -2,9 +2,11 @@
 
 > **Plan:** `plans/PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.1`); decisions rest on
 > `docs/modules/crm-chat/repository-audit.md` (19-CHAT.0).
-> **Status:** delivered in 19-CHAT.1 and implemented in full through 19-CHAT.24
-> (`apps/api/src/crm-chat/`). Every route in §6 is served by the controller; the route table in
-> `crm-chat-contract.ts` is pinned against the controller by `apps/api/test/crm-chat-contract.test.ts`.
+> **Status:** delivered in 19-CHAT.1 and hardened through 19-CHAT.29
+> (`apps/api/src/crm-chat/`); all 27 routes in §6 are implemented and served by the controller. The
+> route table in `crm-chat-contract.ts` is pinned against the controller by
+> `apps/api/test/crm-chat-contract.test.ts`. Page context and conversation sharing (D12) are **not**
+> implemented; see the canonical AI matrix (`docs/architecture/ai-capability-matrix.md`).
 > **Contract version:** `1.3.0`. Any breaking change to a path, a request shape, a response shape, a
 > stream event or an error code bumps the minor version and is recorded in §15.
 > **1.3.0 (19-CHAT.25 → 19-CHAT.29 hardening):** every `limits.*` bound is now enforced server-side

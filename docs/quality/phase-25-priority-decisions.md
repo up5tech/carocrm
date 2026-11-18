@@ -5,6 +5,8 @@
 > override any row **before 25.1** by editing this file (append an override note with date and reason —
 > do not renumber or delete the default record). No decision here authorises code, migrations, provider
 > accounts or release action beyond what the plan already scopes.
+> **At 25.1 (2026-11-18):** the override window has closed with no override recorded in this file;
+> D1–D7 defaults stand and are carried into `docs/architecture/ai-capability-matrix.md`.
 > **Boundary:** CaroCRM is single-tenant by design (owner decision 2026-11-13,
 > `docs/reference/product-charter.md` §6, `docs/security/tenancy-decision.md` §2). Nothing below
 > reopens it.

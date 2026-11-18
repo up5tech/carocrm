@@ -109,7 +109,7 @@
 | G96 | A non-admin could read any record's audit history by supplying its id | audit / ACL | Medium | Fixed (23.4) |
 | G97 | Dependency-vulnerability audit is manual, not in the mandatory gate | platform | Low | Accepted (23.6) |
 | G98 | The three sample extension packages in `modules/` are unsigned | extensions | Low | Accepted (23.6) |
-| G99 | AI documentation drift: SPEC `MAX_TOOLS` 24 vs code 32; "schedule/integration triggers not implemented" vs shipped gated doors; chat contract status line stale | ai-agents / crm-chat (docs) | Low | Open (25.0) — correct in 25.1 |
+| G99 | AI documentation drift: SPEC `MAX_TOOLS` 24 vs code 32; "schedule/integration triggers not implemented" vs shipped gated doors; chat contract status line stale | ai-agents / crm-chat (docs) | Low | Fixed (25.1) — see resolution and executed checks below |
 
 **Phase 23.11 status note (2026-11-13).** The Phase 23 security workstream is finished and its release review is
 recorded in `docs/quality/phase-23-security-release-review.md` with a **NO-GO** decision. Two rows block a
@@ -1220,6 +1220,19 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
   believes trigger doors are absent, or misdates the chat contract surface. Parity claims built
   on them would be wrong. No security or data impact.
 - **Severity:** Low — documentation only; runtime behaviour is correct and fail-closed.
-- **Status:** Open (25.0, 2026-11-18). Disposition: correct in 25.1
-  (`plans/PLAN_Phase_25_AI_Capability_Parity.md` §7). Filed by
-  `docs/quality/phase-25-ai-parity-baseline.md` §3.
+- **Resolution (25.1, 2026-11-18):** the canonical claim source is now
+  `docs/architecture/ai-capability-matrix.md`. Current-state corrections landed in `plans/SPEC.md`
+  (`MAX_TOOLS = 32`, 25 registry keys / 24 Chat-facing, all three trigger doors implemented and
+  feature-gated, with dated changelog rows explicitly marked historical),
+  `docs/architecture/crm-chat-contract.md` (hardened through 19-CHAT.29, contract v1.3.0, 27 routes),
+  `docs/reference/compatibility-matrix.md`, `docs/reference/alpha-status.md`, `README.md`,
+  `docs/compatibility/crm-chat.md`, `docs/compatibility/ai-agents.md`, `CHANGELOG.md` and `plans/PLAN.md`.
+- **Verification executed (25.1):** `node scripts/check-ui-conventions.mjs` — clean (5,179 keys);
+  `node scripts/check-single-tenant.mjs` — clean; `pnpm lint` — pass;
+  `pnpm vitest run apps/api/test/docs-content.test.ts` — 5/5 pass (shipped corpus lint);
+  `pnpm vitest run packages/docs/src/lint.test.ts` — 28/28 pass. Source inventory re-run: 43 AIAgents
+  `.ts` files, 23 CRMChat `.ts`, 1,491-line executor, 24 presets, 27 chat routes, 24 eval tool cases,
+  97 migrations, `MAX_TOOLS = 32`. No AI runtime test, typecheck, live vendor call, migration or
+  database change was part of this documentation-only fix.
+- **Status:** Fixed (25.1, 2026-11-18). Filed by `docs/quality/phase-25-ai-parity-baseline.md` §3;
+  disposition recorded in `plans/PLAN_Phase_25_AI_Capability_Parity.md` §7.

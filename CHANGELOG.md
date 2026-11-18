@@ -18,7 +18,27 @@ compatibility for its internal APIs while it is in alpha.
   blockers in `docs/quality/known-gaps.md` and `docs/security/exception-register.md` close or are
   owner-accepted.
 
-## [Unreleased] — Phase 24 in progress
+## [Unreleased] — Phase 24 and Phase 25 in progress
+
+### Phase 25 — AI capability parity (in progress, not a release)
+
+Documentation-only so far. Phase 25 produces **alpha/pilot evidence only** while the Phase 24.12
+production gate stays open; it is not a second production go/no-go.
+
+- **25.0** Read-only parity baseline and owner defaults D1–D7:
+  `docs/quality/phase-25-ai-parity-baseline.md` and
+  `docs/quality/phase-25-priority-decisions.md`; gap G99 filed.
+- **25.1** One canonical AI claim source (`docs/architecture/ai-capability-matrix.md`), Twenty
+  alpha/beta caveats and explicit skips, corrected tool counts (`MAX_TOOLS = 32`; registry 25,
+  24 Chat-facing), trigger wording (implemented, feature-gated and default off) and CRM Chat contract
+  status (v1.3.0, 27 routes). `plans/SPEC.md`, the compatibility matrix, alpha status, README and this
+  changelog were reconciled. No code, migration, database row or provider account changed.
+
+Not shipped by 25.1: agent principal (25.2), provider fallback (25.3), skills (25.4), workflow AI
+(25.5), trigger filters (25.6), attachments (25.7), web grounding (25.8), chat page context (25.9),
+installation cost view (25.10) and the golden evaluation gate (25.11).
+
+### Phase 24
 
 Single-tenant product completion (`plans/PLAN_Phase_24_Product_Completion.md`). Delivered so far:
 

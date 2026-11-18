@@ -5,7 +5,7 @@
 | **Phiên bản** | 1.9.0 |
 | **Ngày** | 2026-11-06 |
 | **Phạm vi** | Toàn hệ thống (as-built) + đặc tả tầng AI CRM v2 |
-| **Trạng thái** | §1–§7: đã triển khai. §7.2: **24 tool Chat-facing (registry 25)** kể từ P1 (2026-11-05). **Event triggers đã triển khai (2026-11-06):** worker `DomainEventBus` subscriber → cổng `POST action/worker/trigger-event`; agent opt-in bằng `triggers.event` + `eventTypes`/`eventEntities`; record-context only; principal = người publish agent; recursion chặn bằng `correlation_id = aiAgentRun:<id>`. **Schedule triggers và integration triggers vẫn chưa triển khai.** Module `CRMChat` v1.3.0, `AIAgents` v1.2.0. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (19-CHAT.20 → 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (19-CHAT.23). §9.7 + §10.1: **đã triển khai 2026-11-03** (19-CHAT.24). §10.2–§11: quy trình áp dụng cho mọi đợt. |
+| **Trạng thái** | §1–§7: đã triển khai. §7.2: **24 tool Chat-facing (registry 25: 15 built-in + 10 contributions)** kể từ P1 (2026-11-05); trần mỗi agent hiện là **32 tool** (`MAX_TOOLS`, đối chiếu nguồn 25.1; 8/20/24 trong lịch sử là mốc cũ). **Event, schedule và integration triggers đã triển khai (19-AI.25):** worker `DomainEventBus` subscriber → cổng `POST action/worker/trigger-event`; event/schedule feature-gated và mặc định tắt; principal = người publish agent; recursion/idempotency guards tại `runs/triggers.ts`. Chưa có watched field/condition filter (25.6). Module `CRMChat` v1.3.0, `AIAgents` v1.2.0. §9.2, §9.3, §9.5, §9.6: **đã triển khai 2026-11-02** (19-CHAT.20 → 19-CHAT.22). §9.4: **đã triển khai 2026-11-03** (19-CHAT.23). §9.7 + §10.1: **đã triển khai 2026-11-03** (19-CHAT.24). §10.2–§11: quy trình áp dụng cho mọi đợt. |
 | **Ngôn ngữ** | Prose tiếng Việt; định danh, khoá tool, đường dẫn, schema giữ nguyên tiếng Anh. |
 
 ---
@@ -194,7 +194,7 @@ Mỗi tool call chạy trong `scope.runAs(actorUserId)` — quyền của **ngư
 
 ### 7.2 Tool registry — 24 tool hiện có Chat-facing
 
-Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts`, cộng năm tool do module sở hữu tự đăng ký — `crm_cross_module` (`crm-chat`) và bốn tool của `19-CHAT.23` (`lead-score`, `customer-success`, `service-desk`, `ai-agents`) — theo §9.1 luật 6. Đăng ký bằng code tin cậy; model chỉ chọn **key** + **arguments**, không bao giờ chọn handler, URL, bảng, SQL hay luật quyền.
+Khai báo trong `apps/api/src/ai-agents/ai-agent-tools.ts` (15 tool built-in) và đăng ký bởi module (10 đóng góp, registry **25** tổng / **24** Chat-facing); danh sách đầy đủ và nguồn chứng minh ở `docs/architecture/ai-capability-matrix.md` và `apps/api/test/ai-agent-runs.test.ts:351-387`. Đăng ký bằng code tin cậy; model chỉ chọn **key** + **arguments**, không bao giờ chọn handler, URL, bảng, SQL hay luật quyền.
 
 | # | key | effect | Duyệt | `entityScopes` | Cap | Từ |
 |---|---|---|---|---|---|---|
@@ -265,7 +265,7 @@ Năm tool trí tuệ module (`19-CHAT.23`) là wrapper mỏng — mỗi tool tr�
 Hai sự thật as-built mà mọi thiết kế chip/agent phải tính tới (ghi nhận 19-CHAT.24; số liệu cập nhật 2026-11-05):
 
 - Registry còn mang **`omnichannel.send_message`** (material_write, `requiresApproval: true`) do module Omnichannel đăng ký — **25 mục** trong registry, 24 mục phía Chat. Bảng trên liệt kê 24; cả 25 đều được assert một lần nữa trong `apps/api/test/ai-agent-runs.test.ts`.
-- Một agent **không thể mang quá 24 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`, nâng từ 20 lên 24 ngày 2026-11-05 khi bốn tool P1 được thêm). Trần 24 đúng bằng catalogue phía Chat, nên một assistant *có thể* cầm toàn bộ catalogue — 8 → 20 nâng ngày 2026-11-03 vì 8 nằm dưới cỡ catalogue và khiến Chat không thể cấp đủ bộ tool mà các chip quảng bá; 20 → 24 nâng ngày 2026-11-05 theo đúng lý do đó. Cái giá phải trả không phải an toàn (mọi tool vẫn đăng ký bằng code, validate khi publish, ACL khi thực thi) mà là **chất lượng chọn tool**: model cầm 24 mô tả sẽ chọn sai thường hơn model cầm 6 (`§11`). Bộ lọc chip (§9.7) vẫn là cơ chế thường trực, vì grant vẫn là lựa chọn của operator và module có thể chưa cài — `assistant.tools` vẫn là tập con.
+- Một agent **không thể mang quá 32 tool** (`MAX_TOOLS` trong `apps/api/src/ai-agents/ai-agent-config.ts`, nâng từ 24; đối chiếu 25.1 tại `docs/architecture/ai-capability-matrix.md`). Trần 24 thời 19-CHAT.23 đúng bằng catalogue phía Chat, nên một assistant *có thể* cầm toàn bộ catalogue — 8 → 20 nâng ngày 2026-11-03 vì 8 nằm dưới cỡ catalogue và khiến Chat không thể cấp đủ bộ tool mà các chip quảng bá; 20 → 24 nâng ngày 2026-11-05 theo lý do đó; trần hiện tại 32 lớn hơn catalogue. Cái giá phải trả không phải an toàn (mọi tool vẫn đăng ký bằng code, validate khi publish, ACL khi thực thi) mà là **chất lượng chọn tool**: model cầm nhiều mô tả sẽ chọn sai thường hơn model cầm 6 (`§11`). Bộ lọc chip (§9.7) vẫn là cơ chế thường trực, vì grant vẫn là lựa chọn của operator và module có thể chưa cài — `assistant.tools` vẫn là tập con.
 
 ### 7.3 Agent template
 
@@ -675,6 +675,10 @@ Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số 
 ---
 
 ## 12. Lịch sử thay đổi
+
+Các dòng dưới đây là **lịch sử phiên bản**: số tool, trần `MAX_TOOLS` và trạng thái trigger phản ánh
+thời điểm ghi. Trạng thái hiện tại nằm ở dòng **Trạng thái** đầu file và trong
+`docs/architecture/ai-capability-matrix.md` (đối chiếu 25.1).
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
