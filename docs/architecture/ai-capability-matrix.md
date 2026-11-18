@@ -1,7 +1,8 @@
 # AI capability matrix — CaroCRM vs Twenty (Phase 25)
 
-> **Status:** 25.1 (AI charter and documentation truthfulness) and 25.2 (agent principal and least
-> privilege) delivered 2026-11-18. Phase 25 as a whole is **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
+> **Status:** 25.1 (AI charter and documentation truthfulness), 25.2 (agent principal and least
+> privilege) and 25.3 (provider capability parity) delivered 2026-11-18. Phase 25 as a whole is
+> **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
 > (`docs/quality/phase-25-ai-parity-baseline.md`) and the decision record
 > (`docs/quality/phase-25-priority-decisions.md`) are evidence inputs, not parallel matrices.
 > **Evidence rule:** CaroCRM claims carry a repository path and, where it matters, a line; Twenty claims
@@ -34,7 +35,7 @@ output revalidation (`validateBoundedJsonSchema`, `:454`), raw-SQL ACL predicate
 VI/EN injection and ACL evals (`apps/api/test/crm-chat-evaluation.test.ts:761,934,958`), encrypted
 provider keys (`encryptSecret`), SSRF refusal including redirects (`ai-provider-url.ts:44`),
 version-pinned approvals, a deterministic fake provider, and trigger recursion/idempotency guards
-(`runs/triggers.ts:58,179,200,296,375`).
+(`apps/api/src/ai-agents/runs/triggers.ts:58,179,200,296,375`).
 
 ## 2. Capability matrix
 
@@ -46,12 +47,12 @@ version-pinned approvals, a deterministic fake provider, and trigger recursion/i
 | 4 | Workflow AI | **Missing**: `WORKFLOW_ACTIONS` has exactly five actions — `updateRecord`, `createRecord`, `createNotification`, `sendEmail`, `runJob` — and no AI step (`packages/workflow/src/actions/index.ts:62-98`). The DB-free port seam exists (`packages/workflow/src/execute/index.ts:25-30`). | AI actions and autonomous agents inside workflows, with system agents created for AI steps — Live-verified (skills-and-agents.md, `https://docs.twenty.com/user-guide/ai/overview.md`). | One bounded `runAgent` action, pinned version, approval and idempotent retry — 25.5 | **Missing** — P1 |
 | 5 | Multimodal input | **Missing** in chat and run input: zero attachment references in `apps/api/src/crm-chat` (25.0 absence scan). Voice transcription is a separate module (`apps/api/src/voice-communications/`) and is not a substitute. | `runAgent()` user messages accept ≤ 10 attachments from the `agent-chat` folder, fail-not-drop — Live-verified 25.0 (skills-and-agents.md). | Bounded image/PDF attachments, ACL-checked `fileId`, fake-provider tests — 25.7 (D5) | **Missing** — P2 |
 | 6 | Web grounding | **Missing**: `docs_search` searches the local handbook only; zero `web_search` hits in source (25.0 absence scan). | Model-native `webSearch` / `twitterSearch` via `modelConfiguration` — Live-verified 25.0; AI web search is metered (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, re-fetched 25.1). | One bounded, untrusted, cited search tool behind the existing SSRF guard; Twitter/X skipped — 25.8 (D6) | **Missing** — P2 |
-| 7 | Providers | **Partial**: 24 presets in `ai-provider-presets.ts` (configuration, not adapters); 2 real adapters plus a test-only fake registered in `apps/api/src/ai-agents/index.ts:98-105`; Anthropic structured output is explicitly refused (`ai-provider-anthropic.ts:30,242-245`). No second AI SDK. | Built-in OpenAI, Anthropic, Google, Mistral and xAI on every self-hosted plan, plus custom OpenAI-compatible/private endpoints — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/ai/how-tos/ai-faq.md`). 24 presets confirmed in our source; `key: '` count re-run 25.1. | Capability table per adapter/preset, Anthropic fallback, preset verification; no native adapters unless D4 is overridden — 25.3 | **Partial** — P1 |
-| 8 | Permissions | **Partial → principal pinned in 25.2**: 11 synthetic AI capability entities through ACL (`ai-agents-module.ts:30-41`); published versions carry `principal.mode` (`ai-agent-config.ts:145-153,220`, strict schema, no service identity) and `runs/lifecycle.ts` enforces `requesting_user` for manual/Chat and publisher-attribution for automated doors. Every event carries effective principal + pinned version (`ai-agent-run-events.ts:16-31`). **Assignable agent roles are still missing** — the user identity is pinned, not a Twenty-style role assignment. | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Least-privilege mapping below; assignable roles remain a later owner decision — 25.2 delivered the principal half | **Partial** — P0 |
+| 7 | Providers | **Implemented and verified for the declared contract in 25.3**: 24 presets in `ai-provider-presets.ts` (configuration, not adapters); 2 real adapters plus a test-only fake (`apps/api/src/ai-agents/index.ts:98-105`). Capability rows are derived from registered adapter objects (`ai-provider-capabilities.ts`) and published in the existing health view's `providers.capabilityTable`. All three registered adapters now serve `json_schema`: OpenAI-compatible natively, Anthropic through a bounded extraction tool, fake deterministically. Gemini is verified through a local-compatible OpenAI seam; the remaining presets are explicitly expected-but-untested. No second AI SDK and no new native adapter (D4 default). | Built-in OpenAI, Anthropic, Google, Mistral and xAI on every self-hosted plan, plus custom OpenAI-compatible/private endpoints — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/ai/how-tos/ai-faq.md`). 24 presets confirmed in our source; `key: '` count re-run 25.1. | Capability table per adapter/preset, Anthropic fallback, preset verification; no native adapters unless D4 is overridden — 25.3 | **Partial** — P1 |
+| 8 | Permissions | **Partial → principal pinned in 25.2**: 11 synthetic AI capability entities through ACL (`ai-agents-module.ts:30-41`); published versions carry `principal.mode` (`ai-agent-config.ts:145-153,220`, strict schema, no service identity) and `apps/api/src/ai-agents/runs/lifecycle.ts` enforces `requesting_user` for manual/Chat and publisher-attribution for automated doors. Every event carries effective principal + pinned version (`ai-agent-run-events.ts:16-31`). **Assignable agent roles are still missing** — the user identity is pinned, not a Twenty-style role assignment. | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Least-privilege mapping below; assignable roles remain a later owner decision — 25.2 delivered the principal half | **Partial** — P0 |
 | 9 | Cost control | **Partial**: scoped atomic budgets (`forUpdate()`, `ai-agent-quota.service.ts:203,228`), soft `warnPercent` warnings (`:25,43`), model rates (`ai-agent-pricing.service.ts`) and per-run ceilings; migrations 045/048/049. **No installation-wide cost view.** | Workspace credits (1 credit = $1), personal weekly AI allowance, token-priced model calls and a per-action breakdown including model in Settings → Billing — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, `https://docs.twenty.com/user-guide/billing/how-tos/billing-faq.md`). Corrected URL: the 25 plan's old `/billing/capabilities/credits.md` path 404s. | Installation-level usage/cost view and soft-limit warnings; **credits/billing are an explicit skip** — 25.10 | **Partial** — P1 |
 | 10 | Evaluation | **Implemented and verified** at source level: deterministic graders, 24 tool cases × 2 languages × 3 assistants (`TOOLS_PER_ASSISTANT = 8`), injection, ACL-masking and hallucinated-citation negatives (`crm-chat-evaluation.test.ts:761,934,958`); `human_review` pending by design, `model_review` advisory (`ai-agent-evaluations.service.ts:25-26,139,145`). | SDK testing guidance exists; **no comparable published golden suite was found** in the primary sources reviewed (overview, AI FAQ, skills-and-agents, credits, billing FAQ) — `Hypothesis` (an absence claim, not a verified negative). | Versioned dataset and tool-routing accuracy threshold in the nightly DB-free gate — 25.11 | **Implemented, insufficiently verified** (model routing unproven) — P0 |
 | 11 | MCP / extensions | **Implemented and verified**: shipped MCP-compatible tool door (`GET/POST /api/v1/AIAgents/action/mcp/tools|call`, `docs/reference/compatibility-matrix.md:364`), idempotent direct calls (19-AI.23), extension SDK with signed packages, and `modules/webhook-integration`. Model-backed retrieval stays deferred. | `defineMcpServer()` is **beta, "not live yet"** — Live-verified 25.0 (skills-and-agents.md). | Document the shipped adapter as an advantage; no new MCP surface without a live use case — 25.3 / 25.12 | **Implemented and verified** (protocol half) — P1 |
-| 12 | Truthfulness | **Partial → corrected here.** G99's three drifts are fixed in 25.1: `plans/SPEC.md` tool ceiling and trigger status, the CRM Chat contract status line, and `docs/reference/compatibility-matrix.md` / `docs/reference/alpha-status.md` / README. Accepted posture: "Optional protected assistive use only" at `docs/compatibility/advanced-integrations.md:123`; model-backed retrieval deferred; `human_review` pending; Anthropic structured output is an open 25.3 gap. | Documentation is part of the product; no direct parity row — Documented. | One canonical matrix and honest skip list — 25.1 / 25.12 | **Fixed for G99; overall parity review remains Open** — P0 |
+| 12 | Truthfulness | **Partial → corrected here.** G99's three drifts are fixed in 25.1: `plans/SPEC.md` tool ceiling and trigger status, the CRM Chat contract status line, and `docs/reference/compatibility-matrix.md` / `docs/reference/alpha-status.md` / README. Accepted posture: "Optional protected assistive use only" at `docs/compatibility/advanced-integrations.md:123`; model-backed retrieval deferred; `human_review` pending. The former Anthropic structured-output gap was closed in 25.3 without relaxing `validateBoundedJsonSchema()`. | Documentation is part of the product; no direct parity row — Documented. | One canonical matrix and honest skip list — 25.1 / 25.12 | **Fixed for G99; overall parity review remains Open** — P0 |
 
 Summary: rows 1–3, 7–9 and 12 are **Partial** (real capability, named gap); rows 4–6 are **Missing**;
 row 10 is **Implemented, insufficiently verified**; row 11 is **Implemented and verified** for the
@@ -120,7 +121,34 @@ started from a manual/Chat door. A service identity is not a valid mode:
 `auth.principalFromUser` refuses them at the door and the executor marks an already-queued run
 `principal_unavailable`.
 
-## 6. Drift register — G99 resolution and accepted exceptions
+## 6. Provider capability profile (25.3)
+
+Source of truth: `apps/api/src/ai-agents/ai-provider.ts` (`AIProviderCapabilities`) and the registered
+adapter objects. `apps/api/src/ai-agents/ai-provider-capabilities.ts` derives the table; the existing
+`GET /api/v1/AIAgents/action/health` publishes it under `providers.capabilityTable`. A preset has no
+capabilities of its own — it inherits its transport adapter's row and carries an explicit
+verification label. `contextWindowTokens: null` means model-dependent and not declared by this
+contract; it is never a claim of unlimited context.
+
+| Transport | Chat | Tools | Structured output | Streaming | Context size | Image input | Native web search | Verification |
+|---|---|---|---|---|---|---|---|---|
+| `openai-compatible` | Yes | Yes | Yes — `native` response format | No | Model-dependent (`null`) | No | No | adapter-contract |
+| `anthropic` | Yes | Yes | Yes — `extraction_tool` fallback | No | Model-dependent (`null`) | No | No | adapter-contract |
+| `fake` (non-production) | Yes | Yes | Yes — deterministic | No | Model-dependent (`null`) | No | No | adapter-contract |
+
+Presets: `openai`, `anthropic` and `fake` are adapter-contract verified; `gemini` is verified through
+a local stubbed OpenAI-compatible endpoint (no vendor call); all other presets are marked
+`not-verified` and are **expected** to work because they use the same transport, not proven here.
+No native Google/Mistral/xAI adapter was added (D4 default), and no new MCP surface was added:
+CaroCRM's shipped tool door remains the documented advantage over Twenty's beta declaration.
+
+The Anthropic fallback injects one host-defined tool whose `input_schema` is the agent's bounded JSON
+schema, consumes the resulting `tool_use` block inside the adapter, and returns it as `structured`.
+The reserved name cannot be granted as an agent tool, prose instead of an extraction call fails with
+`invalid_response`, a domain tool turn is passed through without inventing an answer, and
+`validateBoundedJsonSchema()` still performs the only schema verdict in the run engine.
+
+## 7. Drift register — G99 resolution and accepted exceptions
 
 | Item | 25.1 disposition |
 |---|---|
@@ -131,10 +159,10 @@ started from a manual/Chat door. A service identity is not a valid mode:
 | "Optional protected assistive use only" | Accepted posture at `docs/compatibility/advanced-integrations.md:123`, cross-linked here; not a contradiction. |
 | Model-backed retrieval deferred | Accepted; no vector store or second datastore was added. |
 | `human_review` pending, `model_review` advisory | Accepted by design; 25.11 assigns an owner and review deadline. |
-| Anthropic structured output refused | Open capability gap, owner 25.3; fallback or a G100+ exception with deadline. Do not relax `validateBoundedJsonSchema()`. |
+| Anthropic structured output refused | Closed in 25.3 with the adapter-side extraction-tool fallback; all registered adapters return a `structured` value for `json_schema`, still validated by `validateBoundedJsonSchema()`. No G100+ exception needed. |
 | Twenty billing URL in the 25 plan | Corrected to `https://docs.twenty.com/user-guide/billing/capabilities/credits.md`; the old path returned Page Not Found on 2026-11-18. |
 
-## 7. Verification recorded by 25.1 and 25.2
+## 8. Verification recorded by 25.1, 25.2 and 25.3
 
 Source inventory re-run on 2026-11-18: 43 AIAgents `.ts` files, 23 CRMChat `.ts` files, a 1,491-line
 executor, 24 presets, 27 chat routes, 24 eval tool cases, 97 migrations and `MAX_TOOLS = 32`. The 25.1
@@ -155,3 +183,17 @@ documentation checks and their results are recorded in `docs/quality/known-gaps.
   `crm-chat-security.test.ts` 22/22 (citation re-authorization). `pnpm typecheck` passed.
 Runtime behaviour of feature-gated surfaces remains verified as code, not as enabled behaviour;
 executed parity evidence belongs to 25.11 and 25.12.
+
+25.3 added executed evidence (no migration, no dependency, no live vendor call):
+
+- `apps/api/test/ai-providers.test.ts` — 25/25 after adding the 25.3 cases: capability rows come from
+  registered adapter objects, presets inherit only their transport's capabilities, Gemini is verified
+  through a stubbed local-compatible endpoint, Anthropic returns a schema-valid structured value via
+  the extraction tool, prose/tool-name collisions fail closed, and all three registered adapters
+  return the same validated `{ ok: true }` answer.
+- Regressions: `apps/api/test/ai-agent-runs.test.ts` 48/48, `apps/api/test/ai-agents.test.ts` 10/10,
+  `apps/api/test/docs-content.test.ts` 5/5 and `packages/docs/src/lint.test.ts` 28/28.
+- `pnpm typecheck` passed; `pnpm lint` passed (UI conventions 5,179 keys + single-tenant + ESLint);
+  `pnpm ci:api-spec --strict` passed (927/927 documented endpoints); `git diff --check` clean.   All 36 file-path references in this matrix resolve from the repository root.
+- The capability table is exposed through `AIAgentsModuleHealthView.providers.capabilityTable` and
+  documented in `api-spec/ai-agents.yaml`; no provider secret appears in the table.

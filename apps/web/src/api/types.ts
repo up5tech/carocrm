@@ -1518,6 +1518,32 @@ export interface AIAgentsHealthDependency {
   readonly missing: readonly string[];
 }
 
+export interface AIProviderCapabilitiesView {
+  readonly chat: boolean;
+  readonly structuredOutput: boolean;
+  readonly structuredOutputMode: 'native' | 'extraction_tool';
+  readonly toolCalling: boolean;
+  readonly streaming: boolean;
+  readonly contextWindowTokens: number | null;
+  readonly imageInput: boolean;
+  readonly nativeWebSearch: boolean;
+  readonly reportsUsage: boolean;
+}
+
+export interface AIProviderCapabilityRowView {
+  readonly key: string;
+  readonly label: string;
+  readonly capabilities: AIProviderCapabilitiesView;
+}
+
+export interface AIProviderPresetCapabilityRowView {
+  readonly key: string;
+  readonly label: string;
+  readonly kind: string;
+  readonly verification: 'adapter-contract' | 'local-compatible-seam' | 'not-verified';
+  readonly capabilities: AIProviderCapabilitiesView | null;
+}
+
 export interface AIAgentsHealthView {
   readonly module: {
     readonly id: string;
@@ -1543,6 +1569,10 @@ export interface AIAgentsHealthView {
     readonly credentialCount: number;
     readonly adapterKeys: readonly string[];
     readonly adapters: readonly { readonly key: string; readonly label: string; readonly toolCalling: boolean }[];
+    readonly capabilityTable: {
+      readonly adapters: readonly AIProviderCapabilityRowView[];
+      readonly presets: readonly AIProviderPresetCapabilityRowView[];
+    };
     /**
      * The curated catalog of popular endpoints. A preset is configuration, not access: it carries
      * a base URL, a model suggestion and the credential header.

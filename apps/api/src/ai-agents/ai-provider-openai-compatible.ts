@@ -41,9 +41,14 @@ export class OpenAICompatibleProviderAdapter implements AIProviderAdapter {
   readonly key = 'openai-compatible';
   readonly label = 'OpenAI-compatible chat completions';
   readonly capabilities = {
+    chat: true,
     structuredOutput: true,
+    structuredOutputMode: 'native',
     toolCalling: true,
     streaming: false,
+    contextWindowTokens: null,
+    imageInput: false,
+    nativeWebSearch: false,
     reportsUsage: true,
   } as const;
 

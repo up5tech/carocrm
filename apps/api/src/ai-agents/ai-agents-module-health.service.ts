@@ -17,6 +17,12 @@ import {
 } from './ai-agents-module.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import { AIProviderRegistry } from './ai-provider.js';
+import {
+  type AIProviderCapabilityRow,
+  type AIProviderPresetCapabilityRow,
+  describePresetCapabilities,
+  describeProviderCapabilities,
+} from './ai-provider-capabilities.js';
 import { providerPresets } from './ai-provider-presets.js';
 
 /**
@@ -72,6 +78,14 @@ export interface AIAgentsModuleHealthView {
       readonly structuredOutput: boolean;
       readonly toolCalling: boolean;
     }[];
+    /**
+     * Phase 25.3 — adapter and preset capability rows derived from the registered adapter objects.
+     * `null` context size means model-dependent; a preset never claims more than its transport.
+     */
+    readonly capabilityTable: {
+      readonly adapters: readonly AIProviderCapabilityRow[];
+      readonly presets: readonly AIProviderPresetCapabilityRow[];
+    };
     /**
      * The curated catalog of popular endpoints an administrator picks from when creating a
      * connection. It is configuration, not access: a preset carries a base URL, a model suggestion
@@ -259,6 +273,10 @@ export class AIAgentsModuleHealthService {
           structuredOutput: adapter.capabilities.structuredOutput,
           toolCalling: adapter.capabilities.toolCalling,
         })),
+        capabilityTable: {
+          adapters: describeProviderCapabilities(this.providers),
+          presets: describePresetCapabilities(this.providers, this.providers.has('fake')),
+        },
         presets: providerPresets(this.providers.has('fake')).map((preset) => ({
           key: preset.key,
           label: preset.label,

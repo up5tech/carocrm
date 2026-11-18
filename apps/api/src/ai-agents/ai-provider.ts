@@ -98,10 +98,22 @@ export interface AIProviderResponse {
   readonly safety: Readonly<Record<string, unknown>>;
 }
 
+export type AIProviderStructuredOutputMode = 'native' | 'extraction_tool';
+
+/**
+ * What this transport can actually do, derived from the adapter implementation rather than from a
+ * vendor name. `null` context size means "model-dependent / not declared by this contract"; a preset
+ * never silently inherits a larger context than the adapter can prove.
+ */
 export interface AIProviderCapabilities {
+  readonly chat: boolean;
   readonly structuredOutput: boolean;
+  readonly structuredOutputMode: AIProviderStructuredOutputMode;
   readonly toolCalling: boolean;
   readonly streaming: boolean;
+  readonly contextWindowTokens: number | null;
+  readonly imageInput: boolean;
+  readonly nativeWebSearch: boolean;
   readonly reportsUsage: boolean;
 }
 

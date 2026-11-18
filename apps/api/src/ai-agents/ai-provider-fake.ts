@@ -51,9 +51,14 @@ export class FakeProviderAdapter implements AIProviderAdapter {
   readonly key = 'fake';
   readonly label = 'Deterministic fake provider (non-production)';
   readonly capabilities = {
+    chat: true,
     structuredOutput: true,
+    structuredOutputMode: 'native',
     toolCalling: true,
     streaming: false,
+    contextWindowTokens: null,
+    imageInput: false,
+    nativeWebSearch: false,
     reportsUsage: true,
   } as const;
 

@@ -1,9 +1,10 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1 and 25.2 delivered 2026-11-18 (canonical claims:
+> **Status:** 25.0, 25.1, 25.2 and 25.3 delivered 2026-11-18 (canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
-> JSONB — no migration, schema change, provider account or release action. Work continues at 25.3.
+> JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback.
+> No migration, schema change, dependency, provider account or release action. Work continues at 25.4.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -101,7 +102,7 @@ Credits, billing, per-seat personal AI allowance, workspace or multi-org agents,
 Facts to verify again at 25.0; do not treat this section as an audit outcome.
 
 - **Runtime:** `apps/api/src/ai-agents/runs/executor.ts` (~1,491 lines) owns the step loop, token/cost/step ceilings and prompt assembly; `runs/lifecycle.ts`, `runs/triggers.ts`, `runs/base.ts`, `runs/shared.ts` split the rest. `ai-agent-config.ts` enforces hard ceilings and a bounded JSON output schema (`mode: 'text' | 'json'`); `validateBoundedJsonSchema()` re-checks model output.
-- **Providers:** `ai-provider.ts` is the vendor-neutral contract; only `ai-provider-openai-compatible.ts` and `ai-provider-anthropic.ts` are registered in `index.ts`, plus the test-only fake. `ai-provider-gateway.service.ts` routes and meters calls. `ai-provider-presets.ts` defines 24 presets including Gemini, Mistral, xAI, Ollama and vLLM — presets are configuration, not adapters. `ai-provider-anthropic.ts:30,242-245` documents that structured output is **not supported** by that adapter.
+- **Providers:** `ai-provider.ts` is the vendor-neutral contract; only `ai-provider-openai-compatible.ts` and `ai-provider-anthropic.ts` are registered in `index.ts`, plus the test-only fake. `ai-provider-gateway.service.ts` routes and meters calls. `ai-provider-presets.ts` defines 24 presets including Gemini, Mistral, xAI, Ollama and vLLM — presets are configuration, not adapters. `ai-provider-anthropic.ts:30,242-245` documented that structured output was **not supported** by that adapter at baseline; 25.3 replaced the refusal with the bounded extraction-tool fallback (canonical matrix §6).
 - **Tools:** 25 registered keys — 15 built-ins in `ai-agent-tools.ts` / `tools/{read,write,schemas}.ts`, 10 contributions from Sales, Projects, ServiceDesk, CustomerSuccess, Marketing Automation, LeadScore, Omnichannel, CRMChat and AIAgents. Per-agent `MAX_TOOLS` is 32 (`ai-agent-config.ts:50`, raised from 24). `plans/SPEC.md` correctly notes 24 Chat-facing tools / registry 25 but still documents `MAX_TOOLS` 24 (stale); `apps/api/test/ai-agent-runs.test.ts` enumerates 25 (24 Chat-facing + `omnichannel.send_message`).
 - **Chat:** `apps/api/src/crm-chat/crm-chat-contract.ts:19` declares v1.3.0 with 27 implemented routes and 11 stream events; `docs/architecture/crm-chat-contract.md` already carries version 1.3.0, but line 5 still says "implemented in full through 19-CHAT.24". Eight UI suggestion chips use `requiresTool` in `apps/web/src/pages/crm-chat/CRMChatSuggestions.tsx`; page context and sharing (D12) are not implemented.
 - **Workflow:** `packages/workflow/src/actions/index.ts:62-98` lists `updateRecord`, `createRecord`, `createNotification`, `sendEmail`, `runJob`. No AI action; the executor is pure and DB-free behind `WorkflowExecutorPorts`, which is the right seam for 25.5.
@@ -157,7 +158,7 @@ Files created in Phase 25 may be incomplete; record them in `docs/quality/known-
 | 25.0 | Baseline audit and parity reconciliation | P0 | **Delivered 2026-11-18** — `docs/quality/phase-25-ai-parity-baseline.md`, D1–D7 defaults in `docs/quality/phase-25-priority-decisions.md`, G99 filed; no code changes |
 | 25.1 | AI charter and documentation truthfulness | P0 | Canonical parity doc, corrected versions/counts, explicit skips |
 | 25.2 | Agent principal and least privilege | P0 | **Delivered 2026-11-18** — `principal.mode` pinned in published config; least-privilege matrix in the canonical matrix; 25.2 + regression tests pass; no migration |
-| 25.3 | Provider capability parity | P1 | Adapter/preset capability table, Anthropic structured-output fallback, no new SDK |
+| 25.3 | Provider capability parity | P1 | **Delivered 2026-11-18** — capability table derived from registered adapters and published in health, Anthropic `json_schema` via bounded extraction tool, Gemini local-compatible seam verified, no new SDK/native adapter |
 | 25.4 | Reusable versioned skills | P1 | Skill metadata, admin API/UI, agent binding, no code execution |
 | 25.5 | Workflow AI action | P1 | Bounded `runAgent` action in `WORKFLOW_ACTIONS`, worker port, approval path |
 | 25.6 | Trigger parity: watched fields and conditions | P1 | Event filters and cron parity, loop guard, idempotency evidence |

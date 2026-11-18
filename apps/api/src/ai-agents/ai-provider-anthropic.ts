@@ -27,8 +27,10 @@ import {
  * distinguished from an external cancellation, and a failure becomes a normalized `AIProviderError`
  * instead of the provider's raw body.
  *
- * Structured output is **not** supported: the Messages API has no `response_format`, so a run that
- * asks for a JSON schema is refused by the gateway rather than answered with prose.
+ * Structured output uses a host-defined extraction tool: the adapter injects a tool whose
+ * `input_schema` is the agent's bounded JSON schema, consumes the resulting `tool_use` block and
+ * returns it as `structured`. The tool is never exposed to the run engine and never executes code;
+ * `validateBoundedJsonSchema()` remains the only authority on whether the answer is valid.
  */
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -38,15 +40,26 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const ANTHROPIC_VERSION = '2023-06-01';
 /** The API requires `max_tokens`; the agent's own ceiling is applied on top of it. */
 const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;
+/** Reserved so a model cannot confuse the bounded extraction tool with an agent tool grant. */
+export const ANTHROPIC_STRUCTURED_OUTPUT_TOOL = '__carocrm_structured_output';
+const STRUCTURED_OUTPUT_INSTRUCTION =
+  'Return the final answer by calling the tool named "__carocrm_structured_output" exactly once ' +
+  'with a JSON object that matches its input schema. Do not call it for any other purpose and do ' +
+  'not call it more than once.';
 
 @Injectable()
 export class AnthropicProviderAdapter implements AIProviderAdapter {
   readonly key = 'anthropic';
   readonly label = 'Anthropic Claude messages';
   readonly capabilities = {
-    structuredOutput: false,
+    chat: true,
+    structuredOutput: true,
+    structuredOutputMode: 'extraction_tool',
     toolCalling: true,
     streaming: false,
+    contextWindowTokens: null,
+    imageInput: false,
+    nativeWebSearch: false,
     reportsUsage: true,
   } as const;
 
@@ -124,11 +137,22 @@ function buildHeaders(context: AIProviderContext): Record<string, string> {
 }
 
 function buildBody(request: AIProviderRequest): Record<string, unknown> {
-  const system = request.messages
+  const structured = request.responseFormat?.type === 'json_schema' ? request.responseFormat : null;
+  if (
+    structured !== null &&
+    (request.tools ?? []).some((tool) => tool.name === ANTHROPIC_STRUCTURED_OUTPUT_TOOL)
+  ) {
+    throw new AIProviderError(
+      'invalid_request',
+      'The reserved structured-output tool name cannot be granted to an agent.',
+    );
+  }
+
+  const systemParts = request.messages
     .filter((message) => message.role === 'system')
-    .map((message) => message.content)
-    .join('\n\n')
-    .trim();
+    .map((message) => message.content);
+  if (structured !== null) systemParts.push(STRUCTURED_OUTPUT_INSTRUCTION);
+  const system = systemParts.join('\n\n').trim();
 
   const body: Record<string, unknown> = {
     model: request.model,
@@ -136,8 +160,21 @@ function buildBody(request: AIProviderRequest): Record<string, unknown> {
     messages: buildMessages(request),
   };
   if (system !== '') body['system'] = system;
-  if (request.tools !== undefined && request.tools.length > 0) {
-    body['tools'] = request.tools.map((tool) => ({
+
+  const tools = [
+    ...(request.tools ?? []),
+    ...(structured === null
+      ? []
+      : [
+          {
+            name: ANTHROPIC_STRUCTURED_OUTPUT_TOOL,
+            description: 'Return the final answer as an instance of the declared JSON schema.',
+            parameters: structured.schema,
+          },
+        ]),
+  ];
+  if (tools.length > 0) {
+    body['tools'] = tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
       input_schema: tool.parameters,
@@ -237,30 +274,82 @@ function parseMessages(body: unknown, request: AIProviderRequest, started: numbe
     }
   }
 
-  const finishReason = toFinishReason(root?.['stop_reason'], toolCalls.length > 0);
-  if (request.responseFormat?.type === 'json_schema') {
-    throw new AIProviderError(
-      'invalid_request',
-      'The Anthropic adapter cannot serve a structured-output request; the Messages API has no response format.',
-    );
-  }
-
   const requestId = typeof root?.['id'] === 'string' ? root['id'] : null;
   const actualModel = typeof root?.['model'] === 'string' ? root['model'] : request.model;
   const usage = parseUsage(root?.['usage']);
-
-  return {
+  const structuredRequest = request.responseFormat?.type === 'json_schema' ? request.responseFormat : null;
+  const base = {
     providerRequestId: requestId,
     model: actualModel,
-    text,
-    structured: null,
-    toolCalls,
-    finishReason,
     usage,
     latencyMs: Date.now() - started,
-    safety: {
+  };
+
+  if (structuredRequest === null) {
+    const finishReason = toFinishReason(root?.['stop_reason'], toolCalls.length > 0);
+    return {
+      ...base,
+      text,
+      structured: null,
+      toolCalls,
       finishReason,
-      hasToolCalls: toolCalls.length > 0,
+      safety: {
+        finishReason,
+        hasToolCalls: toolCalls.length > 0,
+        structuredOutputMode: 'none',
+        stopReason: typeof root?.['stop_reason'] === 'string' ? root['stop_reason'] : null,
+      },
+    };
+  }
+
+  const extractionCalls = toolCalls.filter((call) => call.name === ANTHROPIC_STRUCTURED_OUTPUT_TOOL);
+  const domainCalls = toolCalls.filter((call) => call.name !== ANTHROPIC_STRUCTURED_OUTPUT_TOOL);
+  if (extractionCalls.length > 1) {
+    throw new AIProviderError('invalid_response', 'The provider returned more than one structured-output extraction call.');
+  }
+  if (extractionCalls.length > 0 && domainCalls.length > 0) {
+    throw new AIProviderError(
+      'invalid_response',
+      'The provider mixed a structured-output extraction call with an agent tool call.',
+    );
+  }
+  if (domainCalls.length > 0) {
+    // A tool-use turn is not a final answer: hand the domain calls back so the run engine can
+    // execute the granted tool, then ask for the schema-bound answer on a later turn.
+    const finishReason = toFinishReason(root?.['stop_reason'], true);
+    return {
+      ...base,
+      text,
+      structured: null,
+      toolCalls: domainCalls,
+      finishReason,
+      safety: {
+        finishReason,
+        hasToolCalls: true,
+        structuredOutputMode: 'extraction_tool',
+        stopReason: typeof root?.['stop_reason'] === 'string' ? root['stop_reason'] : null,
+      },
+    };
+  }
+
+  const extraction = extractionCalls[0];
+  if (extraction === undefined) {
+    throw new AIProviderError(
+      'invalid_response',
+      'The provider returned prose instead of calling the structured-output extraction tool.',
+    );
+  }
+  const structured = parseJson(extraction.rawArguments);
+  return {
+    ...base,
+    text: JSON.stringify(structured),
+    structured,
+    toolCalls: [],
+    finishReason: 'stop',
+    safety: {
+      finishReason: 'stop',
+      hasToolCalls: false,
+      structuredOutputMode: 'extraction_tool',
       stopReason: typeof root?.['stop_reason'] === 'string' ? root['stop_reason'] : null,
     },
   };

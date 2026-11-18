@@ -12,6 +12,9 @@
 > CaroCRM means source-level verification in this pass; **no test, lint or typecheck was executed** —
 > `AGENTS.MD` §4 reserves those for the developer. Executed-test evidence is cited from existing suites by
 > path, not re-run. Twenty claims carry a URL and a verification state (§8).
+> **25.3 reconciliation:** this remains the historical 25.0 audit. The finding "Anthropic structured
+> output refused" is now closed by the adapter-side extraction-tool fallback; the current provider
+> capability table is `docs/architecture/ai-capability-matrix.md` §6, not this baseline.
 
 ---
 

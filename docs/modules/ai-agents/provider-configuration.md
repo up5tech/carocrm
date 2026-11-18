@@ -227,9 +227,11 @@ Policy limits, per §6.2/§6.3:
   different credential, or a different residency boundary.
 - Only `AIProviderError` failures trigger a fallback. Validation, policy and permission errors are
   not provider failures and never fall back.
-- Structured-output runs may fall back only to a model on a connection whose adapter supports
-  structured output — publication already refuses an agent whose provider cannot serve its output
-  mode, and `anthropic` (no structured output) therefore cannot be a fallback target for a JSON run.
+- Structured-output runs may fall back only to a model on a connection whose adapter declares
+  `structuredOutput: true`. All three registered adapters now do: OpenAI-compatible natively and
+  Anthropic through the bounded extraction-tool fallback described in §8. The JSON schema is still
+  validated by `validateBoundedJsonSchema()` after the call; a provider response that does not use
+  the extraction tool fails as `invalid_response` instead of silently degrading to prose.
 - The structured-answer repair turn always uses the primary model; fallback covers the main loop.
 
 ---
@@ -239,8 +241,14 @@ Policy limits, per §6.2/§6.3:
 | Kind | Availability | Notes |
 | --- | --- | --- |
 | `openai-compatible` | all environments | `/chat/completions`, tool calls, JSON-schema response format, usage; no vendor SDK. Serves every vendor that speaks that contract. |
-| `anthropic` | all environments | The Messages API (`/messages`, `x-api-key`, pinned `anthropic-version`); tool calls, usage. **No structured output** — the Messages API has no response format, so a run that asks for a JSON schema is refused rather than answered with prose. |
+| `anthropic` | all environments | The Messages API (`/messages`, `x-api-key`, pinned `anthropic-version`); tool calls, usage. Structured output uses a host-defined extraction tool whose `input_schema` is the agent's bounded JSON schema; the tool result stays inside the adapter and is never executable. |
 | `fake` | **non-production only** | Deterministic; simulates errors, delays and tool proposals. Never selected in production. |
+
+The declared per-adapter and per-preset capability table is published at
+`GET /api/v1/AIAgents/action/health` under `providers.capabilityTable` and in
+`docs/architecture/ai-capability-matrix.md` §6. It is derived from the registered adapter objects;
+a preset only inherits its transport's row. Gemini is verified through a stubbed local-compatible
+endpoint, while the other vendor presets are expected-but-untested and labelled `not-verified`.
 
 Adding a **transport** is a code change: implement `AIProviderAdapter`, register it in the module
 barrel, and document its capabilities. No table, API or model output can register an adapter at

@@ -17,7 +17,7 @@ endpoints:
     auth: authenticated
     permissions: "capability use (AIAgent read); provider connection keys/default are only revealed to a caller who also holds providerAdmin"
     request: none
-    response: "200 AIAgentsModuleHealthView { module, ok, execution, dependencies[], optionalIntegrations[], features[], structures[], providers{count,enabledCount,credentialCount,adapterKeys,adapters,presets,defaultKey,defaultResolvable,encryptionConfigured}, settings{version,updatedAt,warnings}, checks[] }"
+    response: "200 AIAgentsModuleHealthView { module, ok, execution, dependencies[], optionalIntegrations[], features[], structures[], providers{count,enabledCount,credentialCount,adapterKeys,adapters,capabilityTable{adapters[{key,label,capabilities{chat,structuredOutput,structuredOutputMode,toolCalling,streaming,contextWindowTokens,imageInput,nativeWebSearch,reportsUsage}}],presets[{key,label,kind,verification,capabilities|null}]},presets,defaultKey,defaultResolvable,encryptionConfigured}, settings{version,updatedAt,warnings}, checks[] }"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
     pagination: none
     sorting: none

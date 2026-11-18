@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { type BoundedJsonSchema, validateBoundedJsonSchema } from '../src/ai-agents/ai-agent-config.js';
 import { AIProviderError, AIProviderRegistry } from '../src/ai-agents/ai-provider.js';
-import { AnthropicProviderAdapter } from '../src/ai-agents/ai-provider-anthropic.js';
+import { ANTHROPIC_STRUCTURED_OUTPUT_TOOL, AnthropicProviderAdapter } from '../src/ai-agents/ai-provider-anthropic.js';
+import { describePresetCapabilities, describeProviderCapabilities } from '../src/ai-agents/ai-provider-capabilities.js';
 import { FakeProviderAdapter } from '../src/ai-agents/ai-provider-fake.js';
 import { OpenAICompatibleProviderAdapter } from '../src/ai-agents/ai-provider-openai-compatible.js';
 import { AI_PROVIDER_PRESETS, presetForConnection, providerPresets } from '../src/ai-agents/ai-provider-presets.js';
@@ -225,8 +227,85 @@ describe('Anthropic adapter', () => {
     ]);
   });
 
-  it('refuses a structured-output request instead of answering with prose', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: '{}' }] })));
+  it('serves structured output through a bounded extraction tool', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        id: 'msg_struct',
+        model: 'claude-sonnet-4-5',
+        content: [
+          { type: 'text', text: 'ignored prose' },
+          {
+            type: 'tool_use',
+            id: 'toolu_struct',
+            name: ANTHROPIC_STRUCTURED_OUTPUT_TOOL,
+            input: { ok: true },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 5, output_tokens: 3 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const schema = {
+      type: 'object',
+      properties: { ok: { type: 'boolean' } },
+      required: ['ok'],
+    };
+
+    const response = await anthropic.complete(
+      {
+        model: 'claude-sonnet-4-5',
+        messages: [{ role: 'user', content: 'return the result' }],
+        responseFormat: { type: 'json_schema', name: 'result', schema },
+      },
+      anthropicContext,
+    );
+
+    expect(response.structured).toEqual({ ok: true });
+    expect(response.text).toBe('{"ok":true}');
+    expect(response.toolCalls).toEqual([]);
+    expect(response.finishReason).toBe('stop');
+    expect(response.safety['structuredOutputMode']).toBe('extraction_tool');
+    expect(validateBoundedJsonSchema(response.structured, schema as BoundedJsonSchema)).toEqual([]);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['system']).toContain(ANTHROPIC_STRUCTURED_OUTPUT_TOOL);
+    expect(body['tools']).toEqual([
+      {
+        name: ANTHROPIC_STRUCTURED_OUTPUT_TOOL,
+        description: 'Return the final answer as an instance of the declared JSON schema.',
+        input_schema: schema,
+      },
+    ]);
+  });
+
+  it('passes a domain tool turn through without inventing a structured answer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          content: [{ type: 'tool_use', id: 'toolu_1', name: 'search', input: { query: 'x' } }],
+          stop_reason: 'tool_use',
+        }),
+      ),
+    );
+    const response = await anthropic.complete(
+      {
+        model: 'claude-sonnet-4-5',
+        messages: [{ role: 'user', content: 'search then answer' }],
+        tools: [{ name: 'search', description: 'search', parameters: { type: 'object' } }],
+        responseFormat: { type: 'json_schema', name: 'result', schema: { type: 'object' } },
+      },
+      anthropicContext,
+    );
+    expect(response.structured).toBeNull();
+    expect(response.toolCalls.map((call) => call.name)).toEqual(['search']);
+    expect(response.finishReason).toBe('tool_calls');
+  });
+
+  it('fails closed when the model returns prose instead of the extraction call', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: '{"ok":true}' }] })));
     const error = await anthropic
       .complete(
         {
@@ -237,7 +316,31 @@ describe('Anthropic adapter', () => {
         anthropicContext,
       )
       .catch((caught: unknown) => caught);
+    expect((error as AIProviderError).category).toBe('invalid_response');
+  });
+
+  it('refuses a reserved extraction-tool name in the agent tool grant', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ content: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const error = await anthropic
+      .complete(
+        {
+          model: 'claude-sonnet-4-5',
+          messages: [{ role: 'user', content: 'hello' }],
+          tools: [
+            {
+              name: ANTHROPIC_STRUCTURED_OUTPUT_TOOL,
+              description: 'reserved',
+              parameters: { type: 'object' },
+            },
+          ],
+          responseFormat: { type: 'json_schema', name: 'result', schema: { type: 'object' } },
+        },
+        anthropicContext,
+      )
+      .catch((caught: unknown) => caught);
     expect((error as AIProviderError).category).toBe('invalid_request');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('maps HTTP 401 to a non-retryable auth error without reading the body', async () => {
@@ -295,5 +398,141 @@ describe('provider presets', () => {
     expect(presetForConnection('anthropic', 'https://api.anthropic.com/v1')?.key).toBe('anthropic');
     // An unknown endpoint falls back to the custom entry rather than guessing.
     expect(presetForConnection('openai-compatible', 'https://internal.example/v1')?.key).toBe('custom');
+  });
+});
+
+describe('provider capability table (25.3)', () => {
+  const registry = new AIProviderRegistry();
+  registry.register(new OpenAICompatibleProviderAdapter());
+  registry.register(new AnthropicProviderAdapter());
+  registry.register(new FakeProviderAdapter());
+
+  it('derives adapter rows from the registered contract objects', () => {
+    const rows = describeProviderCapabilities(registry);
+    expect(rows.map((row) => row.key)).toEqual(['anthropic', 'fake', 'openai-compatible']);
+    for (const row of rows) {
+      expect(Object.keys(row.capabilities)).toEqual([
+        'chat',
+        'structuredOutput',
+        'structuredOutputMode',
+        'toolCalling',
+        'streaming',
+        'contextWindowTokens',
+        'imageInput',
+        'nativeWebSearch',
+        'reportsUsage',
+      ]);
+      expect(row.capabilities.chat).toBe(true);
+      expect(row.capabilities.structuredOutput).toBe(true);
+      expect(row.capabilities.imageInput).toBe(false);
+      expect(row.capabilities.nativeWebSearch).toBe(false);
+      expect(row.capabilities.contextWindowTokens).toBeNull();
+    }
+    expect(rows.find((row) => row.key === 'anthropic')?.capabilities.structuredOutputMode).toBe(
+      'extraction_tool',
+    );
+    expect(rows.find((row) => row.key === 'openai-compatible')?.capabilities.structuredOutputMode).toBe(
+      'native',
+    );
+  });
+
+  it('lets presets inherit only their transport capabilities and labels verification honestly', () => {
+    const rows = describePresetCapabilities(registry, true);
+    expect(rows.length).toBe(providerPresets(true).length);
+    for (const row of rows) {
+      if (row.capabilities === null) {
+        expect(row.verification).toBe('not-verified');
+        continue;
+      }
+      expect(row.capabilities).toEqual(registry.get(row.kind).capabilities);
+    }
+    const byKey = new Map(rows.map((row) => [row.key, row]));
+    expect(byKey.get('gemini')?.verification).toBe('local-compatible-seam');
+    expect(byKey.get('openai')?.verification).toBe('adapter-contract');
+    expect(byKey.get('anthropic')?.verification).toBe('adapter-contract');
+    expect(byKey.get('mistral')?.verification).toBe('not-verified');
+    expect(byKey.get('ollama')?.verification).toBe('not-verified');
+  });
+
+  it('verifies the non-OpenAI Gemini preset through the local-compatible seam', async () => {
+    const preset = AI_PROVIDER_PRESETS.find((entry) => entry.key === 'gemini');
+    expect(preset?.kind).toBe('openai-compatible');
+    expect(preset?.baseUrl).toContain('/openai');
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        id: 'gemini_local_1',
+        model: 'gemini-2.5-flash',
+        choices: [{ finish_reason: 'stop', message: { content: '{"answer":"ok"}' } }],
+        usage: { prompt_tokens: 4, completion_tokens: 2 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const response = await new OpenAICompatibleProviderAdapter().complete(
+      {
+        model: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: 'hello' }],
+        responseFormat: { type: 'json_schema', name: 'result', schema: { type: 'object' } },
+      },
+      { apiKey: 'test-key-never-logged', baseUrl: 'https://gemini-local.example/v1beta/openai' },
+    );
+    expect(response.structured).toEqual({ answer: 'ok' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://gemini-local.example/v1beta/openai/chat/completions');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['model']).toBe('gemini-2.5-flash');
+    expect(body['response_format']).toMatchObject({ type: 'json_schema' });
+    expect((init.headers as Record<string, string>).authorization).toContain('test-key-never-logged');
+  });
+
+  it('returns an equivalent validated structured answer from every registered adapter', async () => {
+    const schema = {
+      type: 'object',
+      properties: { ok: { type: 'boolean' } },
+      required: ['ok'],
+    } as BoundedJsonSchema;
+    const candidates = [
+      new OpenAICompatibleProviderAdapter(),
+      new AnthropicProviderAdapter(),
+      new FakeProviderAdapter(),
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate.key === 'openai-compatible') {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async () =>
+            jsonResponse({ choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }] }),
+          ),
+        );
+      } else if (candidate.key === 'anthropic') {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async () =>
+            jsonResponse({
+              content: [
+                { type: 'tool_use', id: 'toolu_struct', name: ANTHROPIC_STRUCTURED_OUTPUT_TOOL, input: { ok: true } },
+              ],
+              stop_reason: 'tool_use',
+            }),
+          ),
+        );
+      } else {
+        vi.unstubAllGlobals();
+      }
+
+      const response = await candidate.complete(
+        {
+          model: 'result-model',
+          messages: [{ role: 'user', content: 'return the result' }],
+          responseFormat: { type: 'json_schema', name: 'result', schema: schema as unknown as Record<string, unknown> },
+        },
+        candidate.key === 'fake'
+          ? { apiKey: null, baseUrl: 'https://fake.invalid' }
+          : { apiKey: 'test-key-never-logged', baseUrl: 'https://provider.example/v1' },
+      );
+      expect(response.structured).toEqual({ ok: true });
+      expect(validateBoundedJsonSchema(response.structured, schema)).toEqual([]);
+    }
   });
 });

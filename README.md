@@ -15,11 +15,11 @@ Customer Success (19-CS), Service Desk (19-SD), Marketing Automation (19-MA), Vo
 (19-ES) — plus Phase 20 (settings, administration and end-user UX) and Phase 21 (the in-app
 handbook).**
 
-Phase 25 (AI capability parity) is **in progress**: 25.0's read-only baseline and 25.1's documentation
-truthfulness are delivered, with the single canonical claim source at
-[`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md). No AI feature
-from Phase 25 is claimed as shipped by those documentation steps; all Phase 25 evidence is alpha/pilot
-only while the Phase 24.12 production gate remains open.
+Phase 25 (AI capability parity) is **in progress**: 25.0's read-only baseline, 25.1's documentation
+truthfulness, 25.2's version-pinned agent principal and 25.3's provider capability table with the
+Anthropic structured-output fallback are delivered, with the single canonical claim source at
+[`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md). These are
+alpha/pilot capabilities and evidence only while the Phase 24.12 production gate remains open.
 
 _Roadmap_ — [plans/PLAN.md](plans/PLAN.md) for the kernel and module roadmap, plus the phase-level plans
 [Projects](plans/PLAN_Phase_19_Projects.md) · [Sales](plans/PLAN_Phase_19_Sales.md) ·

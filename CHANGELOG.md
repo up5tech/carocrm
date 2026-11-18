@@ -22,7 +22,7 @@ compatibility for its internal APIs while it is in alpha.
 
 ### Phase 25 — AI capability parity (in progress, not a release)
 
-Documentation came first; 25.2 added the first code change in this phase. Phase 25 produces
+Documentation came first; 25.2 and 25.3 added code changes in this phase. Phase 25 produces
 **alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
 production go/no-go.
 
@@ -40,8 +40,15 @@ production go/no-go.
   stamps the effective principal and pinned version; revoked principals fail closed. The 11-capability
   least-privilege ACL profile is documented in `docs/architecture/ai-capability-matrix.md` §5. No
   migration or schema change — the rule rides in the existing version-config JSONB.
+- **25.3** Provider capability parity without a second AI SDK: capability rows are derived from
+  registered adapter objects and published in `AIAgents/action/health` under
+  `providers.capabilityTable`; presets inherit their transport's row and are labelled
+  adapter-contract, local-compatible-seam (Gemini) or not-verified. Anthropic `json_schema` requests
+  now use a bounded host-defined extraction tool inside the adapter instead of being refused; the
+  reserved tool name cannot be granted, prose fails closed, and `validateBoundedJsonSchema()` remains
+  the schema authority. No dependency, migration, native adapter or live vendor call.
 
-Not shipped by 25.2: assignable agent roles, provider fallback (25.3), skills (25.4), workflow AI
+Not shipped by 25.3: assignable agent roles, skills (25.4), workflow AI
 (25.5), trigger filters (25.6), attachments (25.7), web grounding (25.8), chat page context (25.9),
 installation cost view (25.10) and the golden evaluation gate (25.11).
 
