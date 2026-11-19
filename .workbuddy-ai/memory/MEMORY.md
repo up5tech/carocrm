@@ -39,14 +39,13 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   19-CHAT.23; **25 now** (15 built-in + 10 domain contributions), authoritative enumeration in
   `apps/api/test/ai-agent-runs.test.ts`; docs saying 20/21 are stale. Per-agent `MAX_TOOLS` = **32**
   (`ai-agent-config.ts:50`, confirmed 25.1).
-- Runtime: `runs/executor.ts` is back at the 1,500-line ceiling after 25.5; workflow resume logic lives in `runs/workflow-resume.ts`, and 25.4 skill
-  prompt composition lives in `runs/skill-prompt.ts`, to avoid growing the step loop. Bounded JSON output via `ai-agent-config.ts`; Anthropic now supports `json_schema`
+- Runtime: `runs/executor.ts` was at the 1,500-line ceiling after 25.5; workflow resume lives in `runs/workflow-resume.ts`, 25.4 skill prompt composition in `runs/skill-prompt.ts`, and 25.7 transcript construction in `runs/transcript.ts` (executor now ~1,383 lines) to avoid growing the step loop. Bounded JSON output via `ai-agent-config.ts`; Anthropic now supports `json_schema`
   through a bounded extraction tool inside the adapter (25.3), not native response format. Only
   OpenAI-compatible + Anthropic adapters are registered; the other presets are configuration, not
   adapters. Capability rows are derived in `ai-provider-capabilities.ts` and published in the health
-  view's `providers.capabilityTable`; image input/native web search are false, context is `null`.
+  view's `providers.capabilityTable`; native web search is false and context is `null`. Since 25.7 the test-only fake declares `imageInput: true` (metadata only); the real adapters stay false.
 - AI parity boundary (Phase 25, **in progress; 25.0/25.1/25.2/25.3/25.4 delivered 2026-11-18;
-  25.5 and 25.6 implemented 2026-11-19**):
+  25.5 and 25.6 implemented 2026-11-19; 25.7 implemented 2026-11-20, uncommitted**):
   single-tenant only — no workspace/credits/billing/personal AI allowance; Twenty's alpha skills/agents
   and beta MCP are not parity gates. CaroCRM already ships MCP-compatible tools and stronger
   fail-closed ACL/injection evals. Canonical claim source: `docs/architecture/ai-capability-matrix.md`;
@@ -63,9 +62,12 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   bounded `triggers.watchedFields` and one sandboxed `triggers.condition` using `@carocrm/formula`
   (`field('name')` current, `field('__previous_name')` previous); the committed entity event carries a
   bounded before/after snapshot of changed scalars and `runs/trigger-filters.ts` filters before
-  fan-out without changing the five-start cap, recursion guard or `evt:<eventId>:<agentId>` key. No
-  new migration. AIAgents module is v1.7.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
-  25.4 is `952a547`, 25.5 is `f063a60`, and 25.6 is committed/pushed as `ee3c73b`. Per `AGENTS.MD` §4 the agent did not run automated checks for 25.6.
+  fan-out without changing the five-start cap, recursion guard or `evt:<eventId>:<agentId>` key.
+  25.7 accepts ≤10 already-uploaded `fileId`s (PNG/JPEG/PDF, 10MB/file) in chat/run input; ACL is
+  rechecked at creation and before the model call, metadata (never bytes) crosses
+  `AIProviderRequest.attachments`, unsupported adapters fail closed, and metadata is untrusted via
+  `boundRecord`. No migration/OCR/vision call; AIAgents module is v1.8.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
+  25.4 is `952a547`, 25.5 is `f063a60`, and 25.6 is committed/pushed as `ee3c73b`. Per `AGENTS.MD` §4 the agent did not run automated checks for 25.6/25.7.
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial
