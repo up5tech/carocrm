@@ -14,8 +14,13 @@ import { agentConfigChecksum, parseAgentConfig } from '../ai-agent-config.js';
 import { AI_AGENT_RUN_JOB } from '../ai-agent-jobs.js';
 import type { RunStatus } from '../ai-agents-module.js';
 import { MAX_RUN_RECORD_REFS, TERMINAL_RUN_STATUSES } from '../ai-agents-module.js';
+import {
+  normalizeAttachmentIds,
+  normalizeAttachmentMetadata,
+  readStoredAttachments,
+} from './attachments.js';
 import { AIAgentRunExecutor } from './executor.js';
-import { type AIAgentRunView, asRecord, isUniqueViolation,type RunCreateInput, type RunRecordRef } from './shared.js';
+import { type AIAgentRunView, asRecord, isUniqueViolation,type RunAttachment, type RunCreateInput, type RunRecordRef } from './shared.js';
 
 export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
   async create(agentId: string, input: RunCreateInput): Promise<AIAgentRunView> {
@@ -214,7 +219,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
       const message = normalized.input.text ?? (normalized.input.record === undefined
         ? 'Started a conversation.'
         : `Started from ${normalized.input.record.entity} "${normalized.input.record.id}".`);
-      await this.memory.appendUserMessage(conversation.id, id, message);
+      await this.memory.appendUserMessage(conversation.id, id, message, normalized.input.attachments ?? []);
     }
     await this.appendEvent(id, 'run', 'run.queued', `Run queued for agent "${agent.name}".`, {
       agentVersion: version.version,
@@ -249,6 +254,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     const entity = typeof record['entity'] === 'string' ? record['entity'] : undefined;
     const recordId = typeof record['id'] === 'string' ? record['id'] : undefined;
     const storedRefs = storedInput['records'];
+    const attachments = readStoredAttachments(storedInput['attachments']);
     const records = Array.isArray(storedRefs)
       ? storedRefs.flatMap((ref) => {
           const entry = asRecord(ref);
@@ -262,6 +268,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
         ...(text === undefined ? {} : { text }),
         ...(entity === undefined || recordId === undefined ? {} : { record: { entity, id: recordId } }),
         ...(records.length === 0 ? {} : { records }),
+        ...(attachments.length === 0 ? {} : { attachments: attachments.map((attachment) => attachment.fileId) }),
       },
       ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
@@ -429,7 +436,13 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     config: AgentConfig,
     raw: RunCreateInput['input'],
   ): Promise<{
-    input: { text?: string; record?: RunRecordRef; records?: RunRecordRef[]; ref?: string };
+    input: {
+      text?: string;
+      record?: RunRecordRef;
+      records?: RunRecordRef[];
+      attachments?: RunAttachment[];
+      ref?: string;
+    };
   }> {
     if (config.input.mode === 'record') {
       // A record-context agent reads exactly one record; extra references would be validated and
@@ -446,9 +459,11 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
       if (!this.metadata.registry.hasEntity(expected)) throw new ValidationError(`Entity "${expected}" is not registered.`);
       // Fail at creation, under the starter's scope, rather than discovering the refusal mid-run.
       await this.entities.get(expected, record.id);
+      const attachments = await this.normalizeAttachments(raw?.attachments);
       return {
         input: {
           record: { entity: record.entity, id: record.id },
+          ...(attachments.length === 0 ? {} : { attachments }),
           ref: `${expected}:${record.id}`,
         },
       };
@@ -457,6 +472,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     if (text === '') throw new ValidationError('A run needs a task.');
     if (text.length > 4_000) throw new ValidationError('A run task may contain at most 4000 characters.');
     const records = await this.normalizeRecordRefs(raw?.records);
+    const attachments = await this.normalizeAttachments(raw?.attachments);
     // A text-mode run may still name the record it was started from. It is metadata (the model does
     // not read the record), and it lets the owning module bind a run to its subject.
     return {
@@ -464,6 +480,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
         text,
         ...(raw?.record === undefined ? {} : { record: raw.record }),
         ...(records.length === 0 ? {} : { records }),
+        ...(attachments.length === 0 ? {} : { attachments }),
       },
     };
   }
@@ -497,6 +514,23 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
       refs.push({ entity, id });
     }
     return refs;
+  }
+
+  /**
+   * 25.7 — resolve `fileId` references at creation under the starter's scope. `getById` performs
+   * the platform attachment ACL (visibility, parent record, API-key scope), so an unreadable file
+   * fails before the run row exists. Only bounded metadata is persisted in `input.attachments`.
+   */
+  private async normalizeAttachments(raw: readonly string[] | undefined): Promise<RunAttachment[]> {
+    const ids = normalizeAttachmentIds(raw);
+    const attachments: RunAttachment[] = [];
+    for (const id of ids) {
+      const file = await this.attachments.getById(id).catch(() => {
+        throw new ValidationError('An attached file is not readable by this user.', { fileId: id });
+      });
+      attachments.push(normalizeAttachmentMetadata(file));
+    }
+    return attachments;
   }
 
   /**

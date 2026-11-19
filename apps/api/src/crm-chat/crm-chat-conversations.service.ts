@@ -59,6 +59,13 @@ export interface CRMChatMessageView {
   readonly contentFormat: 'plain';
   readonly redaction: 'none' | 'summary' | 'hashed';
   readonly turnId: string | null;
+  /** 25.7 — bounded file metadata stored on the user message; no link is reauthorized here. */
+  readonly attachments: readonly {
+    readonly fileId: string;
+    readonly name: string;
+    readonly mimeType: string;
+    readonly size: number;
+  }[];
   /** The citations of this answer, materialised from an ACL re-read (19-CHAT.8). */
   readonly citations: readonly CRMChatCitationView[];
   readonly createdAt: string;
@@ -342,11 +349,36 @@ export class CRMChatConversationService {
       contentFormat: 'plain',
       redaction,
       turnId: row.run_id,
+      attachments: messageAttachments(row.content_meta),
       citations,
       createdAt: row.created_at.toISOString(),
       completedAt: null,
     };
   }
+}
+
+/**
+ * 25.7 — attachment metadata on a stored user turn. It is display-only: the renderer must not turn
+ * this historical metadata into a download link, because that would bypass the attachment ACL.
+ */
+function messageAttachments(raw: unknown): CRMChatMessageView['attachments'] {
+  const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw) as unknown; } catch { return null; } })() : raw;
+  if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as Record<string, unknown>)['attachments'])) {
+    return [];
+  }
+  const values = (parsed as Record<string, unknown>)['attachments'];
+  if (!Array.isArray(values)) return [];
+  return values.slice(0, 10).flatMap((value) => {
+    if (typeof value !== 'object' || value === null) return [];
+    const entry = value as Record<string, unknown>;
+    const fileId = typeof entry['fileId'] === 'string' ? entry['fileId'] : '';
+    const name = typeof entry['name'] === 'string' ? entry['name'] : '';
+    const mimeType = typeof entry['mimeType'] === 'string' ? entry['mimeType'] : '';
+    const size = typeof entry['size'] === 'number' && Number.isFinite(entry['size']) ? entry['size'] : 0;
+    return fileId === '' || name === '' || mimeType === '' || size <= 0
+      ? []
+      : [{ fileId: fileId.slice(0, 120), name: name.slice(0, 200), mimeType: mimeType.slice(0, 80), size }];
+  });
 }
 
 /**

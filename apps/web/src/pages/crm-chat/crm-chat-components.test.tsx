@@ -34,6 +34,7 @@ function message(overrides: Partial<CRMChatMessageView> = {}): CRMChatMessageVie
     contentFormat: 'plain',
     redaction: 'none',
     turnId: 'turn-1',
+    attachments: [],
     citations: [],
     createdAt: new Date().toISOString(),
     completedAt: null,
@@ -155,6 +156,28 @@ describe('CRMChatFeedbackButtons (19-CHAT.30)', () => {
 });
 
 describe('CRMChatMessageList citations (19-CHAT.30)', () => {
+  it('shows attached file names without turning historical metadata into a link', () => {
+    const html = renderToStaticMarkup(
+      withQuery(
+        <CRMChatMessageList
+          messages={[
+            message({
+              attachments: [
+                { fileId: 'file-1', name: 'brief.png', mimeType: 'image/png', size: 20 },
+              ],
+            }),
+          ]}
+          hasMore={false}
+          loadingOlder={false}
+          onLoadOlder={() => undefined}
+        />,
+      ),
+    );
+    expect(html).toContain('carocrm-chat-attachments');
+    expect(html).toContain('brief.png');
+    expect(html).not.toContain('href="/Attachment');
+  });
+
   it('shows a citation as locked while the page-level reauthorization is unresolved', () => {
     const html = renderToStaticMarkup(
       withQuery(

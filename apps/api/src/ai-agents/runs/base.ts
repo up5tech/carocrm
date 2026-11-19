@@ -4,6 +4,7 @@
 
 import { NotFoundError } from '@carocrm/core/errors/index.js';
 
+import type { AttachmentService } from '../../attachment/attachment.service.js';
 import type { AuthService } from '../../auth/auth.service.js';
 import type { RequestScope } from '../../common/request-scope.js';
 import type { AIAgentRunsTable, DatabaseService } from '../../database/database.service.js';
@@ -22,6 +23,7 @@ import type { AIAgentsPermissionService } from '../ai-agents-permission.service.
 import type { AIAgentsPolicyService } from '../ai-agents-policy.service.js';
 import type { AIAgentsSettingsService } from '../ai-agents-settings.service.js';
 import type { AIProviderGateway } from '../ai-provider-gateway.service.js';
+import { readStoredAttachments } from './attachments.js';
 import { type AIAgentRunEventView, type AIAgentRunView, asRecord,type RunListQuery } from './shared.js';
 
 export abstract class AIAgentRunCore {
@@ -36,6 +38,7 @@ export abstract class AIAgentRunCore {
     protected readonly tools: AIToolRegistry,
     protected readonly gateway: AIProviderGateway,
     protected readonly entities: EntityCrudService,
+    protected readonly attachments: AttachmentService,
     protected readonly metadata: MetadataStoreService,
     protected readonly jobs: JobsService,
     protected readonly memory: AIAgentMemoryService,
@@ -332,6 +335,7 @@ export abstract class AIAgentRunCore {
         text: typeof input['text'] === 'string' ? input['text'].slice(0, 4_000) : null,
         recordEntity: typeof record['entity'] === 'string' ? record['entity'] : null,
         recordId: typeof record['id'] === 'string' ? record['id'] : null,
+        attachments: readStoredAttachments(input['attachments']),
       },
       result: row.result,
       failureCategory: row.failure_category,

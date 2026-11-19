@@ -1,4 +1,4 @@
-import { LinkOutlined, LockOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { LinkOutlined, LockOutlined, PaperClipOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { parseMarkdown } from '@carocrm/docs/parser.js';
 import { Button, Tag, Tooltip } from 'antd';
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -199,6 +199,16 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
             context={{ pageKeys: new Set<string>(), section: '', onAnchor: () => {} }}
           />
         </div>
+
+        {message.attachments.length > 0 ? (
+          <div className="carocrm-chat-attachments">
+            {message.attachments.map((attachment) => (
+              <Tag key={attachment.fileId} bordered={false} icon={<PaperClipOutlined />} style={{ fontSize: 11 }}>
+                {attachment.name}
+              </Tag>
+            ))}
+          </div>
+        ) : null}
 
         {message.citations && message.citations.length > 0 ? (
           <div className="carocrm-chat-cites">

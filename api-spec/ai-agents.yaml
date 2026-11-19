@@ -436,13 +436,13 @@ endpoints:
     path: /api/v1/AIAgents/action/agents/:id/runs
     auth: authenticated
     permissions: "capability use (AIAgent read) plus execution enabled and not globally paused; agent must be published and visible to the caller"
-    request: "RunCreateSchema { input?{text?, record?{entity,id}, records?[{entity,id} max 8]}, idempotencyKey? (8-120 chars), conversationId? } (strict)"
+    request: "RunCreateSchema { input?{text?, record?{entity,id}, records?[{entity,id} max 8], attachments? (max 10 already-uploaded fileIds; ACL-checked; PNG/JPEG/PDF <=10MB)}, idempotencyKey? (8-120 chars), conversationId? } (strict)"
     response: "201 AIAgentRunView — status queued; execution happens asynchronously via the job queue"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND, FEATURE_DISABLED, RATE_LIMITED]
     pagination: none
     sorting: none
     filtering: none
-    sideEffects: [ai_agent_runs row (queued, 24h expiry), optional ai_agent_conversations/messages rows, run.queued timeline event, BullMQ job enqueue, quota and per-user rate checks; record refs are ACL-checked at creation]
+    sideEffects: [ai_agent_runs row (queued, 24h expiry), optional ai_agent_conversations/messages rows, run.queued timeline event, BullMQ job enqueue, quota and per-user rate checks; record refs are ACL-checked at creation; attachment refs are ACL-checked at creation and again before every model call]
     idempotency: "idempotencyKey is unique-indexed; a repeat returns the existing run"
   - method: GET
     path: /api/v1/AIAgents/action/runs/:id

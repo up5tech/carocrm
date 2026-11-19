@@ -5,6 +5,7 @@ import { AIProviderError, AIProviderRegistry } from '../src/ai-agents/ai-provide
 import { ANTHROPIC_STRUCTURED_OUTPUT_TOOL, AnthropicProviderAdapter } from '../src/ai-agents/ai-provider-anthropic.js';
 import { describePresetCapabilities, describeProviderCapabilities } from '../src/ai-agents/ai-provider-capabilities.js';
 import { FakeProviderAdapter } from '../src/ai-agents/ai-provider-fake.js';
+import { AIProviderGateway } from '../src/ai-agents/ai-provider-gateway.service.js';
 import { OpenAICompatibleProviderAdapter } from '../src/ai-agents/ai-provider-openai-compatible.js';
 import { AI_PROVIDER_PRESETS, presetForConnection, providerPresets } from '../src/ai-agents/ai-provider-presets.js';
 
@@ -139,6 +140,18 @@ describe('fake adapter', () => {
     );
     expect(response.structured).toEqual({ ok: true });
     expect(response.finishReason).toBe('stop');
+  });
+
+  it('records attachment ids without reading file bytes', async () => {
+    const response = await new FakeProviderAdapter().complete(
+      {
+        ...request,
+        attachments: [{ fileId: 'file_1', name: 'brief.png', mimeType: 'image/png', size: 12 }],
+      },
+      { apiKey: null, baseUrl: 'https://fake.invalid' },
+    );
+    expect(response.safety['attachmentIds']).toEqual(['file_1']);
+    expect(response.text).toContain('[file_1]');
   });
 
   it('simulates a normalized provider error from the prompt', async () => {
@@ -424,7 +437,7 @@ describe('provider capability table (25.3)', () => {
       ]);
       expect(row.capabilities.chat).toBe(true);
       expect(row.capabilities.structuredOutput).toBe(true);
-      expect(row.capabilities.imageInput).toBe(false);
+      expect(row.capabilities.imageInput).toBe(row.key === 'fake');
       expect(row.capabilities.nativeWebSearch).toBe(false);
       expect(row.capabilities.contextWindowTokens).toBeNull();
     }
@@ -534,5 +547,43 @@ describe('provider capability table (25.3)', () => {
       expect(response.structured).toEqual({ ok: true });
       expect(validateBoundedJsonSchema(response.structured, schema)).toEqual([]);
     }
+  });
+});
+
+describe('provider gateway attachment capability (25.7)', () => {
+  it('refuses attachments on an adapter without image input, before any network call', async () => {
+    const gateway = new AIProviderGateway(
+      {
+        resolve: async () => ({
+          key: 'openai',
+          kind: 'openai-compatible',
+          label: 'OpenAI compatible',
+          baseUrl: 'https://provider.example/v1',
+          models: ['result-model'],
+          dataClasses: ['internal'],
+          config: {},
+        }),
+        adapterFor: () => new OpenAICompatibleProviderAdapter(),
+      } as never,
+      {
+        settings: async () => ({
+          dataPolicy: { allowedExternalDataClasses: ['internal'] },
+          limits: { maxElapsedSeconds: 5 },
+        }),
+      } as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      gateway.complete({
+        connectionKey: 'openai',
+        request: {
+          model: 'result-model',
+          messages: [{ role: 'user', content: 'Summarize the file' }],
+          attachments: [{ fileId: 'file_1', name: 'brief.png', mimeType: 'image/png', size: 20 }],
+        },
+      }),
+    ).rejects.toThrow(/does not support attachment input/);
   });
 });

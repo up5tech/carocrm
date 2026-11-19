@@ -136,7 +136,9 @@ never returns to `running`. Chat adds no transition of its own — it only relab
 
 ### 4.3 First turn creates the thread
 
-1. The client submits `{ conversationId?: string, prompt, idempotencyKey?, contextRefs? }`.
+1. The client submits `{ conversationId?: string, prompt, idempotencyKey?, contextRefs?, attachments? }`.
+   `attachments` is a list of at most ten already-uploaded `fileId`s (25.7); the server resolves and
+   ACL-checks each one through the platform attachment service.
 2. Chat resolves the assistant (§10) and refuses with `FEATURE_DISABLED` / `503 CHAT_AGENT_UNAVAILABLE`
    when it is not `ready`.
 3. Chat calls `AIAgentRunService.create(agentId, { input, idempotencyKey, conversationId })`.
@@ -234,7 +236,7 @@ Pagination decisions that the implementation fixes, so the client cannot get the
 
 | Method | Path | Gate | Request | Response |
 | --- | --- | --- | --- | --- |
-| `POST` | `action/turns` | `use` + `readTools` effective + assistant `ready` | `{ conversationId?, prompt, idempotencyKey?, contextRefs? }` | `CRMChatTurnView` (202) |
+| `POST` | `action/turns` | `use` + `readTools` effective + assistant `ready` | `{ conversationId?, prompt, idempotencyKey?, contextRefs?, attachments? (≤10 fileIds, 25.7) }` | `CRMChatTurnView` (202) |
 | `GET` | `action/turns/:turnId` | `use` + owner | — | `CRMChatTurnView` |
 | `GET` | `action/turns/:turnId/events` | `use` + owner | `Last-Event-ID` | `text/event-stream` (§8) |
 | `POST` | `action/turns/:turnId/cancel` | `use` + owner | `{}` | `CRMChatTurnView` |
@@ -247,7 +249,7 @@ Submission is `POST action/turns`, not a route nested under a conversation, beca
 does not exist until the first turn: `conversationId` is optional in the body and the runtime creates
 the thread when it is absent (§4.3).
 
-`contextRefs` is the only client-supplied influence on what the agent may look at, and it is a
+`contextRefs` is one of two client-supplied influences on what the agent may look at, and it is a
 **reference**, not data: `{ entity: string, id: string }` (at most `limits.maxContextRefs`). Since
 19-CHAT.26/19-AI.28 **every** reference is forwarded — the run input carries the full list as
 `records` (with `record` kept as the first ref for single-reference consumers), and each ref is
@@ -255,6 +257,13 @@ re-read under the caller's ACL when the run is created and again under the actin
 the prompt is built. An unreadable reference **fails the turn at creation** (`404 NOT_FOUND`) rather
 than being silently dropped; refs that become unreadable later are withheld from the prompt and
 counted in the task text.
+
+`attachments` (25.7) is the other reference-only field: a list of already-uploaded `fileId`s, at most
+ten per turn, restricted to PNG/JPEG/PDF and 10MB per file. The server resolves each id through
+`AttachmentService.getById` under the submitting user's ACL before creating the run, stores only
+bounded metadata in the existing run/message JSON payloads, and re-checks the same ACL before every
+model call. A revoked file blocks the run before a provider request; no file bytes, client-supplied
+filename or storage key is accepted in the turn body.
 
 `prompt` is the field name the implementation uses; an earlier draft of this contract called it
 `message`. The implemented name is the one clients send, and it is the name the SPA and the tests

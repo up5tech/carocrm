@@ -2834,6 +2834,14 @@
     "composerUnavailable": "The assistant is not ready, so the composer is disabled.",
     "composerPlaceholder": "Type your message here...",
     "composerHint": "Up to {max} characters, {seconds}s per turn.",
+    "attachments": {
+      "add": "Attach file",
+      "title": "Attached files",
+      "max": "You can attach at most {max} files.",
+      "unsupported": "Only PNG, JPEG and PDF files can be attached.",
+      "tooLarge": "A file must be between 1 byte and 10 MB.",
+      "uploadFailed": "The file could not be uploaded. Try again."
+    },
     "cancelTurn": "Cancel",
     "send": "Send",
     "generating": "Generating...",

@@ -22,7 +22,7 @@ compatibility for its internal APIs while it is in alpha.
 
 ### Phase 25 — AI capability parity (in progress, not a release)
 
-Documentation came first; 25.2–25.6 added code changes in this phase. Phase 25 produces
+Documentation came first; 25.2–25.7 added code changes in this phase. Phase 25 produces
 **alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
 production go/no-go.
 
@@ -73,10 +73,19 @@ production go/no-go.
   `evt:<eventId>:<agentId>` idempotency key are unchanged; cron equivalence and its process-timezone
   gap are documented in the canonical matrix. No migration. AIAgents module version is now 1.7.0.
   Automated checks are assigned to the developer by `AGENTS.MD` §4.
+- **25.7** Bounded attachment input: chat turns and AIAgents runs accept up to ten already-uploaded
+  `fileId`s restricted to PNG/JPEG/PDF and 10MB per file. `AttachmentService.getById` checks read ACL
+  at creation and again before every model call; a revoked file blocks the run as
+  `attachment_not_accessible` before a provider call. Enriched run views, CRM Chat turn status and
+  user-message metadata expose bounded attachment metadata without a download link. The vendor-neutral
+  `AIProviderRequest.attachments` field carries metadata only; unsupported adapters fail clearly and
+  the deterministic fake records ids and returns a stable text description. Attachment metadata and a
+  bounded future extraction seam are shaped by `boundRecord`/`promptSafe` as untrusted data. No file
+  bytes, OCR, third-party vision call, new storage backend or migration. AIAgents module version is
+  now 1.8.0; automated checks are assigned to the developer by `AGENTS.MD` §4.
 
-Not shipped by 25.6: assignable agent roles, code-defined agents, attachments
-(25.7), web grounding (25.8), chat page context (25.9), installation cost view (25.10) and the golden
-evaluation gate (25.11).
+Not shipped by 25.7: assignable agent roles, code-defined agents, web grounding (25.8), chat page
+context (25.9), installation cost view (25.10) and the golden evaluation gate (25.11).
 
 ### Phase 24
 

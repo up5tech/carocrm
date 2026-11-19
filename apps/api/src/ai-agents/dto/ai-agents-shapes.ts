@@ -6,6 +6,7 @@ import {
   MAX_SKILL_LABEL_CHARS,
   SKILL_KEY_PATTERN,
 } from '../ai-agent-skills.js';
+import { MAX_PROVIDER_ATTACHMENTS } from '../ai-provider.js';
 import { MAX_RUN_RECORD_REFS } from '../ai-agents-module.js';
 
 /**
@@ -18,6 +19,11 @@ import { MAX_RUN_RECORD_REFS } from '../ai-agents-module.js';
  */
 
 export const PROVIDER_KEY_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
+export const RUN_ATTACHMENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,120}$/;
+
+export const RunAttachmentIdsSchema = z
+  .array(z.string().trim().regex(RUN_ATTACHMENT_ID_PATTERN, 'fileId must be a stored file id'))
+  .max(MAX_PROVIDER_ATTACHMENTS);
 
 const ProviderKeySchema = z
   .string()
@@ -201,6 +207,11 @@ export const RunCreateSchema = z
          * the same bound and ACL-checks every entry.
          */
         records: z.array(RunRecordRefSchema).max(MAX_RUN_RECORD_REFS).optional(),
+        /**
+         * 25.7 — already-uploaded file ids. The service resolves each through the attachment ACL;
+         * no file bytes, names or client-supplied metadata are accepted here.
+         */
+        attachments: RunAttachmentIdsSchema.optional(),
       })
       .strict()
       .optional(),

@@ -10,6 +10,27 @@
 
 export type AIProviderRole = 'system' | 'user' | 'assistant' | 'tool';
 
+/**
+ * Phase 25.7 — bounded attachment metadata, never file bytes. The caller resolves an already
+ * uploaded `fileId` through the platform's attachment ACL and sends only these four fields across
+ * the vendor-neutral boundary. An adapter that cannot accept these refs must declare
+ * `imageInput: false`; the gateway refuses the call rather than dropping the attachment.
+ */
+export interface AIProviderAttachment {
+  readonly fileId: string;
+  readonly name: string;
+  readonly mimeType: 'image/png' | 'image/jpeg' | 'application/pdf';
+  readonly size: number;
+}
+
+export const MAX_PROVIDER_ATTACHMENTS = 10;
+export const MAX_PROVIDER_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const PROVIDER_ATTACHMENT_MIME_TYPES: readonly AIProviderAttachment['mimeType'][] = [
+  'image/png',
+  'image/jpeg',
+  'application/pdf',
+];
+
 export interface AIProviderMessage {
   readonly role: AIProviderRole;
   readonly content: string;
@@ -36,6 +57,8 @@ export interface AIProviderRequest {
   readonly responseFormat?: AIProviderResponseFormat | undefined;
   readonly temperature?: number | undefined;
   readonly maxOutputTokens?: number | undefined;
+  /** Phase 25.7 — already-resolved attachment metadata, never bytes or storage keys. */
+  readonly attachments?: readonly AIProviderAttachment[] | undefined;
   /** Adapter-enforced timeout. The gateway also applies its own ceiling. */
   readonly timeoutMs?: number | undefined;
   /** External cancellation (run cancel, HTTP disconnect, worker stop). */

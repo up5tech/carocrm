@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { RunAttachmentIdsSchema } from '../../ai-agents/dto/ai-agents-shapes.js';
 import { patchOf } from '../../common/patch-schema.js';
 import { CRMChatSettingsSchema } from '../crm-chat-settings.service.js';
 
@@ -106,6 +107,11 @@ export const CRMChatTurnCreateSchema = z
       )
       .max(10)
       .optional(),
+    /**
+     * 25.7 — already-uploaded file ids. Reuses the AIAgents run bound (max 10); the run service
+     * ACL-checks every id under the submitting user before a run or conversation is created.
+     */
+    attachments: RunAttachmentIdsSchema.optional(),
   })
   .strict();
 

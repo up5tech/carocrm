@@ -743,6 +743,8 @@ export const api = {
     conversationId?: string | undefined;
     idempotencyKey?: string | undefined;
     contextRefs?: readonly { entity: string; id: string }[] | undefined;
+    /** Phase 25.7 — already-uploaded attachment ids (max 10). */
+    attachments?: readonly string[] | undefined;
   }) => request<CRMChatTurnResult>('/CRMChat/action/turns', post(input)),
   /** Phase 19-CHAT.5 — get turn status. */
   crmChatGetTurn: (turnId: string) => request<CRMChatTurnStatus>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}`),

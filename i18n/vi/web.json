@@ -2834,6 +2834,14 @@
     "composerUnavailable": "Trợ lý chưa sẵn sàng nên ô soạn tin đang bị khóa.",
     "composerPlaceholder": "Nhập tin nhắn của bạn tại đây...",
     "composerHint": "Tối đa {max} ký tự, {seconds} giây mỗi lượt.",
+    "attachments": {
+      "add": "Đính kèm tệp",
+      "title": "Tệp đã đính kèm",
+      "max": "Bạn chỉ có thể đính kèm tối đa {max} tệp.",
+      "unsupported": "Chỉ hỗ trợ tệp PNG, JPEG và PDF.",
+      "tooLarge": "Mỗi tệp phải từ 1 byte đến 10 MB.",
+      "uploadFailed": "Không thể tải tệp lên. Vui lòng thử lại."
+    },
     "cancelTurn": "Hủy",
     "send": "Gửi",
     "generating": "Đang tạo...",

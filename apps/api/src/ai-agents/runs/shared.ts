@@ -9,6 +9,10 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 
 import type { MetadataStoreService } from '../../metadata/metadata-store.service.js';
 import type { RunStatus, RunTrigger } from '../ai-agents-module.js';
+import type { AIProviderAttachment } from '../ai-provider.js';
+
+/** Phase 25.7 — the persisted/provider-neutral attachment shape. */
+export type RunAttachment = AIProviderAttachment;
 
 export interface RunRecordRef {
   readonly entity: string;
@@ -45,6 +49,11 @@ export interface RunCreateInput {
      * what the prompt renders. Ignored — and refused — for record-mode agents.
      */
     readonly records?: readonly RunRecordRef[] | undefined;
+    /**
+     * 25.7 — already-uploaded file ids. Creation resolves each through the attachment ACL and
+     * stores bounded metadata in this same JSON input; no column or separate table is added.
+     */
+    readonly attachments?: readonly string[] | undefined;
   } | undefined;
   readonly idempotencyKey?: string | undefined;
   readonly trigger?: RunTrigger | undefined;
@@ -64,7 +73,12 @@ export interface AIAgentRunView {
   readonly status: RunStatus;
   readonly trigger: RunTrigger;
   readonly initiatedByUserId: string | null;
-  readonly input: { readonly text: string | null; readonly recordEntity: string | null; readonly recordId: string | null };
+  readonly input: {
+    readonly text: string | null;
+    readonly recordEntity: string | null;
+    readonly recordId: string | null;
+    readonly attachments: readonly RunAttachment[];
+  };
   readonly result: unknown;
   readonly failureCategory: string | null;
   readonly failureMessage: string | null;

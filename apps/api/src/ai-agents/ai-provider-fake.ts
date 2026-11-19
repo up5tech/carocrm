@@ -57,7 +57,9 @@ export class FakeProviderAdapter implements AIProviderAdapter {
     toolCalling: true,
     streaming: false,
     contextWindowTokens: null,
-    imageInput: false,
+    // 25.7 — deterministic attachment reception only. It returns a stable text description and
+    // records the ids in `safety`; it never reads file bytes or calls a vision model.
+    imageInput: true,
     nativeWebSearch: false,
     reportsUsage: true,
   } as const;
@@ -104,13 +106,20 @@ export class FakeProviderAdapter implements AIProviderAdapter {
     // 19-AI.28 test seam: `__FAKE_ECHO_PROMPT__` returns the full user message, so a test can prove
     // which record references actually reached the model prompt (the default echo is 200 chars).
     const echoPrompt = prompt.includes('__FAKE_ECHO_PROMPT__') ? lastUserContent(request) : null;
+    // 25.7 test seam: the attachment ids are recorded without reading bytes, so a test can prove
+    // the metadata crossed the vendor-neutral contract. The text description is stable.
+    const attachmentIds = (request.attachments ?? []).map((attachment) => attachment.fileId);
+    const attachmentDescription =
+      attachmentIds.length === 0
+        ? ''
+        : `\nAttachments: ${attachmentIds.map((id) => `[${id}]`).join(', ')}`;
     const text =
       echoedActor !== null
         ? echoedActor
         : (echoPrompt ??
           (request.responseFormat?.type === 'json_schema'
             ? JSON.stringify(structured)
-            : `Fake response to: ${prompt.slice(0, 200)}`));
+            : `Fake response to: ${prompt.slice(0, 200)}${attachmentDescription}`));
 
     return {
       providerRequestId: `fake-${String(Date.now())}`,
@@ -125,7 +134,7 @@ export class FakeProviderAdapter implements AIProviderAdapter {
         cachedInputTokens: 0,
       },
       latencyMs: Date.now() - started,
-      safety: { fake: true },
+      safety: { fake: true, ...(attachmentIds.length === 0 ? {} : { attachmentIds }) },
     };
   }
 }

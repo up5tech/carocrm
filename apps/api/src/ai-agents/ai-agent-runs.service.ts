@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { AttachmentService } from '../attachment/attachment.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
@@ -70,6 +71,7 @@ export class AIAgentRunService extends AIAgentRunTriggers {
     @Inject(AIToolRegistry) tools: AIToolRegistry,
     @Inject(AIProviderGateway) gateway: AIProviderGateway,
     @Inject(EntityService) entities: EntityCrudService,
+    @Inject(AttachmentService) attachments: AttachmentService,
     @Inject(METADATA_STORE) metadata: MetadataStoreService,
     @Inject(JobsService) jobs: JobsService,
     @Inject(AIAgentMemoryService) memory: AIAgentMemoryService,
@@ -88,6 +90,7 @@ export class AIAgentRunService extends AIAgentRunTriggers {
       tools,
       gateway,
       entities,
+      attachments,
       metadata,
       jobs,
       memory,

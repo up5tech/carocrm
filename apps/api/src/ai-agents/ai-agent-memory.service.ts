@@ -170,8 +170,20 @@ export class AIAgentMemoryService {
   }
 
   /** Store the user's turn. Sequence allocation is serialised per conversation in a transaction. */
-  async appendUserMessage(conversationId: string, runId: string, content: string): Promise<void> {
-    await this.appendMessage(conversationId, runId, 'user', content, {}, 'none');
+  async appendUserMessage(
+    conversationId: string,
+    runId: string,
+    content: string,
+    attachments: readonly { readonly fileId: string; readonly name: string; readonly mimeType: string; readonly size: number }[] = [],
+  ): Promise<void> {
+    await this.appendMessage(
+      conversationId,
+      runId,
+      'user',
+      content,
+      attachments.length === 0 ? {} : { attachments: [...attachments] },
+      'none',
+    );
   }
 
   /** Store the assistant's final answer (or a safe failure summary) after the run settles. */

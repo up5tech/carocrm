@@ -288,6 +288,7 @@ export class CRMChatController {
       conversationId: input.conversationId,
       idempotencyKey,
       contextRefs: input.contextRefs,
+      attachments: input.attachments,
     });
 
     return result;

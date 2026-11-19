@@ -12,6 +12,9 @@ import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import {
   AIProviderError,
   type AIProviderErrorCategory,
+  MAX_PROVIDER_ATTACHMENTS,
+  MAX_PROVIDER_ATTACHMENT_BYTES,
+  PROVIDER_ATTACHMENT_MIME_TYPES,
   type AIProviderRequest,
   type AIProviderResponse,
   type AIProviderUsage,
@@ -108,6 +111,29 @@ export class AIProviderGateway {
     }
     if ((input.request.tools?.length ?? 0) > 0 && !adapter.capabilities.toolCalling) {
       throw new ValidationError(`Provider adapter "${adapter.key}" does not support tool calling.`);
+    }
+    const attachments = input.request.attachments ?? [];
+    if (attachments.length > MAX_PROVIDER_ATTACHMENTS) {
+      throw new ValidationError(`A model call may carry at most ${String(MAX_PROVIDER_ATTACHMENTS)} attachments.`);
+    }
+    for (const attachment of attachments) {
+      const fileId = typeof attachment.fileId === 'string' ? attachment.fileId : '';
+      if (
+        fileId === '' ||
+        typeof attachment.name !== 'string' ||
+        attachment.name === '' ||
+        !PROVIDER_ATTACHMENT_MIME_TYPES.includes(attachment.mimeType) ||
+        !Number.isInteger(attachment.size) ||
+        attachment.size <= 0 ||
+        attachment.size > MAX_PROVIDER_ATTACHMENT_BYTES
+      ) {
+        throw new ValidationError('An attachment did not pass the provider contract bounds.', {
+          fileId: fileId.slice(0, 120),
+        });
+      }
+    }
+    if (attachments.length > 0 && !adapter.capabilities.imageInput) {
+      throw new ValidationError(`Provider adapter "${adapter.key}" does not support attachment input.`);
     }
     const timeoutMs = Math.min(
       input.request.timeoutMs ?? settings.limits.maxElapsedSeconds * 1_000,

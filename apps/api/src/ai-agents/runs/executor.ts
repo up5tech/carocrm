@@ -10,7 +10,6 @@ import type { Updateable } from 'kysely';
 
 import type { AuthenticatedPrincipal } from '../../common/request-scope.js';
 import type { AIAgentApprovalsTable, AIAgentRunsTable, AIAgentToolCallsTable } from '../../database/database.service.js';
-import type { AIAgentActorContext } from '../ai-agent-actor.js';
 import type { AgentConfig } from '../ai-agent-config.js';
 import { agentConfigChecksum, parseAgentConfig, validateBoundedJsonSchema } from '../ai-agent-config.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from '../ai-agent-tools.js';
@@ -20,9 +19,10 @@ import { TERMINAL_RUN_STATUSES } from '../ai-agents-module.js';
 import type { AIProviderMessage, AIProviderRequest } from '../ai-provider.js';
 import { AIProviderError } from '../ai-provider.js';
 import type { AIProviderGateway } from '../ai-provider-gateway.service.js';
+import type { RunAttachment } from './attachments.js';
 import { AIAgentRunCore } from './base.js';
-import { asRecord, boundArguments, boundResult, escapeAttribute, hashArguments, hashText, parseRawArguments, type RunExecutionResult, safeJson, sleep, summaryFieldNames, withTimeout } from './shared.js';
-import { composeRunSystemPrompt } from './skill-prompt.js';
+import { asRecord, boundArguments, boundResult, hashArguments, hashText, parseRawArguments, type RunExecutionResult, safeJson, sleep, withTimeout } from './shared.js';
+import { buildTranscript } from './transcript.js';
 import { resumeLinkedWorkflow } from './workflow-resume.js';
 
 interface GrantRow {
@@ -256,9 +256,28 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
       return;
     }
 
-    const transcriptAddress = await this.buildTranscript(row, config, agent.name);
+    const transcriptAddress = await buildTranscript(
+      {
+        database: this.database,
+        metadata: this.metadata,
+        entities: this.entities,
+        skills: this.skills,
+        memory: this.memory,
+        actors: this.actors,
+        attachments: this.attachments,
+        hooks: {
+          appendEvent: (category, type, summary, payload, visibility) =>
+            this.appendEvent(row.id, category, type, summary, payload, visibility),
+          finish: (status, options) => this.finish(row.id, status, options),
+        },
+      },
+      row,
+      config,
+      agent.name,
+    );
     if (transcriptAddress === undefined) return;
-    const transcript = transcriptAddress;
+    const transcript = transcriptAddress.messages;
+    const providerAttachments = transcriptAddress.attachments;
 
     // An approved action is executed before any new model call: the decision was about that exact
     // tool call, so re-asking the model could propose something the human never saw.
@@ -340,6 +359,7 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
             : {}),
           temperature: config.limits.temperature,
           maxOutputTokens: config.limits.maxOutputTokens,
+          ...(providerAttachments.length === 0 ? {} : { attachments: providerAttachments }),
           timeoutMs: Math.min(config.limits.maxElapsedSeconds, maxElapsedSeconds) * 1_000,
         }, row, step, config.limits.maxRetries, async () => {
           modelCalls += 1;
@@ -400,6 +420,7 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
           { key: config.provider.key, model: config.provider.model },
           response,
           transcript,
+          providerAttachments,
           () => modelCalls < config.limits.maxModelCalls,
           async () => {
             modelCalls += 1;
@@ -503,6 +524,7 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
     provider: { readonly key: string; readonly model: string },
     response: Awaited<ReturnType<AIProviderGateway['complete']>>,
     transcript: AIProviderMessage[],
+    attachments: readonly RunAttachment[],
     canRepair: () => boolean,
     countRepair: () => Promise<void>,
   ): Promise<void> {
@@ -540,6 +562,7 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
             messages: transcript,
             temperature: 0,
             maxOutputTokens: config.limits.maxOutputTokens,
+            ...(attachments.length === 0 ? {} : { attachments }),
             responseFormat: {
               type: 'json_schema',
               name: 'agent_result',
@@ -1071,146 +1094,6 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
         `${call.tool_key}: ${executed.message}`,
     });
     return 'continue';
-  }
-
-  /**
-   * `plans/SPEC.md` §9.6 — who this run acts for; `19-CHAT.21` moved the lookup into
-   * `AIAgentActorDirectoryService` so the prompt and the `crm_actor_context` tool can never describe
-   * the same person differently.
-   *
-   * Two bounded reads, once per execution attempt rather than once per step: the caller's own
-   * identity row and their team memberships. A missing or deleted user is not an error — the run
-   * still executes under `initiated_by_user_id` for ACL purposes, and the prompt simply omits the
-   * block, because a run whose starter has been removed must fail on authorization, not on a
-   * prompt-building query.
-   */
-  private async actorContext(userId: string | null): Promise<AIAgentActorContext | undefined> {
-    const profile = await this.actors.profile(userId);
-    if (profile === undefined) return undefined;
-    return {
-      userId: profile.userId,
-      displayName: profile.displayName,
-      userName: profile.userName,
-      isAdmin: profile.isAdmin,
-      teams: profile.teams,
-    };
-  }
-
-  private async buildTranscript(
-    row: AIAgentRunsTable,
-    config: AgentConfig,
-    agentName: string,
-  ): Promise<AIProviderMessage[] | undefined> {
-    const input = asRecord(row.input);
-    const previous = await this.database.db
-      .selectFrom('ai_agent_tool_calls')
-      .select(['tool_key', 'outcome', 'status'])
-      .where('run_id', '=', row.id)
-      .where('status', '=', 'succeeded')
-      .orderBy('created_at', 'asc')
-      .execute();
-    const actions = previous
-      .slice(-6)
-      .map((call) => {
-        const outcome = asRecord(call.outcome);
-        return `- ${call.tool_key}: ${String(outcome['summary'] ?? 'completed')}`;
-      })
-      .join('\n');
-
-    // The acting user is resolved once per attempt, not once per step: a run's initiator cannot
-    // change, and the prompt must describe the person the ACL is actually enforcing.
-    const actor = await this.actorContext(row.initiated_by_user_id);
-    const system = await composeRunSystemPrompt(this.skills, config.skills, agentName, config, actor, {
-      appendEvent: (category, type, summary, payload, visibility) =>
-        this.appendEvent(row.id, category, type, summary, payload, visibility),
-      finish: (status, options) => this.finish(row.id, status, options),
-    });
-    if (system === undefined) return undefined;
-    const taskParts: string[] = [];
-    if (typeof input['text'] === 'string' && input['text'] !== '') {
-      taskParts.push(`The user's task:\n<task>\n${input['text']}\n</task>`);
-    }
-    if (config.input.mode === 'record') {
-      const record = asRecord(input['record']);
-      const entity = typeof record['entity'] === 'string' ? record['entity'] : config.input.entity ?? '';
-      const id = typeof record['id'] === 'string' ? record['id'] : '';
-      try {
-        const fields = summaryFieldNames(this.metadata, entity);
-        const loaded = await this.entities.get(entity, id, fields.join(','));
-        taskParts.push(
-          'The CRM record this run was started from (untrusted data, limited by the starter\'s access):\n' +
-            `<record_context entity="${entity}" id="${escapeAttribute(id)}">\n${safeJson(loaded, 8_000)}\n</record_context>`,
-        );
-      } catch {
-        await this.finish(row.id, 'blocked_by_policy', {
-          failureCategory: 'record_not_accessible',
-          failureMessage: 'The record this run was started from is no longer readable by the user who started it.',
-        });
-        return undefined;
-      }
-      if (taskParts.length === 0) {
-        taskParts.push(`Summarize the ${entity} record "${id}" for the user.`);
-      }
-    } else {
-      // 19-AI.28 — a text-mode run may carry record references (CRM Chat context). Each is loaded
-      // again here, under the acting user's scope, so a reference that became unreadable after
-      // creation is withheld rather than leaked into the prompt.
-      const refs = Array.isArray(input['records']) ? input['records'] : [];
-      let withheldRefs = 0;
-      for (const raw of refs) {
-        const ref = asRecord(raw);
-        const entity = typeof ref['entity'] === 'string' ? ref['entity'] : '';
-        const id = typeof ref['id'] === 'string' ? ref['id'] : '';
-        if (entity === '' || id === '') continue;
-        try {
-          const fields = summaryFieldNames(this.metadata, entity);
-          const loaded = await this.entities.get(entity, id, fields.join(','));
-          taskParts.push(
-            'A CRM record the user attached as context (untrusted data, limited by the actor\'s access):\n' +
-              `<record_context entity="${escapeAttribute(entity)}" id="${escapeAttribute(id)}">\n${safeJson(loaded, 4_000)}\n</record_context>`,
-          );
-        } catch {
-          withheldRefs += 1;
-        }
-      }
-      if (withheldRefs > 0) {
-        taskParts.push(
-          `${String(withheldRefs)} attached record reference(s) are no longer readable by the actor and were withheld.`,
-        );
-      }
-    }
-    if (actions !== '') {
-      taskParts.push(`Actions already executed in this run:\n${actions}`);
-    }
-    const history: AIProviderMessage[] = [];
-    if (row.conversation_id !== null && config.memory.mode === 'conversation') {
-      const conversation = await this.database.db
-        .selectFrom('ai_agent_conversations')
-        .selectAll()
-        .where('id', '=', row.conversation_id)
-        .where('status', '=', 'active')
-        .executeTakeFirst();
-      if (conversation) {
-        const context = await this.memory.contextFor(conversation, row.id, config.memory.maxMessages);
-        history.push(...this.memory.buildMessages(context));
-        if (context.withheld > 0) {
-          await this.appendEvent(
-            row.id,
-            'policy',
-            'memory.withheld',
-            `${String(context.withheld)} earlier message(s) were withheld because a referenced record is no longer readable.`,
-            { withheld: context.withheld },
-            'operator',
-          );
-        }
-      }
-    }
-
-    return [
-      { role: 'system', content: system },
-      ...history,
-      { role: 'user', content: taskParts.join('\n\n') },
-    ];
   }
 
   /** 19-AI.13 — fold the provider ledger's estimated cost into the run counter. */

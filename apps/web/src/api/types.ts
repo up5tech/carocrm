@@ -1867,6 +1867,14 @@ export type AIAgentRunStatus =
   | 'blocked_by_policy'
   | 'outcome_unknown';
 
+/** Phase 25.7 — bounded metadata for an already-uploaded file attached to an agent turn. */
+export interface AIAgentAttachment {
+  readonly fileId: string;
+  readonly name: string;
+  readonly mimeType: string;
+  readonly size: number;
+}
+
 export interface AIAgentRunView {
   readonly id: string;
   readonly agentId: string;
@@ -1877,7 +1885,12 @@ export interface AIAgentRunView {
   readonly status: AIAgentRunStatus;
   readonly trigger: string;
   readonly initiatedByUserId: string | null;
-  readonly input: { readonly text: string | null; readonly recordEntity: string | null; readonly recordId: string | null };
+  readonly input: {
+    readonly text: string | null;
+    readonly recordEntity: string | null;
+    readonly recordId: string | null;
+    readonly attachments: readonly AIAgentAttachment[];
+  };
   readonly result: unknown;
   readonly failureCategory: string | null;
   readonly failureMessage: string | null;
@@ -2956,6 +2969,7 @@ export interface CRMChatMessageView {
   readonly contentFormat: 'plain';
   readonly redaction: 'none' | 'summary' | 'hashed';
   readonly turnId: string | null;
+  readonly attachments: readonly AIAgentAttachment[];
   readonly citations: readonly unknown[];
   readonly createdAt: string;
   readonly completedAt: string | null;
@@ -3064,6 +3078,7 @@ export interface CRMChatTurnStatus {
   readonly result: unknown;
   readonly failureMessage: string | null;
   readonly cancelRequested: boolean;
+  readonly attachments: readonly AIAgentAttachment[];
 }
 
 /** Phase 19-CHAT.6 — SSE stream event type. */

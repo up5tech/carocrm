@@ -78,9 +78,10 @@ OpenAI-compatible chat-completions contract; no vendor SDK is vendored.
    separate field, per the plan's "estimated vs authoritative" rule.
 7. **Trigger surface.** Manual runs are live; record/event/schedule/integration trigger doors are
    implemented (19-AI.25) but require operator enablement and setup before they fire: event and
-   schedule flags default to `false`, and allowlists default to empty. Watched-field and condition
-   filters are the remaining parity gap (25.6). The canonical claim source is
-   `docs/architecture/ai-capability-matrix.md` (25.1).
+   schedule flags default to `false`, and allowlists default to empty. 25.6 added bounded watched-field
+   and condition filters; 25.7 added ≤10 ACL-checked attachment references to runs and chat turns,
+   with metadata only crossing the vendor-neutral provider contract. The canonical claim source is
+   `docs/architecture/ai-capability-matrix.md`.
 8. **19-AI.18 retrieval stays deferred.** No vector index or RAG layer exists in this module; the
    plan itself declares retrieval optional and ACL-preserving sources mandatory, so absent retrieval
    is simply not claimed.

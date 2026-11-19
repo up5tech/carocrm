@@ -1,7 +1,7 @@
-import { SendOutlined, StopOutlined } from '@ant-design/icons';
+import { CloseOutlined, PaperClipOutlined, SendOutlined, StopOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Input, Space } from 'antd';
-import type { ComponentRef } from 'react';
+import { Alert, Button, Input, Space, Tag } from 'antd';
+import type { ChangeEvent, ComponentRef } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -12,6 +12,11 @@ import { CRMChatPromptTemplates } from './CRMChatPromptTemplates.js';
 import { useCrmChatStream } from './useCrmChatStream.js';
 
 const { TextArea } = Input;
+
+/** 25.7 D5 — client pre-checks mirror the server bounds; the server remains authoritative. */
+const MAX_CHAT_ATTACHMENTS = 10;
+const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const CHAT_ATTACHMENT_MIME_TYPES: ReadonlySet<string> = new Set(['image/png', 'image/jpeg', 'application/pdf']);
 
 export interface CRMChatComposerProps {
   readonly conversationId?: string | undefined;
@@ -30,6 +35,11 @@ export interface CRMChatComposerProps {
   readonly prefill?: { readonly text: string; readonly nonce: number } | undefined;
 }
 
+interface PendingAttachment {
+  readonly id: string;
+  readonly name: string;
+}
+
 /** User-safe progress phases. The server never streams hidden reasoning, only lifecycle state. */
 type TurnPhase = 'idle' | 'queued' | 'thinking' | 'tool' | 'finishing';
 
@@ -44,11 +54,14 @@ type TurnPhase = 'idle' | 'queued' | 'thinking' | 'tool' | 'finishing';
  * - Streaming state display
  * - 19-CHAT.14 — saved prompt templates, inserted as plain text
  * - 19-CHAT.12 — the action proposal card, when a turn asks for a write to be confirmed
+ * - 25.7 — optional, already-uploaded PNG/JPEG/PDF attachments sent as bounded file references
  */
 export function CRMChatComposer(props: CRMChatComposerProps) {
   const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted, resetSignal, prefill } = props;
 
   const [prompt, setPrompt] = useState('');
+  const [attachments, setAttachments] = useState<readonly PendingAttachment[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
@@ -56,6 +69,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
   const [toolLabel, setToolLabel] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const textAreaRef = useRef<ComponentRef<typeof TextArea>>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const seenResetSignal = useRef(resetSignal);
   const seenPrefillNonce = useRef(prefill?.nonce);
   // The first turn starts without a conversation id and creates one on the server. Keep the live id
@@ -80,7 +94,9 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     if (resetSignal === undefined || resetSignal === seenResetSignal.current) return;
     seenResetSignal.current = resetSignal;
     setPrompt('');
+    setAttachments([]);
     setStreamError(null);
+    if (fileInputRef.current !== null) fileInputRef.current.value = '';
     textAreaRef.current?.focus();
   }, [resetSignal]);
 
@@ -209,6 +225,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         prompt,
         conversationId,
         idempotencyKey,
+        attachments: attachments.map((attachment) => attachment.id),
       });
     },
     onSuccess: (result) => {
@@ -216,6 +233,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
       setTurnPhase('queued');
       setToolLabel(null);
       setPrompt('');
+      setAttachments([]);
       setStreamError(null);
       conversationRef.current = result.conversationId ?? conversationRef.current;
       onTurnSubmitted?.(result);
@@ -232,6 +250,40 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
       setTurnPhase('idle');
     },
   });
+
+  const handleFiles = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+    if (attachments.length + files.length > MAX_CHAT_ATTACHMENTS) {
+      setStreamError(t('web.crmChat.attachments.max', { max: MAX_CHAT_ATTACHMENTS }));
+      return;
+    }
+    for (const file of files) {
+      if (!CHAT_ATTACHMENT_MIME_TYPES.has(file.type)) {
+        setStreamError(t('web.crmChat.attachments.unsupported'));
+        return;
+      }
+      if (file.size <= 0 || file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+        setStreamError(t('web.crmChat.attachments.tooLarge'));
+        return;
+      }
+    }
+
+    setUploadingAttachments(true);
+    const uploaded: PendingAttachment[] = [];
+    try {
+      for (const file of files) {
+        const attachment = await api.uploadAttachment(file);
+        uploaded.push({ id: attachment.id, name: attachment.name });
+      }
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch {
+      setStreamError(t('web.crmChat.attachments.uploadFailed'));
+    } finally {
+      setUploadingAttachments(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (!prompt.trim() || !enabled || submitTurn.isPending) return;
@@ -256,7 +308,14 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
   const charCount = prompt.length;
   const isOverLimit = charCount > maxMessageChars;
   const turnActive = currentTurnId !== null;
-  const canSubmit = enabled && prompt.trim().length > 0 && !isOverLimit && !submitTurn.isPending && !stream.isConnected && !turnActive;
+  const canSubmit =
+    enabled &&
+    prompt.trim().length > 0 &&
+    !isOverLimit &&
+    !submitTurn.isPending &&
+    !uploadingAttachments &&
+    !stream.isConnected &&
+    !turnActive;
 
   const progressText =
     turnPhase === 'tool' && toolLabel !== null
@@ -316,7 +375,42 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
             currentPrompt={prompt}
             onInsert={(text) => setPrompt((current) => (current.trim() === '' ? text : `${current}\n${text}`))}
           />
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            multiple
+            accept="image/png,image/jpeg,application/pdf"
+            data-testid="crm-chat-attachment-input"
+            onChange={(event) => void handleFiles(event)}
+          />
+          <Button
+            size="small"
+            icon={<PaperClipOutlined />}
+            loading={uploadingAttachments}
+            disabled={!enabled || attachments.length >= MAX_CHAT_ATTACHMENTS || submitTurn.isPending || stream.isConnected || turnActive}
+            aria-label={t('web.crmChat.attachments.add')}
+            title={t('web.crmChat.attachments.add')}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {t('web.crmChat.attachments.add')}
+          </Button>
         </div>
+
+        {attachments.length > 0 ? (
+          <div className="carocrm-chat-attachments" aria-label={t('web.crmChat.attachments.title')}>
+            {attachments.map((attachment) => (
+              <Tag
+                key={attachment.id}
+                closable
+                closeIcon={<CloseOutlined />}
+                onClose={() => setAttachments((current) => current.filter((entry) => entry.id !== attachment.id))}
+              >
+                {attachment.name}
+              </Tag>
+            ))}
+          </div>
+        ) : null}
 
         <TextArea
           ref={textAreaRef}

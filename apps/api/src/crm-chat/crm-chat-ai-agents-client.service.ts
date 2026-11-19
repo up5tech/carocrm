@@ -33,6 +33,8 @@ export interface CrmChatTurnSubmission {
   readonly idempotencyKey: string;
   /** Optional safe context references (record IDs the user is viewing). */
   readonly contextRefs?: readonly { readonly entity: string; readonly id: string }[] | undefined;
+  /** 25.7 — already-uploaded file ids; AIAgents resolves and ACL-checks them. */
+  readonly attachments?: readonly string[] | undefined;
 }
 
 export interface CrmChatTurnResult {
@@ -50,6 +52,8 @@ export interface CrmChatTurnStatus {
   readonly result: unknown;
   readonly failureMessage: string | null;
   readonly cancelRequested: boolean;
+  /** 25.7 — bounded metadata for files attached to this turn. */
+  readonly attachments: readonly { fileId: string; name: string; mimeType: string; size: number }[];
 }
 
 @Injectable()
@@ -78,6 +82,7 @@ export class CRMChatAIAgentsClientService {
         text: input.prompt,
         ...(refs.length > 0 ? { record: refs[0] } : {}),
         ...(refs.length > 0 ? { records: [...refs] } : {}),
+        ...(input.attachments === undefined ? {} : { attachments: [...input.attachments] }),
       },
       idempotencyKey: input.idempotencyKey,
       conversationId: input.conversationId,
@@ -128,6 +133,7 @@ export class CRMChatAIAgentsClientService {
       result: await this.citations.reauthorizedResult(run.result),
       failureMessage: run.failureMessage,
       cancelRequested: run.cancelRequested,
+      attachments: run.input.attachments,
     };
   }
 

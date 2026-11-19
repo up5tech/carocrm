@@ -162,6 +162,15 @@ describe('CRMChat AIAgents Integration Adapter', () => {
     }
   });
 
+  it('rejects more than ten attachment references at the turn boundary', async () => {
+    const result = await call('POST', '/api/v1/CRMChat/action/turns', userToken, {
+      prompt: 'Test',
+      attachments: Array.from({ length: 11 }, (_, index) => `file_${String(index)}`),
+    });
+    expect([400, 403, 422]).toContain(result.status);
+    expect(result.body['id']).toBeUndefined();
+  });
+
   it('requires authentication for turn endpoints', async () => {
     const result = await call('POST', '/api/v1/CRMChat/action/turns', undefined, {
       prompt: 'Test',
