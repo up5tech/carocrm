@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { WorkflowActionPendingError } from '../errors/index.js';
 import type { ActionNode, WorkflowDefinition, WorkflowRunContext, WorkflowStepRecord, WorkflowStepSnapshot } from '../types/index.js';
 import type { WorkflowExecutorPorts } from './index.js';
 import { executeWorkflow } from './index.js';
@@ -83,6 +84,37 @@ describe('executeWorkflow', () => {
     const stamp = recorder.steps.filter((step) => step.nodeId === 'a1');
     expect(stamp.map((step) => step.status)).toEqual(['running', 'completed']);
     expect(stamp[1]?.output).toEqual({ output: { created: 'Stamp' } });
+  });
+
+  it('parks at an AI step that started durable external work and leaves it re-enterable', async () => {
+    const definition: WorkflowDefinition = {
+      trigger: { eventType: 'entity.created', entityType: 'Account' },
+      start: 'ai',
+      nodes: [
+        {
+          id: 'ai',
+          type: 'action',
+          name: 'Classify',
+          action: 'runAgent',
+          params: { agentId: '11111111-2222-4333-8444-555555555555', task: 'Classify {{name}}' },
+          next: 'e',
+        },
+        { id: 'e', type: 'end', name: 'Done' },
+      ],
+    };
+    const recorder = ports({
+      runAction: async () => {
+        throw new WorkflowActionPendingError('agent run r1', { agentRunId: 'r1' });
+      },
+    });
+    const result = await executeWorkflow(definition, run(), recorder.ports);
+    expect(result.status).toBe('waiting');
+    expect(result.result).toMatchObject({ resumeAt: 'ai', pending: true });
+    expect(recorder.waiting).toEqual([{ nextNodeId: 'ai', delaySeconds: 0 }]);
+    expect(recorder.resumes).toEqual([]);
+    expect(recorder.finished).toEqual([]);
+    expect(recorder.steps.at(-1)).toMatchObject({ nodeId: 'ai', status: 'running', output: { pending: { agentRunId: 'r1' } } });
+    expect(recorder.steps.some((step) => step.status === 'completed' && step.nodeId === 'ai')).toBe(false);
   });
 
   it('follows the "then" branch when a condition matches', async () => {

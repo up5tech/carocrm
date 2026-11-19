@@ -1,4 +1,5 @@
 import type { Logger } from '@carocrm/core/logger/index.js';
+import { WorkflowActionPendingError } from '@carocrm/workflow';
 import { describe, expect, it } from 'vitest';
 
 import type { Queryable } from '../db.js';
@@ -199,5 +200,78 @@ describe('workflow actions', () => {
     await expect(
       runWorkflowAction(deps, RUN, { ...(NODE as never as object), action: 'dropEverything' } as never, RECORD),
     ).rejects.toThrowError(/no implementation in this worker build/);
+  });
+});
+
+describe('runAgent workflow action', () => {
+  const AGENT_ID = '11111111-2222-4333-8444-555555555555';
+  const AI_NODE = {
+    id: 'ai1',
+    type: 'action',
+    name: 'Classify',
+    action: 'runAgent',
+    params: { agentId: AGENT_ID, task: 'Summarize {{name}}', outputMapping: { fields: { description: 'data.summary' } } },
+  } as never;
+
+  function aiHarness(body: Record<string, unknown>, status = 200) {
+    const base = harness();
+    const calls: { url: string; init: RequestInit }[] = [];
+    const deps: ActionDeps = {
+      ...base.deps,
+      workflowAI: {
+        apiBaseUrl: 'http://api.test/',
+        secret: 'worker-secret',
+        fetcher: async (url, init) => {
+          calls.push({ url: String(url), init: init as RequestInit });
+          return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+        },
+      },
+    };
+    return { ...base, deps, calls };
+  }
+
+  it('parks the workflow instead of faking a result while the agent run is active', async () => {
+    const { deps, calls } = aiHarness({ runId: 'agent-run-1', status: 'running', pending: true });
+    let caught: unknown;
+    try {
+      await runWorkflowAction(deps, RUN, AI_NODE, RECORD);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(WorkflowActionPendingError);
+    expect((caught as WorkflowActionPendingError).detail).toEqual({ agentRunId: 'agent-run-1', workflowNodeId: 'ai1' });
+    expect(calls[0]?.url).toBe('http://api.test/api/v1/AIAgents/action/worker/workflow/run');
+    expect(calls[0]?.init.headers).toMatchObject({ 'x-worker-secret': 'worker-secret' });
+    const sent = JSON.parse(String(calls[0]?.init.body)) as Record<string, unknown>;
+    expect(sent['idempotencyKey']).toBe('wf:run1:ai1');
+    expect(sent['task']).toBe('Summarize ACME');
+    expect(sent['workflow']).toMatchObject({ workflowRunId: 'run1', nodeId: 'ai1', entityType: 'Account' });
+  });
+
+  it('maps only validated fields onto the triggering record', async () => {
+    const { deps, queries } = aiHarness({
+      runId: 'agent-run-1',
+      status: 'succeeded',
+      fields: { description: 'a short summary' },
+    });
+    const result = await runWorkflowAction(deps, RUN, AI_NODE, RECORD);
+    expect(result.summary).toContain('agent-run-1');
+    const patch = queries.find((query) => query.sql.includes('attrs = attrs ||'));
+    expect(patch?.params[0]).toBe('a1');
+    expect(patch?.params[2]).toBe('{"description":"a short summary"}');
+  });
+
+  it('refuses to invent agent runs when no worker capability is configured', async () => {
+    const { deps } = harness();
+    await expect(runWorkflowAction(deps, RUN, AI_NODE, RECORD)).rejects.toThrowError(/no worker capability/);
+  });
+
+  it('surfaces a failed agent run as a failed workflow action', async () => {
+    const { deps } = aiHarness({
+      runId: 'agent-run-1',
+      status: 'failed',
+      failure: { category: 'invalid_output', message: 'bad schema' },
+    });
+    await expect(runWorkflowAction(deps, RUN, AI_NODE, RECORD)).rejects.toThrowError(/runAgent failed: agent run agent-run-1 failed: bad schema/);
   });
 });

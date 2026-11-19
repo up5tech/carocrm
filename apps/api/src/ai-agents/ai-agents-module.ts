@@ -160,7 +160,7 @@ export const TERMINAL_RUN_STATUSES: ReadonlySet<RunStatus> = new Set([
   'outcome_unknown',
 ]);
 
-export const RUN_TRIGGERS = ['manual', 'record', 'event', 'schedule', 'integration'] as const;
+export const RUN_TRIGGERS = ['manual', 'record', 'event', 'schedule', 'integration', 'workflow'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 /**
@@ -382,7 +382,7 @@ export type AIAgentErrorCode = (typeof AI_AGENTS_ERROR_CODES)[number];
 export const AI_AGENTS_MODULE = {
   id: 'AIAgents',
   name: 'AI Agents',
-  version: '1.5.0',
+  version: '1.6.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; AI Agents runs after Marketing Automation (`380`). */
   loadOrder: 390,
@@ -422,6 +422,7 @@ export const AI_AGENTS_MODULE = {
     '19-AI.21',
     '19-AI.28',
     '25.4',
+    '25.5',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

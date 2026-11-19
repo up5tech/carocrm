@@ -1,6 +1,6 @@
 import { FormulaEngine } from '@carocrm/formula';
 
-import { errorMessage } from '../errors/index.js';
+import { errorMessage, WorkflowActionPendingError } from '../errors/index.js';
 import { formulaContextOf } from '../interpolate/index.js';
 import type { ActionNode, WorkflowDefinition, WorkflowNode, WorkflowRunContext, WorkflowRunResult, WorkflowStepRecord, WorkflowStepSnapshot } from '../types/index.js';
 import { validateDefinition } from '../validation/index.js';
@@ -33,7 +33,7 @@ export interface WorkflowExecutorPorts {
   finishRun(input: { readonly runId: string; readonly status: 'completed' | 'failed' | 'cancelled'; readonly error?: string | undefined }): Promise<void>;
   /** Park the run for `delaySeconds`, continuing at `nextNodeId` when it fires. */
   scheduleResume(input: { readonly runId: string; readonly delaySeconds: number; readonly nextNodeId: string | undefined }): Promise<void>;
-  /** Mark the run as waiting for a delay (so the UI can tell "paused" from "stuck"). */
+  /** Mark the run as waiting for a delay or for durable external work (so the UI can tell "paused" from "stuck"). */
   markWaiting(input: { readonly runId: string; readonly nextNodeId: string | undefined; readonly delaySeconds: number }): Promise<void>;
   log?(message: string): void;
   /** Cooperative cancellation (§24): a long run is asked to stop between nodes. */
@@ -126,6 +126,16 @@ export async function executeWorkflow(
         }
       }
     } catch (error: unknown) {
+      if (error instanceof WorkflowActionPendingError) {
+        // Phase 25.5: an AI step has started durable work elsewhere. The step stays `running` in
+        // the ledger (so it is not skipped on re-entry), the run parks at this node, and the host
+        // resumes exactly here when the external run settles. No duplicate model run is possible:
+        // the host re-enters with the same idempotency key.
+        await ports.recordStep(step(run, node, 'running', { pending: error.detail }));
+        await ports.markWaiting({ runId: run.runId, nextNodeId: node.id, delaySeconds: 0 });
+        ports.log?.(`Workflow run ${run.runId} parked at "${node.name}" waiting for ${String(error.message)}.`);
+        return { status: 'waiting', result: { executed, resumeAt: node.id, pending: true } };
+      }
       const message = `${node.name}: ${errorMessage(error)}`;
       ports.log?.(`Workflow run ${run.runId} failed at "${node.name}": ${errorMessage(error)}`);
       await ports.recordStep(step(run, node, 'failed', {}, errorMessage(error)));

@@ -175,4 +175,56 @@ describe('workflow definition validation', () => {
     );
     expect(graph.nodes[0]).toMatchObject({ type: 'condition', then: 'e' });
   });
+
+  it('accepts a bounded runAgent step', () => {
+    const graph = validateDefinition(
+      definition({
+        nodes: [
+          {
+            id: 'a1',
+            type: 'action',
+            name: 'Classify',
+            action: 'runAgent',
+            params: {
+              agentId: '11111111-2222-4333-8444-555555555555',
+              task: 'Summarize {{name}}',
+              outputMapping: { fields: { description: 'data.summary' } },
+            },
+            next: 'e',
+          },
+          { id: 'e', type: 'end', name: 'Done' },
+        ],
+      }),
+    );
+    expect(graph.nodes[0]).toMatchObject({ action: 'runAgent' });
+  });
+
+  it('refuses oversized or code-shaped runAgent parameters', () => {
+    const base = { agentId: '11111111-2222-4333-8444-555555555555', task: 'ok' };
+    expect(
+      definitionIssues(
+        definition({ nodes: [{ id: 'a1', type: 'action', name: 'A', action: 'runAgent', params: { ...base, task: 'x'.repeat(4_001) } }] }),
+      )[0]?.message,
+    ).toContain('task');
+    expect(
+      definitionIssues(
+        definition({
+          nodes: [
+            {
+              id: 'a1',
+              type: 'action',
+              name: 'A',
+              action: 'runAgent',
+              params: { ...base, outputMapping: { fields: { description: 'eval(process.env)' } } },
+            },
+          ],
+        }),
+      )[0]?.message,
+    ).toContain('outputMapping');
+    expect(
+      definitionIssues(
+        definition({ nodes: [{ id: 'a1', type: 'action', name: 'A', action: 'runAgent', params: { ...base, shell: 'rm -rf /' } }] }),
+      )[0]?.code,
+    ).toBe('WORKFLOW_INVALID');
+  });
 });

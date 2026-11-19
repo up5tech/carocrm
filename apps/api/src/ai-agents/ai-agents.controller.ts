@@ -64,6 +64,7 @@ import {
   SkillPublishSchema,
   SkillUpdateSchema,
 } from './dto/ai-agents-shapes.js';
+import { mapWorkflowOutput } from './runs/workflow-output.js';
 
 /**
  * Phase 19-AI.2–19-AI.4 — the `AIAgents` foundation API
@@ -591,6 +592,48 @@ export class AIAgentsController {
     return this.runs.execute(id);
   }
 
+  /**
+   * Phase 25.5 — the worker's workflow-step door. This is not the run engine: the API re-checks the
+   * published agent, its workflow opt-in, skill bindings, approval policy and 25.2 principal rule,
+   * then starts one idempotent run. A settled result is mapped only if it passed the captured
+   * version's bounded output schema. A still-running run is reported as `pending`; the engine queues
+   * `workflow.resume` when it settles.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/worker/workflow/run')
+  async workflowRunForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const input = parse(WORKFLOW_AGENT_RUN_SCHEMA, body);
+    const started = await this.runs.startFromWorkflow({
+      agentId: input.agentId,
+      task: input.task,
+      ...(input.record === undefined ? {} : { record: input.record }),
+      ...(input.skillKeys === undefined ? {} : { skillKeys: input.skillKeys }),
+      approvalExpectation: input.approvalExpectation,
+      idempotencyKey: input.idempotencyKey,
+      metadata: input.workflow,
+    });
+    let mapped;
+    try {
+      mapped = mapWorkflowOutput(started, input.workflow.outputMapping);
+    } catch (error) {
+      throw new ValidationError(error instanceof Error ? error.message : 'The agent output could not be mapped.');
+    }
+    return {
+      runId: started.run.id,
+      status: started.run.status,
+      trigger: started.run.trigger,
+      agentVersion: started.run.agentVersion,
+      ...(mapped.kind === 'pending' ? { pending: true } : {}),
+      ...(mapped.kind === 'mapped' ? { fields: mapped.fields } : {}),
+      ...(mapped.kind === 'unmapped' ? { fields: {} } : {}),
+      ...(mapped.kind === 'failed'
+        ? { failure: { category: mapped.failureCategory, message: mapped.failureMessage } }
+        : {}),
+    };
+  }
+
   // -------------------------------------------------------------------------
   // 19-AI.12 — conversations, memory and retention
   // -------------------------------------------------------------------------
@@ -976,6 +1019,39 @@ const RUN_STATUS_SET: ReadonlySet<string> = new Set([
   'blocked_by_policy',
   'outcome_unknown',
 ]);
+
+const WORKFLOW_OUTPUT_MAPPING_SCHEMA = z
+  .object({
+    entity: z.string().regex(/^[A-Z][A-Za-z0-9]{1,49}$/).optional(),
+    recordId: z.string().min(1).max(120).optional(),
+    fields: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,49}$/), z.string().regex(/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+){0,7}$/).max(200))
+      .refine((fields) => Object.keys(fields).length > 0 && Object.keys(fields).length <= 12, {
+        message: 'An output map needs between 1 and 12 fields.',
+      }),
+  })
+  .strict();
+
+const WORKFLOW_AGENT_RUN_SCHEMA = z
+  .object({
+    agentId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
+    task: z.string().min(1).max(4_000),
+    record: z.object({ entity: z.string().regex(/^[A-Z][A-Za-z0-9]{1,49}$/), id: z.string().min(1).max(120) }).strict().optional(),
+    skillKeys: z.array(z.string().regex(/^[a-z][a-z0-9_]{1,63}$/)).max(8).optional(),
+    approvalExpectation: z.enum(['policy', 'must_require']).default('policy'),
+    idempotencyKey: z.string().min(1).max(120),
+    workflow: z
+      .object({
+        workflowId: z.string().min(1).max(120),
+        workflowRunId: z.string().min(1).max(120),
+        nodeId: z.string().min(1).max(120),
+        entityType: z.string().regex(/^[A-Z][A-Za-z0-9]{1,49}$/),
+        entityId: z.string().min(1).max(120),
+        userId: z.string().min(1).max(120).optional(),
+        outputMapping: WORKFLOW_OUTPUT_MAPPING_SCHEMA.optional(),
+      })
+      .strict(),
+  })
+  .strict();
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

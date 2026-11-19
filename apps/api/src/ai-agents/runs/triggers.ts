@@ -6,10 +6,17 @@ import { FeatureDisabledError, NotFoundError, RateLimitError, ValidationError } 
 import { log } from '@carocrm/core/logger/index.js';
 
 import { isValidCronExpression } from '../../jobs/cron.js';
-import { parseAgentConfig } from '../ai-agent-config.js';
+import { type AgentConfig, type BoundedJsonSchema, parseAgentConfig } from '../ai-agent-config.js';
 import { aiAgentScheduleId } from '../ai-agents-module.js';
 import { AIAgentRunLifecycle } from './lifecycle.js';
-import { type AIAgentRunView,type RunCreateInput } from './shared.js';
+import { type AIAgentRunView, type RunCreateInput, type WorkflowRunMetadata } from './shared.js';
+
+/** What the workflow host needs to map a settled run's answer back onto a record. */
+export interface WorkflowRunStartResult {
+  readonly run: AIAgentRunView;
+  readonly outputMode: 'text' | 'json';
+  readonly outputSchema?: BoundedJsonSchema | undefined;
+}
 
 /** The agent fields a trigger door needs, plus the published version's stored config. */
 interface PublishedTriggerAgent {
@@ -100,6 +107,146 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
         .execute();
     }
     return view;
+  }
+
+  /**
+   * Phase 25.5 — the workflow step door. Unlike the fan-out trigger doors, this starts exactly one
+   * published agent named by an administrator's workflow definition. The worker capability only
+   * carries the request; every rule below is re-checked against the immutable published version.
+   *
+   * Principal rule (25.2): `requesting_user` acts as the user who caused the workflow run;
+   * `publisher` is accepted only when that same user is the agent owner. There is no service
+   * identity. Skill keys are an assertion against the pinned bindings, never an override; an
+   * approval expectation can only refuse a permissive agent, never weaken its policy.
+   */
+  async startFromWorkflow(input: {
+    readonly agentId: string;
+    readonly task: string;
+    readonly record?: { readonly entity: string; readonly id: string } | undefined;
+    readonly skillKeys?: readonly string[] | undefined;
+    readonly approvalExpectation?: 'policy' | 'must_require' | undefined;
+    readonly idempotencyKey: string;
+    readonly metadata: WorkflowRunMetadata;
+  }): Promise<WorkflowRunStartResult> {
+    if (input.idempotencyKey.length === 0 || input.idempotencyKey.length > 120) {
+      throw new ValidationError('The workflow idempotency key is invalid.');
+    }
+    // Return the existing run before reading mutable draft fields: a redelivered step must observe
+    // the same run even if somebody edited the agent meanwhile.
+    const existing = await this.database.db
+      .selectFrom('ai_agent_runs')
+      .selectAll()
+      .where('idempotency_key', '=', input.idempotencyKey)
+      .executeTakeFirst();
+    if (existing !== undefined) {
+      const { agents } = await this.agentNames([existing.agent_id]);
+      return {
+        run: this.toView(existing, agents.get(existing.agent_id)),
+        ...(await this.outputShape(existing.agent_version_id)),
+      };
+    }
+
+    const agent = await this.database.db
+      .selectFrom('ai_agents')
+      .selectAll()
+      .where('id', '=', input.agentId)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    if (!agent) throw new NotFoundError(`Agent "${input.agentId}" does not exist.`);
+    if (agent.status !== 'published' || agent.current_version === null) {
+      throw new ValidationError('Only a published agent with a current version can be used in a workflow.');
+    }
+    const version = await this.database.db
+      .selectFrom('ai_agent_versions')
+      .selectAll()
+      .where('agent_id', '=', agent.id)
+      .where('version', '=', agent.current_version)
+      .executeTakeFirst();
+    if (!version) throw new NotFoundError('The published version is missing.');
+    const parsed = parseAgentConfig(version.config);
+    if (!parsed.ok) throw new ValidationError('The published configuration is no longer valid; republish the agent.');
+    const config = parsed.config;
+    if (config.triggers?.workflow !== true) {
+      throw new ValidationError('This agent has not opted in to workflow runs.');
+    }
+    if (input.skillKeys !== undefined && input.skillKeys.length > 0) {
+      const pinned = new Set(config.skills.map((binding) => binding.key));
+      const unknown = input.skillKeys.filter((key) => !pinned.has(key));
+      if (unknown.length > 0) {
+        throw new ValidationError('The workflow expects a skill that the published version does not pin.', {
+          skills: unknown,
+        });
+      }
+    }
+    if (input.approvalExpectation === 'must_require' && config.approval.requireFor.length === 0) {
+      throw new ValidationError('The workflow requires an approval policy, but this agent never asks for one.');
+    }
+
+    const initiator = input.metadata.userId;
+    const publisherMode = config.principal.mode === 'publisher';
+    if (publisherMode && (initiator === undefined || initiator === '' || initiator !== agent.owner_user_id)) {
+      throw new ValidationError('This version pins the publisher as principal; only its owner may start it from a workflow.');
+    }
+    const actorId: string | undefined = publisherMode ? (agent.owner_user_id ?? undefined) : initiator;
+    if (actorId === undefined || actorId === '') {
+      throw new ValidationError('A workflow AI step needs an initiating user.');
+    }
+    const principal = await this.auth.principalFromUser(actorId);
+    const view = await this.scope.runAs(
+      principal,
+      () =>
+        this.createInternal(
+          agent.id,
+          {
+            input: {
+              text: input.task,
+              ...(input.record === undefined ? {} : { record: input.record }),
+            },
+            idempotencyKey: input.idempotencyKey,
+            trigger: 'workflow',
+            metadata: input.metadata,
+          },
+          true,
+        ),
+      `workflow:${input.metadata.workflowId}:${input.metadata.workflowRunId}`,
+    );
+    await this.database.db
+      .updateTable('ai_agent_runs')
+      .set({ causation_id: input.metadata.workflowRunId, modified_at: new Date() })
+      .where('id', '=', view.id)
+      .execute();
+    await this.appendEvent(
+      view.id,
+      'run',
+      'run.workflow_linked',
+      'Started by a workflow step.',
+      {
+        workflowId: input.metadata.workflowId,
+        workflowRunId: input.metadata.workflowRunId,
+        nodeId: input.metadata.nodeId,
+        principalMode: config.principal.mode,
+      },
+      'user',
+    );
+    // The created view is already the caller-visible shape; do not re-read it through `get()` here.
+    // This worker door has no session of its own, and the read path would re-check AIAgent.use
+    // outside the initiating principal's scope even though creation just passed that check.
+    return { run: view, outputMode: config.output.mode, ...(config.output.schema === undefined ? {} : { outputSchema: config.output.schema }) };
+  }
+
+  /** The output contract of the exact version a run captured, not the agent's current draft. */
+  private async outputShape(versionId: string): Promise<{ outputMode: 'text' | 'json'; outputSchema?: BoundedJsonSchema | undefined }> {
+    const row = await this.database.db
+      .selectFrom('ai_agent_versions')
+      .select('config')
+      .where('id', '=', versionId)
+      .executeTakeFirst();
+    const parsed = row === undefined ? undefined : parseAgentConfig(row.config);
+    const config: AgentConfig | undefined = parsed?.ok === true ? parsed.config : undefined;
+    return {
+      outputMode: config?.output.mode ?? 'text',
+      ...(config?.output.schema === undefined ? {} : { outputSchema: config.output.schema }),
+    };
   }
 
   /**

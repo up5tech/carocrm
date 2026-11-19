@@ -588,6 +588,18 @@ endpoints:
     filtering: none
     sideEffects: [same as POST /action/runs/:id/execute: lease-claimed run execution with provider calls, tool calls, events and ledger rows]
     idempotency: "lease claim and run-state checks make re-delivery a no-op"
+  - method: POST
+    path: /api/v1/AIAgents/action/worker/workflow/run
+    auth: public
+    permissions: "shared worker capability: x-worker-secret header compared in constant time against the configured worker secret; refused when unset"
+    request: "strict { agentId, task (<=4000), record?, skillKeys? (<=8), approvalExpectation (policy|must_require), idempotencyKey, workflow { workflowId, workflowRunId, nodeId, entityType, entityId, userId?, outputMapping? (<=12 field paths) } }"
+    response: "200 { runId, status, trigger, agentVersion, pending?, fields?, failure? } — pending until the agent run settles; fields are mapped only from schema-validated structured output"
+    errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED, NOT_FOUND]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: [starts one idempotent workflow-triggered agent run under the 25.2 principal rule; queues workflow.resume when the run settles; no record write until validated output is mapped]
+    idempotency: "workflow idempotencyKey = wf:<workflowRunId>:<nodeId>; a repeat replays the same run and the same mapped fields"
   - method: GET
     path: /api/v1/AIAgents/action/conversations
     auth: authenticated

@@ -15,6 +15,26 @@ export interface RunRecordRef {
   readonly id: string;
 }
 
+/**
+ * Phase 25.5 — provenance carried by a workflow-initiated run. Stored under `input.workflow`; the
+ * executor reads it when the run settles so the workflow can resume the same node. No new table.
+ */
+export interface WorkflowRunMetadata {
+  readonly workflowId: string;
+  readonly workflowRunId: string;
+  readonly nodeId: string;
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly userId?: string | undefined;
+  readonly outputMapping?:
+    | {
+        readonly entity?: string | undefined;
+        readonly recordId?: string | undefined;
+        readonly fields: Record<string, string>;
+      }
+    | undefined;
+}
+
 export interface RunCreateInput {
   readonly input?: {
     readonly text?: string | undefined;
@@ -28,6 +48,8 @@ export interface RunCreateInput {
   } | undefined;
   readonly idempotencyKey?: string | undefined;
   readonly trigger?: RunTrigger | undefined;
+  /** Internal doors only; never accepted from the public run DTO. */
+  readonly metadata?: WorkflowRunMetadata | undefined;
   /** Continue an existing owner-scoped thread of the same agent (conversation memory only). */
   readonly conversationId?: string | undefined;
 }

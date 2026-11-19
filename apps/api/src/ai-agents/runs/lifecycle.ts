@@ -165,7 +165,10 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
             service_principal: null,
             trigger: input.trigger ?? 'manual',
             status: 'queued',
-            input: JSON.stringify(normalized.input),
+            input: JSON.stringify({
+              ...normalized.input,
+              ...(input.metadata === undefined ? {} : { workflow: input.metadata }),
+            }),
             input_ref: normalized.input.ref ?? null,
             idempotency_key: input.idempotencyKey ?? null,
             correlation_id: id,

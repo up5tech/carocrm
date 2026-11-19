@@ -1144,7 +1144,7 @@ export class AIAgentDefinitionService {
             },
             output: { mode: 'text' },
             memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
+            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, workflow: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
         },
@@ -1183,7 +1183,7 @@ export class AIAgentDefinitionService {
             },
             output: { mode: 'text' },
             memory: { mode: 'conversation', maxMessages: 12, retentionDays: 30 },
-            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
+            triggers: { manual: true, record: false, event: false, schedule: false, integration: false, workflow: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
         },
@@ -1242,7 +1242,7 @@ function parsedFallbackConfig(): AgentConfig {
     },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, workflow: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }

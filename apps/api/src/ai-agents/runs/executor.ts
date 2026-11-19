@@ -23,6 +23,7 @@ import type { AIProviderGateway } from '../ai-provider-gateway.service.js';
 import { AIAgentRunCore } from './base.js';
 import { asRecord, boundArguments, boundResult, escapeAttribute, hashArguments, hashText, parseRawArguments, type RunExecutionResult, safeJson, sleep, summaryFieldNames, withTimeout } from './shared.js';
 import { composeRunSystemPrompt } from './skill-prompt.js';
+import { resumeLinkedWorkflow } from './workflow-resume.js';
 
 interface GrantRow {
   readonly tool_key: string;
@@ -1315,9 +1316,12 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
     // now authoritative.
     const settled = await this.database.db
       .selectFrom('ai_agent_runs')
-      .select(['conversation_id', 'agent_id', 'agent_version'])
+      .select(['conversation_id', 'agent_id', 'agent_version', 'trigger', 'input'])
       .where('id', '=', runId)
       .executeTakeFirst();
+    if (settled !== undefined) {
+      await resumeLinkedWorkflow({ enqueue: (job) => this.jobs.enqueue(job), note: (payload) => this.appendEvent(runId, 'run', 'run.workflow_resume_queued', 'The linked workflow step will re-check this result.', payload) }, runId, status, settled);
+    }
     if (settled?.conversation_id !== null && settled?.conversation_id !== undefined) {
       await this.memory.appendRunOutcome({
         conversationId: settled.conversation_id,

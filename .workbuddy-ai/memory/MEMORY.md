@@ -39,13 +39,14 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   19-CHAT.23; **25 now** (15 built-in + 10 domain contributions), authoritative enumeration in
   `apps/api/test/ai-agent-runs.test.ts`; docs saying 20/21 are stale. Per-agent `MAX_TOOLS` = **32**
   (`ai-agent-config.ts:50`, confirmed 25.1).
-- Runtime: `runs/executor.ts` 1,496 lines (near the 1,500 ceiling in the 19-AI plan); 25.4 skill
-  prompt composition lives in `runs/skill-prompt.ts` to avoid growing the step loop. Bounded JSON output via `ai-agent-config.ts`; Anthropic now supports `json_schema`
+- Runtime: `runs/executor.ts` is back at the 1,500-line ceiling after 25.5; workflow resume logic lives in `runs/workflow-resume.ts`, and 25.4 skill
+  prompt composition lives in `runs/skill-prompt.ts`, to avoid growing the step loop. Bounded JSON output via `ai-agent-config.ts`; Anthropic now supports `json_schema`
   through a bounded extraction tool inside the adapter (25.3), not native response format. Only
   OpenAI-compatible + Anthropic adapters are registered; the other presets are configuration, not
   adapters. Capability rows are derived in `ai-provider-capabilities.ts` and published in the health
   view's `providers.capabilityTable`; image input/native web search are false, context is `null`.
-- AI parity boundary (Phase 25, **in progress; 25.0/25.1/25.2/25.3/25.4 delivered 2026-11-18**):
+- AI parity boundary (Phase 25, **in progress; 25.0/25.1/25.2/25.3/25.4 delivered 2026-11-18;
+  25.5 delivered 2026-11-19**):
   single-tenant only — no workspace/credits/billing/personal AI allowance; Twenty's alpha skills/agents
   and beta MCP are not parity gates. CaroCRM already ships MCP-compatible tools and stronger
   fail-closed ACL/injection evals. Canonical claim source: `docs/architecture/ai-capability-matrix.md`;
@@ -54,9 +55,13 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   owner-only); service principals are refused and `service_principal` remains NULL. Every run event
   carries effective principal + pinned version. Skills (25.4) are text-only versioned records in
   `ai_agent_skills` (migration 098): stable key/version, draft→published frozen, `skillAdmin` ACL,
-  exact agent bindings, subordinate prompt block, `skill.applied` event, no code execution. AIAgents
-  module is v1.5.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is committed/pushed as `455db1c`;
-  25.4 is implemented and verified but left uncommitted.
+  exact agent bindings, subordinate prompt block, `skill.applied` event, no code execution. 25.5 adds one
+  bounded `runAgent` catalog action: DB-free parking via `WorkflowActionPendingError`, worker→API
+  shared-secret door, published-version/skill/approval/25.2-principal re-checks, bounded JSON→field
+  mapping, `trigger = 'workflow'` (migration 099) and deterministic `workflow.resume` from
+  `runs/workflow-resume.ts`; no service principal, code execution, new SDK or MCP surface. AIAgents
+  module is v1.6.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
+  25.4 is committed/pushed as `952a547` (HEAD/origin/master, clean tree as of 2026-11-19).
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial

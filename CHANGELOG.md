@@ -22,7 +22,7 @@ compatibility for its internal APIs while it is in alpha.
 
 ### Phase 25 — AI capability parity (in progress, not a release)
 
-Documentation came first; 25.2, 25.3 and 25.4 added code changes in this phase. Phase 25 produces
+Documentation came first; 25.2–25.5 added code changes in this phase. Phase 25 produces
 **alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
 production go/no-go.
 
@@ -35,7 +35,7 @@ production go/no-go.
   status (v1.3.0, 27 routes). `plans/SPEC.md`, the compatibility matrix, alpha status, README and this
   changelog were reconciled. No code, migration, database row or provider account changed.
 - **25.2** Published agent versions now carry `config.principal.mode`: `requesting_user` (default for
-  manual, CRM Chat and the future workflow AI action) or `publisher` (automated triggers only, and
+  manual, CRM Chat and the workflow AI action) or `publisher` (automated triggers only, and
   only when the door already runs as the agent owner). Service identities are refused; every run event
   stamps the effective principal and pinned version; revoked principals fail closed. The 11-capability
   least-privilege ACL profile is documented in `docs/architecture/ai-capability-matrix.md` §5. No
@@ -55,10 +55,18 @@ production go/no-go.
   operating rules, and record `skill.applied` in the run timeline. The AIAgents page gains a Skills
   tab and the agent editor a published-version picker. Module version is now 1.5.0. No code
   execution surface, new SDK, live call or destructive migration.
+- **25.5** One bounded workflow AI action: `runAgent` starts a pinned published agent through the
+  existing DB-free workflow executor and worker port. The API's shared-secret door (`POST
+  /api/v1/AIAgents/action/worker/workflow/run`) re-checks the published version, `triggers.workflow`,
+  pinned skill keys, approval expectation, the 25.2 principal and bounded JSON output before applying
+  mapped primitive fields. Long runs park the workflow with the step still `running`; the agent engine
+  queues a deterministic `workflow.resume` job when the run settles. Runs carry `trigger = 'workflow'`
+  and a workflow causation id (additive migration 099); no system agent, code execution, shell/SQL
+  interpolation, new SDK or new MCP surface. AIAgents module version is now 1.6.0.
 
-Not shipped by 25.4: assignable agent roles, code-defined agents, workflow AI
-(25.5), trigger filters (25.6), attachments (25.7), web grounding (25.8), chat page context (25.9),
-installation cost view (25.10) and the golden evaluation gate (25.11).
+Not shipped by 25.5: assignable agent roles, code-defined agents, trigger filters (25.6), attachments
+(25.7), web grounding (25.8), chat page context (25.9), installation cost view (25.10) and the golden
+evaluation gate (25.11).
 
 ### Phase 24
 

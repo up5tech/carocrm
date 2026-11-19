@@ -42,6 +42,21 @@ export class WorkflowValidationError extends Error {
   }
 }
 
+/**
+ * An action started external work that has not settled yet. The engine parks the run at this node
+ * instead of marking it failed; the host resumes the same node when the external outcome is durable.
+ * Re-entry is safe only because the host supplies a stable idempotency key to the external system.
+ */
+export class WorkflowActionPendingError extends Error {
+  readonly detail: Record<string, unknown>;
+
+  constructor(message: string, detail: Record<string, unknown> = {}) {
+    super(message);
+    this.name = 'WorkflowActionPendingError';
+    this.detail = detail;
+  }
+}
+
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

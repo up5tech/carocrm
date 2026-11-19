@@ -265,6 +265,9 @@ export class WorkerApplication {
       registry: this.jobRegistry,
       domainEvents: this.domainEvents,
       enqueue: async (job, data) => this.jobQueue.enqueue(job, data),
+      // Phase 25.5: the same worker capability the AI jobs use. The action is inert (and loud) when
+      // the deployment has not configured it; definitions cannot silently fabricate agent runs.
+      workflowAI: { apiBaseUrl: this.config.apiBaseUrl, secret: this.config.reportWorkerSecret },
     });
   }
 

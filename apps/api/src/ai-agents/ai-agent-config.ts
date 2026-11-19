@@ -271,6 +271,8 @@ export const AgentConfigSchema = z
         event: z.boolean().default(false),
         schedule: z.boolean().default(false),
         integration: z.boolean().default(false),
+        /** 25.5 — an in-product workflow step may start this published version. */
+        workflow: z.boolean().default(false),
         /** Event types that may start a run (P1, 19-AI.17). Empty means never. */
         eventTypes: z.array(z.enum(['entity.created', 'entity.updated', 'entity.deleted', 'entity.restored'])).max(4).default([]),
         /** PascalCase entities that may start a run (P1, 19-AI.17). Empty means never. */
@@ -362,7 +364,7 @@ export function blankAgentConfig(): AgentConfig {
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, workflow: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }
