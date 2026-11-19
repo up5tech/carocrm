@@ -45,7 +45,7 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   adapters. Capability rows are derived in `ai-provider-capabilities.ts` and published in the health
   view's `providers.capabilityTable`; native web search is false and context is `null`. Since 25.7 the test-only fake declares `imageInput: true` (metadata only); the real adapters stay false.
 - AI parity boundary (Phase 25, **in progress; 25.0/25.1/25.2/25.3/25.4 delivered 2026-11-18;
-  25.5 and 25.6 implemented 2026-11-19; 25.7 implemented 2026-11-20, uncommitted**):
+  25.5 and 25.6 implemented 2026-11-19; 25.7 implemented 2026-11-20**):
   single-tenant only — no workspace/credits/billing/personal AI allowance; Twenty's alpha skills/agents
   and beta MCP are not parity gates. CaroCRM already ships MCP-compatible tools and stronger
   fail-closed ACL/injection evals. Canonical claim source: `docs/architecture/ai-capability-matrix.md`;
@@ -67,7 +67,7 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   rechecked at creation and before the model call, metadata (never bytes) crosses
   `AIProviderRequest.attachments`, unsupported adapters fail closed, and metadata is untrusted via
   `boundRecord`. No migration/OCR/vision call; AIAgents module is v1.8.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
-  25.4 is `952a547`, 25.5 is `f063a60`, and 25.6 is committed/pushed as `ee3c73b`. Per `AGENTS.MD` §4 the agent did not run automated checks for 25.6/25.7.
+  25.4 is `952a547`, 25.5 is `f063a60`, 25.6 is `ee3c73b`, and 25.7 is `e8c1699`. Per `AGENTS.MD` §4 the agent did not run automated checks for 25.6/25.7.
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial
