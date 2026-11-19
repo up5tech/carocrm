@@ -1,6 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { KNOWN_DOMAIN_EVENTS } from '@carocrm/core/domain-events/index.js';
 import { AuthenticationFailedError, InvalidQueryError, ValidationError } from '@carocrm/core/errors/index.js';
 import {
   Body,
@@ -706,10 +705,11 @@ export class AIAgentsController {
    * The worker has no session and the ACL of the person who caused the record change is not
    * knowable from here, so this door starts nothing by itself: it names the event, and the
    * service starts a run for each agent that (a) is currently published, (b) opts in with
-   * `triggers.event` + matching `eventTypes`/`eventEntities` allowlists, and (c) is a
-   * record-context agent for exactly this entity. Each run executes as the **publishing user**,
-   * never wider; recursion is stopped because events produced inside a run carry
-   * `correlation_id = 'aiAgentRun:<id>'` and never re-enter this door.
+   * `triggers.eventTypes`/`eventEntities` allowlists, (c) is a record-context agent for exactly
+   * this entity, and (d) passes the 25.6 watched-field/condition filters against the bounded
+   * changed-value snapshot. Each run executes as the **publishing user**, never wider; recursion is
+   * stopped because events produced inside a run carry `correlation_id = 'aiAgentRun:<id>'` and
+   * never re-enter this door.
    *
    * `features.eventTriggers` off is a quiet `{ disabled: true }`, never a retry storm.
    */
@@ -718,26 +718,20 @@ export class AIAgentsController {
   @Post('action/worker/trigger-event')
   async triggerEventForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
-    const raw = asRecord(body);
-    const eventId = typeof raw['eventId'] === 'string' ? raw['eventId'].trim() : '';
-    const eventType = typeof raw['eventType'] === 'string' ? raw['eventType'].trim() : '';
-    const entityType = typeof raw['entityType'] === 'string' ? raw['entityType'].trim() : '';
-    const entityId = typeof raw['entityId'] === 'string' ? raw['entityId'].trim() : '';
-    if (
-      eventId.length === 0 ||
-      eventId.length > 120 ||
-      entityId.length === 0 ||
-      entityId.length > 120 ||
-      !KNOWN_DOMAIN_EVENTS.includes(eventType) ||
-      !/^[A-Z][A-Za-z0-9]{1,49}$/.test(entityType)
-    ) {
-      throw new ValidationError('The trigger payload is invalid.');
+    const parsed = WORKER_EVENT_TRIGGER_SCHEMA.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new ValidationError('The trigger payload is invalid.', {
+        issues: parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+      });
     }
+    const { eventId, eventType, entityType, entityId, changed, values } = parsed.data;
     return this.runs.triggerEvent({
       eventId,
-      eventType: eventType as 'entity.created' | 'entity.updated' | 'entity.deleted' | 'entity.restored',
+      eventType,
       entityType,
       entityId,
+      changed,
+      values,
     });
   }
 
@@ -1050,6 +1044,36 @@ const WORKFLOW_AGENT_RUN_SCHEMA = z
         outputMapping: WORKFLOW_OUTPUT_MAPPING_SCHEMA.optional(),
       })
       .strict(),
+  })
+  .strict();
+
+const EVENT_FIELD_SCHEMA = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/);
+const EVENT_VALUE_SCALAR_SCHEMA = z.union([
+  z.string().max(500),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
+const EVENT_VALUE_SCHEMA = z.union([EVENT_VALUE_SCALAR_SCHEMA, z.array(EVENT_VALUE_SCALAR_SCHEMA).max(10)]);
+const EVENT_VALUES_SCHEMA = z
+  .object({
+    before: z.record(EVENT_FIELD_SCHEMA, EVENT_VALUE_SCHEMA).default({}),
+    after: z.record(EVENT_FIELD_SCHEMA, EVENT_VALUE_SCHEMA).default({}),
+  })
+  .strict()
+  .refine((values) => Object.keys(values.before).length + Object.keys(values.after).length <= 20, {
+    message: 'An event value snapshot may contain at most 20 entries.',
+  });
+
+const WORKER_EVENT_TRIGGER_SCHEMA = z
+  .object({
+    eventId: z.string().trim().min(1).max(120),
+    eventType: z.enum(['entity.created', 'entity.updated', 'entity.deleted', 'entity.restored']),
+    entityType: z.string().trim().regex(/^[A-Z][A-Za-z0-9]{1,49}$/),
+    entityId: z.string().trim().min(1).max(120),
+    changed: z.array(EVENT_FIELD_SCHEMA).max(20).default([]),
+    values: EVENT_VALUES_SCHEMA.default({ before: {}, after: {} }),
+    correlationId: z.string().max(200).nullable().optional(),
   })
   .strict();
 

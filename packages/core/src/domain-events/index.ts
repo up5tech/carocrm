@@ -15,12 +15,24 @@ export const KNOWN_DOMAIN_EVENTS: readonly string[] = Object.values(DOMAIN_EVENT
 /** The kernel mutations that publish an entity event. */
 export type RecordMutation = 'create' | 'update' | 'delete' | 'restore';
 
+/** Bounded before/after values for fields that actually changed in a mutation. */
+export interface EntityEventValues {
+  readonly before: Readonly<Record<string, unknown>>;
+  readonly after: Readonly<Record<string, unknown>>;
+}
+
 export interface EntityEventPayload {
   entityType: string;
   entityId: string;
   changed: string[];
   userId: string | null;
   version: number;
+  /**
+   * 25.6 — a bounded snapshot of the changed fields only. Values are scalars or arrays of
+   * scalars; objects are omitted and strings are truncated. This is untrusted data for trigger
+   * conditions, never an instruction or a source of record state.
+   */
+  values?: EntityEventValues | undefined;
 }
 
 const BOOKKEEPING_FIELDS: ReadonlySet<string> = new Set(['id', 'modifiedAt', 'createdAt', 'version', 'deletedAt']);
@@ -74,4 +86,52 @@ export function changedFields(data: Readonly<Record<string, unknown>>, previous?
     changed.push(key);
   }
   return changed.sort();
+}
+
+const MAX_EVENT_VALUE_FIELDS = 20;
+const MAX_EVENT_VALUE_LENGTH = 500;
+const MAX_EVENT_VALUE_ITEMS = 10;
+
+type EventScalar = string | number | boolean | null;
+type EventValue = EventScalar | EventScalar[];
+
+function eventScalar(value: unknown): EventScalar | undefined {
+  if (value === null) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') return value.slice(0, MAX_EVENT_VALUE_LENGTH);
+  if (value instanceof Date) return value.toISOString();
+  return undefined;
+}
+
+function eventValue(value: unknown): EventValue | undefined {
+  const scalar = eventScalar(value);
+  if (scalar !== undefined) return scalar;
+  if (!Array.isArray(value)) return undefined;
+  const items: EventScalar[] = [];
+  for (const item of value.slice(0, MAX_EVENT_VALUE_ITEMS)) {
+    const converted = eventScalar(item);
+    if (converted === undefined) return undefined;
+    items.push(converted);
+  }
+  return items;
+}
+
+/**
+ * 25.6 — build the bounded value snapshot carried by an entity event. Only changed fields are
+ * included; nested objects are dropped so an outbox row can never become a full record dump.
+ */
+export function changedEventValues(
+  data: Readonly<Record<string, unknown>>,
+  previous?: Readonly<Record<string, unknown>>,
+): EntityEventValues {
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+  for (const key of changedFields(data, previous).slice(0, MAX_EVENT_VALUE_FIELDS)) {
+    const previousScalar = eventValue(previous?.[key]);
+    const currentScalar = eventValue(data[key]);
+    if (previousScalar !== undefined) before[key] = previousScalar;
+    if (currentScalar !== undefined) after[key] = currentScalar;
+  }
+  return { before, after };
 }

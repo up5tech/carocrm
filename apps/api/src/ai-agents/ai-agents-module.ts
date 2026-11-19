@@ -382,7 +382,7 @@ export type AIAgentErrorCode = (typeof AI_AGENTS_ERROR_CODES)[number];
 export const AI_AGENTS_MODULE = {
   id: 'AIAgents',
   name: 'AI Agents',
-  version: '1.6.0',
+  version: '1.7.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; AI Agents runs after Marketing Automation (`380`). */
   loadOrder: 390,
@@ -391,7 +391,8 @@ export const AI_AGENTS_MODULE = {
   /** Frontend route of the human-facing surface. */
   frontendRoute: '/ai-agents',
   /**
-   * Sub-phases whose code has landed and whose suites pass.
+   * Sub-phases whose code has landed. Suites are added with each phase; the developer runs the
+   * automated checks per `AGENTS.MD` §4.
    * 19-AI.14 is built and tested but switched off by default (`features.evaluations`).
    * 19-AI.18 is the protocol half only (MCP adapter); model-backed retrieval stays deferred.
    * 19-AI.15 (Sales) and 19-AI.16 (CustomerSuccess/ServiceDesk/Projects) shipped their read-side
@@ -423,6 +424,7 @@ export const AI_AGENTS_MODULE = {
     '19-AI.28',
     '25.4',
     '25.5',
+    '25.6',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

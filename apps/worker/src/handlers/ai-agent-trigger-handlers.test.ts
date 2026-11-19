@@ -43,7 +43,15 @@ function entityEvent(eventType: string, overrides: Record<string, unknown> = {})
   return {
     id: 'evt-test-ai17',
     eventType,
-    payload: { entityType: 'Account', entityId: 'acc-1', changed: ['name'], userId: 'u-1', version: 1, ...overrides },
+    payload: {
+      entityType: 'Account',
+      entityId: 'acc-1',
+      changed: ['status'],
+      values: { before: { status: 'New' }, after: { status: 'Qualified' } },
+      userId: 'u-1',
+      version: 1,
+      ...overrides,
+    },
     correlationId: 'req-1',
   };
 }
@@ -61,6 +69,17 @@ describe('the AI agent event-trigger subscriber (19-AI.17)', () => {
     const bus = new DomainEventBus(logger());
     registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
     await bus.publish({ ...entityEvent('entity.created'), correlationId: 'aiAgentRun:run-123' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('never lets an agent re-trigger itself by changing its own watched field', async () => {
+    const fetcher = vi.fn(async () => json({ started: 0 }));
+    const bus = new DomainEventBus(logger());
+    registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
+    await bus.publish({
+      ...entityEvent('entity.updated', { changed: ['status'] }),
+      correlationId: 'aiAgentRun:run-456',
+    });
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -96,6 +115,20 @@ describe('the AI agent event-trigger subscriber (19-AI.17)', () => {
     expect(body['eventId']).toBe('evt-test-ai17');
     expect(body['eventType']).toBe('entity.created');
     expect(body['entityType']).toBe('Account');
+    expect(body['changed']).toEqual(['status']);
+    expect(body['values']).toEqual({ before: { status: 'New' }, after: { status: 'Qualified' } });
+  });
+
+  it('forwards the changed-field snapshot so the watched-field filter can decide', async () => {
+    const fetcher = vi.fn(async () => json({ disabled: true, started: 0 }));
+    const bus = new DomainEventBus(logger());
+    registerAIAgentDomainEvents(bus, deps(fetcher as unknown as typeof fetch));
+    await bus.publish(entityEvent('entity.updated'));
+    const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    const values = body['values'] as { before: Record<string, unknown>; after: Record<string, unknown> };
+    expect(values.before['status']).toBe('New');
+    expect(values.after['status']).toBe('Qualified');
   });
 
   it('treats a { disabled: true } answer as done, not as failure', async () => {

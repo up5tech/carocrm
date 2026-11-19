@@ -1,5 +1,5 @@
 import type { EntityEventPayload } from '@carocrm/core/domain-events/index.js';
-import { changedFields, entityEventType } from '@carocrm/core/domain-events/index.js';
+import { changedEventValues, changedFields, entityEventType } from '@carocrm/core/domain-events/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import type { RequestScope } from '../common/request-scope.js';
@@ -21,12 +21,16 @@ export class EntityEventHookService {
   ) {}
 
   async handle(args: AfterSaveHookArgs): Promise<void> {
+    const isDeleteOrRestore = args.operation === 'delete' || args.operation === 'restore';
+    const changed = isDeleteOrRestore ? [] : changedFields(args.record.data, args.previous);
+    const values = isDeleteOrRestore ? undefined : changedEventValues(args.record.data, args.previous);
     const payload: EntityEventPayload = {
       entityType: args.entityType,
       entityId: args.record.id,
-      changed: args.operation === 'delete' || args.operation === 'restore' ? [] : changedFields(args.record.data, args.previous),
+      changed,
       userId: args.userId ?? this.scope.userId ?? null,
       version: args.record.version,
+      ...(values === undefined ? {} : { values }),
     };
     await this.bus.dispatch(args.tx, { type: entityEventType(args.operation), payload: { ...payload } });
   }

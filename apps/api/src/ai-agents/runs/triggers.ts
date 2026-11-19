@@ -10,6 +10,7 @@ import { type AgentConfig, type BoundedJsonSchema, parseAgentConfig } from '../a
 import { aiAgentScheduleId } from '../ai-agents-module.js';
 import { AIAgentRunLifecycle } from './lifecycle.js';
 import { type AIAgentRunView, type RunCreateInput, type WorkflowRunMetadata } from './shared.js';
+import { evaluateEventTriggerFilter, type TriggerEventValues } from './trigger-filters.js';
 
 /** What the workflow host needs to map a settled run's answer back onto a record. */
 export interface WorkflowRunStartResult {
@@ -288,12 +289,17 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
    * Recursion is stopped at the source: every event produced inside a run carries
    * `correlation_id = 'aiAgentRun:<id>'`, and the worker subscriber never hands those back to this
    * door. Depth stays 0 here, so the `depth > 3` ceiling in `triggerRun` never comes into play.
+   *
+   * 25.6 adds watched-field and condition filters before the fan-out. Filtered agents are reported
+   * in `skipped` with a stable reason; they never become runs or retryable errors.
    */
   async triggerEvent(input: {
     readonly eventId: string;
     readonly eventType: 'entity.created' | 'entity.updated' | 'entity.deleted' | 'entity.restored';
     readonly entityType: string;
     readonly entityId: string;
+    readonly changed?: readonly string[] | undefined;
+    readonly values?: TriggerEventValues | undefined;
   }): Promise<{
     readonly disabled?: true;
     readonly matched: number;
@@ -307,19 +313,28 @@ export abstract class AIAgentRunTriggers extends AIAgentRunLifecycle {
       return { disabled: true, matched: 0, started: 0, skipped: [], errors: [] };
     }
     const candidates: { readonly agent: PublishedTriggerAgent }[] = [];
+    const skipped: { agent: string; reason: string }[] = [];
     for (const row of await this.publishedTriggerAgents()) {
       const parsed = parseAgentConfig(row.version_config);
       if (!parsed.ok) continue;
-      const triggers = parsed.config.triggers;
-      if (!triggers.event) continue;
-      if (!triggers.eventTypes.includes(input.eventType)) continue;
-      if (!triggers.eventEntities.includes(input.entityType)) continue;
-      // A record-context agent is the only shape an event can feed; it names the entity it reads.
-      if (parsed.config.input.mode !== 'record' || parsed.config.input.entity !== input.entityType) continue;
+      // 25.6 — entity/event/record allowlists plus watched-field and condition filters run before
+      // the owner is resolved or a run is created. A filter miss is a quiet skip, not an error the
+      // outbox poller would retry forever.
+      const filtered = evaluateEventTriggerFilter(parsed.config, {
+        eventId: input.eventId,
+        eventType: input.eventType,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        changed: input.changed ?? [],
+        ...(input.values === undefined ? {} : { values: input.values }),
+      });
+      if (!filtered.matched) {
+        skipped.push({ agent: row.agent_key, reason: filtered.reason ?? 'filter-mismatch' });
+        continue;
+      }
       candidates.push({ agent: row });
     }
 
-    const skipped: { agent: string; reason: string }[] = [];
     const errors: { agent: string; category: string }[] = [];
     let started = 0;
     // Fan-out cap: one busy record must not start the whole catalogue.

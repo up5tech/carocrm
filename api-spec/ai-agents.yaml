@@ -712,13 +712,13 @@ endpoints:
     path: /api/v1/AIAgents/action/worker/trigger-event
     auth: public
     permissions: "shared worker capability: x-worker-secret header, constant-time compared"
-    request: "{ eventId, eventType (entity.created|entity.updated|entity.deleted|entity.restored), entityType, entityId } — validated inline, not a strict zod object"
+    request: "{ eventId, eventType (entity.created|entity.updated|entity.deleted|entity.restored), entityType, entityId, changed? (<=20 field names), values? ({before,after}: changed values — scalars or scalar arrays <=10, strings <=500 chars, <=20 entries total), correlationId? (string|null, provenance only) } — strict zod validation; values are untrusted event data, not prompt text"
     response: "200 { disabled?, matched, started, skipped[{agent,reason}], errors[{agent,category}] } — quiet {disabled:true} when eventTriggers is off"
     errors: [AUTHENTICATION_FAILED, VALIDATION_FAILED]
     pagination: none
     sorting: none
     filtering: none
-    sideEffects: [up to 5 published opted-in agents each start a run as their owner (ai_agent_runs rows, events, job enqueues); at-least-once delivery dedups via evt:<eventId>:<agentId> idempotency keys]
+    sideEffects: [up to 5 published opted-in agents whose entity/event/record allowlists and 25.6 watched-field/condition filters match each start a run as their owner (ai_agent_runs rows, events, job enqueues); at-least-once delivery dedups via evt:<eventId>:<agentId> idempotency keys]
     idempotency: "per-agent idempotency key makes re-delivery a no-op"
   - method: POST
     path: /api/v1/AIAgents/action/worker/trigger-schedule

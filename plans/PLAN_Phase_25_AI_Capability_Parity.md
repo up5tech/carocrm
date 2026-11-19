@@ -1,14 +1,15 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4 and 25.5 delivered (25.0–25.4 on 2026-11-18;
-> 25.5 on 2026-11-19; canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5 and 25.6 implemented (25.0–25.4 on 2026-11-18;
+> 25.5 and 25.6 on 2026-11-19; canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
 > JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
 > 25.4 added versioned, non-executable skill text records through additive migration 098. Migration
 > 098 was the first schema change in Phase 25; 25.5 adds additive migration 099 so a run can carry
-> `trigger = 'workflow'`. No dependency, provider account or release action.
-> Work continues at 25.6.
+> `trigger = 'workflow'`. 25.6 needs no migration: filters live in the published JSONB config and
+> the outbox payload. No dependency, provider account or release action.
+> Work continues at 25.7.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -165,7 +166,7 @@ Files created in Phase 25 may be incomplete; record them in `docs/quality/known-
 | 25.3 | Provider capability parity | P1 | **Delivered 2026-11-18** — capability table derived from registered adapters and published in health, Anthropic `json_schema` via bounded extraction tool, Gemini local-compatible seam verified, no new SDK/native adapter |
 | 25.4 | Reusable versioned skills | P1 | **Delivered 2026-11-18** — additive migration 098, `skillAdmin` ACL capability, CRUD/publish/archive API + admin tab, exact published-version agent bindings, subordinate prompt block, `skill.applied` transcript, DB-free + API tests pass; no code execution |
 | 25.5 | Workflow AI action | P1 | **Delivered 2026-11-19** — bounded `runAgent` catalog entry + parking executor, worker door with shared secret, published-version/opt-in/skill/approval re-checks, 25.2 principal rule, bounded JSON output mapping, `workflow` trigger migration 099, deterministic `workflow.resume`, DB-free + API tests pass; no code execution or new SDK/MCP surface |
-| 25.6 | Trigger parity: watched fields and conditions | P1 | Event filters and cron parity, loop guard, idempotency evidence |
+| 25.6 | Trigger parity: watched fields and conditions | P1 | **Implemented 2026-11-19** — bounded `watchedFields`/`condition` in published config, sandboxed `@carocrm/formula` filter with `field('__previous_<name>')`, bounded changed-value outbox snapshot, five-start/recursion/idempotency guards unchanged, cron equivalence and timezone gap documented; DB-free + API/worker tests added, automated checks to be run by developer (`AGENTS.MD` §4) |
 | 25.7 | Bounded multimodal input | P2 | Image/PDF attachments for chat and runs, ACL and fake-provider tests |
 | 25.8 | Grounded web search | P2 | One bounded search tool, untrusted citation handling, cost/SSRF guard |
 | 25.9 | CRM Chat page context and UX parity | P1 | Record/page context, skill picker, contract drift fixed, sharing decision |
@@ -332,6 +333,13 @@ step shape only.
 ---
 
 ## 12. Phase 25.6 — Trigger Parity: Watched Fields and Conditions (P1)
+
+> **Implemented 2026-11-19.** The published config carries bounded `watchedFields` and one
+> sandboxed `condition`; the committed outbox event carries only changed-field scalars before and
+> after. `runs/trigger-filters.ts` applies all filters before fan-out, so a filtered agent never
+> creates a run and never produces a retryable error. No migration, new expression language, new
+> worker topology or principal override. Automated checks were not run by the coding agent because
+> `AGENTS.MD` §4 assigns them to the developer.
 
 ### Objective
 

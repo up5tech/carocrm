@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { FormulaEngine, readFieldsOf } from '@carocrm/formula';
 import { z } from 'zod';
 
 import {
@@ -25,6 +26,13 @@ import { DATA_CLASSES, EFFECT_CLASSES } from './ai-agents-module.js';
 
 export const MAX_SYSTEM_PROMPT_CHARS = 12_000;
 export const MAX_CONFIG_BYTES = 32_768;
+
+/** 25.6 — formula context key for the value a watched field held before the event. */
+export const AGENT_PREVIOUS_FIELD_PREFIX = '__previous_';
+const MAX_WATCHED_TRIGGER_FIELDS = 20;
+const MAX_TRIGGER_CONDITION_CHARS = 1_000;
+const TRIGGER_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const TRIGGER_FORMULA_ENGINE = new FormulaEngine();
 /**
  * How many tools one agent version may grant.
  *
@@ -278,6 +286,17 @@ export const AgentConfigSchema = z
         /** PascalCase entities that may start a run (P1, 19-AI.17). Empty means never. */
         eventEntities: z.array(z.string().regex(/^[A-Z][A-Za-z0-9]{1,49}$/)).max(20).default([]),
         /**
+         * 25.6 — update-only watched fields. A run starts only when at least one of these fields
+         * appears in the committed `entity.updated` event's changed list.
+         */
+        watchedFields: z.array(z.string().regex(TRIGGER_FIELD_PATTERN)).max(MAX_WATCHED_TRIGGER_FIELDS).default([]),
+        /**
+         * 25.6 — sandboxed formula evaluated against the changed watched fields. The current value
+         * is `field('name')`; the previous value is `field('__previous_name')`. Only watched fields
+         * may be read. No new expression language is introduced.
+         */
+        condition: z.string().trim().min(1).max(MAX_TRIGGER_CONDITION_CHARS).optional(),
+        /**
          * 19-AI.17 schedule triggers: the cron expression (5 fields) the instance scheduler fires.
          * Meaningful only when `schedule` is true; publication refuses the combination without it.
          */
@@ -306,6 +325,68 @@ export const AgentConfigSchema = z
   })
   .strict()
   .superRefine((config, ctx) => {
+    const triggers = config.triggers;
+    if (triggers.watchedFields.length > 0 || triggers.condition !== undefined) {
+      if (!triggers.event) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['triggers', 'event'],
+          message: 'Watched fields and conditions require an event trigger.',
+        });
+      }
+      if (!triggers.eventTypes.includes('entity.updated')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['triggers', 'eventTypes'],
+          message: 'Watched fields and conditions only apply to entity.updated events.',
+        });
+      }
+      if (new Set(triggers.watchedFields).size !== triggers.watchedFields.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['triggers', 'watchedFields'],
+          message: 'A watched field may be listed only once.',
+        });
+      }
+      if (triggers.watchedFields.some((field) => field.startsWith(AGENT_PREVIOUS_FIELD_PREFIX))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['triggers', 'watchedFields'],
+          message: `A watched field cannot start with "${AGENT_PREVIOUS_FIELD_PREFIX}".`,
+        });
+      }
+    }
+    if (triggers.condition !== undefined) {
+      const validation = TRIGGER_FORMULA_ENGINE.validate(triggers.condition);
+      if (!validation.valid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['triggers', 'condition'],
+          message: validation.error ?? 'The trigger condition is not a valid formula.',
+        });
+      }
+      if (triggers.watchedFields.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['triggers', 'watchedFields'],
+          message: 'A trigger condition needs at least one watched field.',
+        });
+      } else {
+        const readable = new Set<string>();
+        for (const field of triggers.watchedFields) {
+          readable.add(field);
+          readable.add(`${AGENT_PREVIOUS_FIELD_PREFIX}${field}`);
+        }
+        const unknown = readFieldsOf(triggers.condition).filter((field) => !readable.has(field));
+        if (unknown.length > 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['triggers', 'condition'],
+            message: `A trigger condition may only read watched fields: ${unknown.join(', ')}.`,
+          });
+        }
+      }
+    }
     if (config.input.mode === 'record' && (config.input.entity ?? '') === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -364,7 +445,7 @@ export function blankAgentConfig(): AgentConfig {
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },
     memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
-    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, workflow: false, eventTypes: [], eventEntities: [], integrationTypes: [] },
+    triggers: { manual: true, record: false, event: false, schedule: false, integration: false, workflow: false, eventTypes: [], eventEntities: [], watchedFields: [], integrationTypes: [] },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };
 }

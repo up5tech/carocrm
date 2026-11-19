@@ -81,6 +81,8 @@ export function registerAIAgentDomainEvents(bus: DomainEventBus, deps: AIAgentTr
                   eventType: event.eventType,
                   entityType: event.entity?.entityType,
                   entityId: event.entity?.entityId,
+                  changed: event.entity?.changed ?? [],
+                  values: event.entity?.values ?? { before: {}, after: {} },
                   correlationId: correlation === '' ? null : correlation,
                 }
               : {

@@ -46,7 +46,7 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   adapters. Capability rows are derived in `ai-provider-capabilities.ts` and published in the health
   view's `providers.capabilityTable`; image input/native web search are false, context is `null`.
 - AI parity boundary (Phase 25, **in progress; 25.0/25.1/25.2/25.3/25.4 delivered 2026-11-18;
-  25.5 delivered 2026-11-19**):
+  25.5 and 25.6 implemented 2026-11-19**):
   single-tenant only — no workspace/credits/billing/personal AI allowance; Twenty's alpha skills/agents
   and beta MCP are not parity gates. CaroCRM already ships MCP-compatible tools and stronger
   fail-closed ACL/injection evals. Canonical claim source: `docs/architecture/ai-capability-matrix.md`;
@@ -59,9 +59,14 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   bounded `runAgent` catalog action: DB-free parking via `WorkflowActionPendingError`, worker→API
   shared-secret door, published-version/skill/approval/25.2-principal re-checks, bounded JSON→field
   mapping, `trigger = 'workflow'` (migration 099) and deterministic `workflow.resume` from
-  `runs/workflow-resume.ts`; no service principal, code execution, new SDK or MCP surface. AIAgents
-  module is v1.6.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
-  25.4 is committed/pushed as `952a547` (HEAD/origin/master, clean tree as of 2026-11-19).
+  `runs/workflow-resume.ts`; no service principal, code execution, new SDK or MCP surface. 25.6 adds
+  bounded `triggers.watchedFields` and one sandboxed `triggers.condition` using `@carocrm/formula`
+  (`field('name')` current, `field('__previous_name')` previous); the committed entity event carries a
+  bounded before/after snapshot of changed scalars and `runs/trigger-filters.ts` filters before
+  fan-out without changing the five-start cap, recursion guard or `evt:<eventId>:<agentId>` key. No
+  new migration. AIAgents module is v1.7.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
+  25.4 is `952a547`, 25.5 is committed/pushed as `f063a60`. 25.6 is implemented but uncommitted;
+  per `AGENTS.MD` §4 the agent did not run automated checks for it.
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial

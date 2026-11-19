@@ -1753,8 +1753,14 @@ export interface AIAgentConfigShape {
     event: boolean;
     schedule: boolean;
     integration: boolean;
+    workflow?: boolean;
     eventTypes?: readonly ('entity.created' | 'entity.updated' | 'entity.deleted' | 'entity.restored')[];
     eventEntities?: readonly string[];
+    watchedFields?: readonly string[];
+    condition?: string;
+    scheduleCron?: string;
+    scheduleText?: string;
+    integrationTypes?: readonly string[];
   };
   readonly approval: { requireFor: readonly string[] };
 }

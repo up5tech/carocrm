@@ -22,7 +22,7 @@ compatibility for its internal APIs while it is in alpha.
 
 ### Phase 25 — AI capability parity (in progress, not a release)
 
-Documentation came first; 25.2–25.5 added code changes in this phase. Phase 25 produces
+Documentation came first; 25.2–25.6 added code changes in this phase. Phase 25 produces
 **alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
 production go/no-go.
 
@@ -63,8 +63,18 @@ production go/no-go.
   queues a deterministic `workflow.resume` job when the run settles. Runs carry `trigger = 'workflow'`
   and a workflow causation id (additive migration 099); no system agent, code execution, shell/SQL
   interpolation, new SDK or new MCP surface. AIAgents module version is now 1.6.0.
+- **25.6** Trigger parity: published agents can bound an `entity.updated` watch list to
+  `triggers.watchedFields` and one sandboxed `triggers.condition` evaluated by `@carocrm/formula`.
+  Current values read as `field('name')` and previous values as `field('__previous_name')`; only
+  watched fields are readable, and no new expression language is introduced. The committed entity
+  event now carries a bounded before/after snapshot of changed scalar fields, and the shared-secret
+  trigger door applies all filters before fan-out, so unchanged fields, false conditions and
+  create/delete/restore events become quiet skips. The existing five-start cap, recursion guard and
+  `evt:<eventId>:<agentId>` idempotency key are unchanged; cron equivalence and its process-timezone
+  gap are documented in the canonical matrix. No migration. AIAgents module version is now 1.7.0.
+  Automated checks are assigned to the developer by `AGENTS.MD` §4.
 
-Not shipped by 25.5: assignable agent roles, code-defined agents, trigger filters (25.6), attachments
+Not shipped by 25.6: assignable agent roles, code-defined agents, attachments
 (25.7), web grounding (25.8), chat page context (25.9), installation cost view (25.10) and the golden
 evaluation gate (25.11).
 

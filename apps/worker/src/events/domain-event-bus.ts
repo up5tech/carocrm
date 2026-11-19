@@ -79,13 +79,26 @@ export function entityPayloadOf(event: OutboxEvent): EntityEventPayload | undefi
   if (!KNOWN_DOMAIN_EVENTS.includes(event.eventType)) return undefined;
   const payload = event.payload as Partial<EntityEventPayload>;
   if (typeof payload.entityType !== 'string' || typeof payload.entityId !== 'string') return undefined;
+  const rawValues = payload.values;
+  const values =
+    typeof rawValues === 'object' && rawValues !== null
+      ? {
+          before: asValueMap((rawValues as { before?: unknown })['before']),
+          after: asValueMap((rawValues as { after?: unknown })['after']),
+        }
+      : undefined;
   return {
     entityType: payload.entityType,
     entityId: payload.entityId,
     changed: Array.isArray(payload.changed) ? payload.changed : [],
     userId: typeof payload.userId === 'string' ? payload.userId : null,
     version: typeof payload.version === 'number' ? payload.version : 0,
+    ...(values === undefined ? {} : { values }),
   };
+}
+
+function asValueMap(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function toDomainEventMessage(event: OutboxEvent, log: Logger): DomainEventMessage {

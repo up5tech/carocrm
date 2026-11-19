@@ -742,3 +742,118 @@ describe('the integration trigger door (19-AI.17)', () => {
     expect(res.body['started']).toBe(0);
   });
 });
+
+describe('the watched-field trigger filter (25.6)', () => {
+  const WATCH_EVENT = `evt-watched-${runId}`;
+  let watchedAgentId = '';
+
+  beforeAll(async () => {
+    eventIds.push(WATCH_EVENT);
+    const enabled = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+      features: { eventTriggers: true },
+    });
+    expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
+    watchedAgentId = await publishAgent(
+      `agent-test-${runId}-watched`,
+      `${MARKER} watched agent`,
+      {
+        ...baseConfig([]),
+        triggers: {
+          manual: true,
+          record: false,
+          event: true,
+          schedule: false,
+          integration: false,
+          eventTypes: ['entity.updated'],
+          eventEntities: ['Account'],
+          watchedFields: ['status'],
+          condition: "field('status') == 'Qualified' && field('__previous_status') == 'New'",
+        },
+      },
+    );
+  });
+
+  it('starts once on a matching watched transition and is replay-safe', async () => {
+    const first = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+      eventId: WATCH_EVENT,
+      eventType: 'entity.updated',
+      entityType: 'Account',
+      entityId: accountId,
+      changed: ['status', 'description'],
+      values: { before: { status: 'New' }, after: { status: 'Qualified' } },
+    }, TEST_SECRET);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body['started'], JSON.stringify(first.body)).toBe(1);
+    expect(first.body['matched'], JSON.stringify(first.body)).toBe(1);
+
+    const row = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select(['id', 'trigger', 'idempotency_key', 'causation_id'])
+      .where('causation_id', '=', WATCH_EVENT)
+      .executeTakeFirst();
+    expect(row).toBeDefined();
+    expect(row?.trigger).toBe('event');
+    expect(row?.idempotency_key).toBe(`evt:${WATCH_EVENT}:${watchedAgentId}`);
+    runIds.push(String(row?.id ?? ''));
+
+    const replay = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+      eventId: WATCH_EVENT,
+      eventType: 'entity.updated',
+      entityType: 'Account',
+      entityId: accountId,
+      changed: ['status'],
+      values: { before: { status: 'New' }, after: { status: 'Qualified' } },
+    }, TEST_SECRET);
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+    expect(replay.body['started']).toBe(1);
+    expect(await countRuns(WATCH_EVENT)).toBe(1);
+  });
+
+  it('does not start when no watched field changed', async () => {
+    const eventId = `evt-unchanged-${runId}`;
+    eventIds.push(eventId);
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+      eventId,
+      eventType: 'entity.updated',
+      entityType: 'Account',
+      entityId: accountId,
+      changed: ['description'],
+      values: { before: { description: 'old' }, after: { description: 'new' } },
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body['started']).toBe(0);
+    const skipped = res.body['skipped'] as { agent: string; reason: string }[];
+    expect(skipped.some((entry) => entry.reason === 'watched-field-unchanged')).toBe(true);
+    expect(await countRuns(eventId)).toBe(0);
+  });
+
+  it('does not start when the condition is false on the transition', async () => {
+    const eventId = `evt-condition-false-${runId}`;
+    eventIds.push(eventId);
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+      eventId,
+      eventType: 'entity.updated',
+      entityType: 'Account',
+      entityId: accountId,
+      changed: ['status'],
+      values: { before: { status: 'Qualified' }, after: { status: 'New' } },
+    }, TEST_SECRET);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body['started']).toBe(0);
+    const skipped = res.body['skipped'] as { agent: string; reason: string }[];
+    expect(skipped.some((entry) => entry.reason === 'condition-false')).toBe(true);
+    expect(await countRuns(eventId)).toBe(0);
+  });
+
+  it('rejects an oversized or non-scalar event value snapshot', async () => {
+    const res = await call('POST', '/api/v1/AIAgents/action/worker/trigger-event', undefined, {
+      eventId: `evt-bad-values-${runId}`,
+      eventType: 'entity.updated',
+      entityType: 'Account',
+      entityId: accountId,
+      changed: ['status'],
+      values: { before: { status: { nested: true } }, after: { status: 'Qualified' } },
+    }, TEST_SECRET);
+    expect([400, 422]).toContain(res.status);
+  });
+});

@@ -17,8 +17,9 @@ handbook).**
 
 Phase 25 (AI capability parity) is **in progress**: 25.0's read-only baseline, 25.1's documentation
 truthfulness, 25.2's version-pinned agent principal, 25.3's provider capability table with the
-Anthropic structured-output fallback, 25.4's reusable versioned skills and 25.5's bounded workflow AI
-action are delivered, with the single canonical claim source at
+Anthropic structured-output fallback, 25.4's reusable versioned skills, 25.5's bounded workflow AI
+action and 25.6's watched-field/condition trigger filters are implemented, with the single canonical
+claim source at
 [`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md). These are
 alpha/pilot capabilities and evidence only while the Phase 24.12 production gate remains open.
 
