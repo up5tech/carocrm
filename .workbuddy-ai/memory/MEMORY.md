@@ -65,8 +65,7 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`; per-module detail in `docs
   bounded before/after snapshot of changed scalars and `runs/trigger-filters.ts` filters before
   fan-out without changing the five-start cap, recursion guard or `evt:<eventId>:<agentId>` key. No
   new migration. AIAgents module is v1.7.0. 25.1 is `c7b27db`, 25.2 is `0be449b`, 25.3 is `455db1c`;
-  25.4 is `952a547`, 25.5 is committed/pushed as `f063a60`. 25.6 is implemented but uncommitted;
-  per `AGENTS.MD` §4 the agent did not run automated checks for it.
+  25.4 is `952a547`, 25.5 is `f063a60`, and 25.6 is committed/pushed as `ee3c73b`. Per `AGENTS.MD` §4 the agent did not run automated checks for 25.6.
 
 ## SQL / platform gotchas
 - `entity_records`: `created_at` + `modified_at` (no `updated_at`). `ON CONFLICT` needs the partial
