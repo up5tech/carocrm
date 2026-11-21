@@ -110,8 +110,27 @@ production go/no-go.
   `Last-Event-ID` header so a reloaded page can resume a stream. Conversation sharing (D12) is
   recorded as **Accepted — not implemented**. No migration, no new table, no new dependency.
 
-Not shipped by 25.9: assignable agent roles, code-defined agents, installation cost view (25.10) and
-the golden evaluation gate (25.11).
+- **25.10** Installation-level cost and usage visibility. The AI Agents **Usage** tab now answers
+  "which agent/model/trigger spent what, over which window" from the same two ledgers the module has
+  always owned (`ai_agent_runs`, `ai_agent_provider_requests`) — no second store, no new table and no
+  migration. The window is the module's own period grammar (`this_month`, `rolling:30d`, `all`,
+  `ai-agent-periods.ts`) resolved in the caller's own zone, so "this month" means the same thing in
+  the report and in an answer. Cost and tokens are broken down by agent, by trigger type and by
+  provider/model next to the installation total; every figure keeps its honest `estimate` / `none` /
+  `unknown` label, and a dropped provider-ledger write marks the affected agent and trigger
+  `unknown`. `GET /api/v1/AIAgents/action/usage` serves the report and
+  `GET /api/v1/AIAgents/action/usage/export` serves the same numbers as a flat CSV, so the screen and
+  the exported view come from one implementation. The **soft limit now warns before the hard limit
+  stops work**: the policy state names the dimension that is near its threshold, and the unlocked
+  quota pre-check writes an in-app notification to the administrators, deduped per policy, dimension
+  and period. The locked, transactional enforcement path is untouched — a hard quota is still atomic
+  and fail-closed. Only provider keys and model ids are exposed; the provider connection table is
+  never joined, so no credential can reach the report or the export. **No** credit balance, per-seat
+  allowance, payment flow or billing table was added — credits and billing remain an explicit skip
+  (D1).
+
+Not shipped by 25.10: assignable agent roles, code-defined agents and the golden evaluation gate
+(25.11).
 
 ### Phase 24
 

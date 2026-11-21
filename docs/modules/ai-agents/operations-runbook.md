@@ -61,6 +61,15 @@ operator enables both switches, and an agent opts in itself:
   `POST /api/v1/AIAgents/action/settings` with `safety.globalExecutionPaused=true`, stops new runs
   without deleting history.
 - Hard limits stop execution safely and preserve partial results.
+- Where the money went: the **Usage** tab of the AI Agents module page answers it per agent, per
+  trigger type and per provider/model over a chosen window (`this month` by default), and
+  `GET /api/v1/AIAgents/action/usage/export` writes the same numbers to a CSV file for the finance
+  handover. Cost is an **estimate** priced from the admin-maintained price cards, never the
+  provider's billed amount.
+- A near-limit warning arrives as an in-app notification for the administrators, naming the limit
+  that is close (runs, requests, tokens, cost or concurrent runs). It is raised when a run is
+  created, so an installation that stopped creating runs sees the state on the Usage tab and in the
+  budget list instead.
 
 ## Retention / deletion request
 

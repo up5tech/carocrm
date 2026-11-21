@@ -1,7 +1,7 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8 and 25.9 implemented (25.0–25.4 on 2026-11-18;
-> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9 on 2026-11-21; canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8, 25.9 and 25.10 implemented (25.0–25.4 on 2026-11-18;
+> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9 and 25.10 on 2026-11-21; canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
 > JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
@@ -15,8 +15,10 @@
 > (D6's operator-endpoint branch). 25.9 needs no migration either: the page context travels in the
 > existing run input JSON, and the chat contract moved 1.3.0 → 1.4.0 for the new
 > `GET action/page-context` route, the `pageContext` request/response field and the
-> `?lastEventId=` resume parameter. No dependency or release action.
-> Work continues at 25.10.
+> `?lastEventId=` resume parameter. 25.10 needs no migration either: the installation-level cost
+> and usage view reads the existing run and provider ledgers, and the soft-limit warning is an
+> in-app notification row. No dependency or release action.
+> Work continues at 25.11.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -494,6 +496,30 @@ Provide the useful part of Twenty's Billing breakdown — per-action model and c
 - An operator can answer "which agent/model spent what this month" from the UI and from an exported view.
 - No credit balance, no per-seat allowance, no payment flow, no new billing table.
 - Hard quota enforcement remains atomic and unchanged.
+
+### Delivered (2026-11-21)
+
+- **One ledger, one report.** `apps/api/src/ai-agents/ai-agent-cost-report.ts` is a pure read model
+  over `ai_agent_runs` and `ai_agent_provider_requests`; `ai-agent-cost-report.service.ts` loads the
+  window, reuses `ai-agent-pricing.service.ts` for the price cards and `ai-agent-quota.service.ts` for
+  the warnings. No second store, no new table, no migration.
+- **The window.** The report answers over the module's own period grammar (`this_month`,
+  `rolling:30d`, `all`, `ai-agent-periods.ts`), resolved in the caller's own zone — the same rule
+  the chat tools follow.
+- **The breakdown.** Cost and tokens by agent, by trigger type and by provider/model, plus the
+  installation total; each figure keeps the `estimate` / `none` / `unknown` label, and a dropped
+  ledger write (§19-AI.24) marks the affected agent and trigger `unknown`.
+- **The export.** `GET /api/v1/AIAgents/action/usage/export` renders the same report as one flat CSV
+  (`dimension,key,label,windowFrom,windowTo,…`); the screen and the file come from one implementation.
+- **The warning before the stop.** The soft limit now names the dimension it is near
+  (`quotaLimitState`, `ai-agent-quota-limits.ts`) and the unlocked quota pre-check writes an in-app
+  notification to the administrators (`ai-agent-quota-notification.service.ts`), deduped per policy,
+  dimension and period. The locked, transactional path is untouched: enforcement stays atomic and
+  fail-closed (§12.3).
+- **No secrets.** Only provider keys and model ids are read; the provider connection table is never
+  joined, and a test proves the credential of a live connection appears in neither the report nor the
+  export.
+- **Explicitly not delivered:** credit balance, per-seat allowance, payment flow, billing table.
 
 ---
 

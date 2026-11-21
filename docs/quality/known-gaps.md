@@ -1264,3 +1264,26 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
   context. Browser coverage of a live turn needs a seeded assistant and the fake provider in the e2e
   environment; the shipped e2e harness deliberately writes no settings, so that belongs to the test
   environment, not to this feature.
+
+---
+
+## G101 — The soft-limit warning needs traffic, and the cost report aggregates its window in memory
+
+- **Module / contract:** ai-agents — Phase 25.10 (installation-level cost and usage visibility).
+- **Evidence (25.10, 2026-11-21):**
+  - The soft-limit notification is raised by the **unlocked** quota pre-check
+    (`apps/api/src/ai-agents/ai-agent-quota.service.ts`, `assertRunAllowedUnlocked`), which runs when a
+    run is created. An installation that stops creating runs therefore receives no notification even
+    while it sits above its soft threshold. The state itself stays visible: the report's `warnings`
+    and `GET /api/v1/AIAgents/action/quotas/status` are derived from the ledger on every read.
+  - The report loads the window's run and provider-ledger rows into memory and aggregates them in
+    JavaScript (`apps/api/src/ai-agents/ai-agent-cost-report.service.ts`,
+    `ai-agent-cost-report.ts`) — the same shape as the read-out it replaced, so the cost is
+    proportional to the size of the chosen window and there is no server-side rollup.
+- **Impact:** no data loss and no security impact. The warning is a prompt, not a guarantee, and the
+  operator's answer ("which agent/model spent what this month") is answered by the report itself; the
+  unbounded `all` window on a very large installation is the slow path.
+- **Severity:** Low.
+- **Resolution (25.10, 2026-11-21):** **Deferred (P2).** A scheduled sweep could raise the warning
+  without traffic, and a rollup table would bound the report cost. Both are separate changes, and
+  neither belongs to the read-only view 25.10 delivers.

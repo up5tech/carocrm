@@ -748,12 +748,24 @@ endpoints:
     path: /api/v1/AIAgents/action/usage
     auth: authenticated
     permissions: "capability usage (AIAgentUsage read)"
-    request: none
-    response: "200 { totals{runs,modelCalls,toolCalls,inputTokens,outputTokens,estimatedCostUsd,costLabel,ledgerWriteFailures}, byAgent[], byProvider[] }"
-    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
+    request: "query: period (period token this_month|last_month|this_week|today|this_quarter|this_year|rolling:Nd|all; default this_month, resolved in the caller's zone), timezone (IANA zone; defaults to the caller's), agentId (optional), trigger (optional, one of manual|record|event|schedule|integration|workflow)"
+    response: "200 { window{token,label,from,to,timezone}, totals{runs,modelCalls,toolCalls,inputTokens,outputTokens,tokens,requests,failures,estimatedCostUsd,costLabel,ledgerWriteFailures}, byAgent[{agentId,agentKey,agentName,runs,modelCalls,toolCalls,tokens,requests,failures,estimatedCostUsd,costLabel}], byTrigger[{trigger,runs,modelCalls,toolCalls,tokens,estimatedCostUsd,costLabel}], byProvider[{providerKey,model,requests,failures,inputTokens,outputTokens,tokens,averageLatencyMs,estimatedCostUsd,costLabel,priceCard}], warnings[{policyId,scope,scopeRef,providerKey,agentId,period,warnPercent,dimension,used,limit,exhausted}] }"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
     pagination: none
-    sorting: "byAgent/byProvider sorted by volume descending"
-    filtering: none
+    sorting: "byAgent/byTrigger/byProvider sorted by cost descending, then volume descending"
+    filtering: "period token, timezone, agentId and trigger narrow the window and the rows"
+    sideEffects: none
+    idempotency: safe to repeat
+  - method: GET
+    path: /api/v1/AIAgents/action/usage/export
+    auth: authenticated
+    permissions: "capability usage (AIAgentUsage read)"
+    request: "query: the same period/timezone/agentId/trigger grammar as GET action/usage"
+    response: "200 text/csv attachment (dimension,key,label,windowFrom,windowTo,runs,modelCalls,toolCalls,tokens,requests,failures,estimatedCostUsd,costLabel; one row per total, agent, trigger and provider/model)"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
+    pagination: none
+    sorting: "same order as GET action/usage"
+    filtering: "same grammar as GET action/usage"
     sideEffects: none
     idempotency: safe to repeat
   - method: GET

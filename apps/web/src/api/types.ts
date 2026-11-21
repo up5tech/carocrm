@@ -2062,6 +2062,13 @@ export interface AIAgentBudgetPolicyStatus extends AIAgentBudgetPolicy {
   };
   readonly warning: boolean;
   readonly exhausted: boolean;
+  /** Phase 25.10 — which limit the state belongs to, with its numbers. */
+  readonly warningDimension: 'runs' | 'requests' | 'tokens' | 'costUsd' | 'concurrentRuns' | null;
+  readonly warningUsed: number | null;
+  readonly warningLimit: number | null;
+  readonly exhaustedDimension: 'runs' | 'requests' | 'tokens' | 'costUsd' | 'concurrentRuns' | null;
+  readonly exhaustedUsed: number | null;
+  readonly exhaustedLimit: number | null;
 }
 
 export interface AIAgentRetentionReport {
@@ -2071,27 +2078,61 @@ export interface AIAgentRetentionReport {
   readonly runEvents: number;
 }
 
+/** Phase 25.10 — the cost label of a figure: `estimate`, `none` (no price data) or `unknown`. */
+export type AIAgentCostLabel = 'estimate' | 'none' | 'unknown';
+
+/**
+ * Phase 25.10 — the installation-level cost and usage report.
+ *
+ * One windowed read-out over the run counters and the provider ledger: cost and tokens by agent, by
+ * trigger type, by provider/model, plus the installation total. The window is the report's own
+ * period token, so "this month" means the same thing here and in an answer.
+ */
 export interface AIAgentUsageView {
+  readonly window: {
+    readonly token: string;
+    readonly label: string;
+    readonly from: string | null;
+    readonly to: string | null;
+    readonly timezone: string;
+  };
   readonly totals: {
     readonly runs: number;
     readonly modelCalls: number;
     readonly toolCalls: number;
     readonly inputTokens: number;
     readonly outputTokens: number;
+    readonly tokens: number;
+    readonly requests: number;
+    readonly failures: number;
     readonly estimatedCostUsd: number;
     /** `estimate` when priced from an admin snapshot; `none` when no price data exists (19-AI.13);
      * `unknown` when provider ledger writes were dropped (19-AI.24). */
-    readonly costLabel: 'estimate' | 'none' | 'unknown';
+    readonly costLabel: AIAgentCostLabel;
     /** 19-AI.24 — provider ledger writes the gateway had to drop. */
     readonly ledgerWriteFailures: number;
   };
   readonly byAgent: readonly {
     readonly agentId: string;
+    readonly agentKey: string;
     readonly agentName: string;
     readonly runs: number;
     readonly modelCalls: number;
     readonly toolCalls: number;
     readonly tokens: number;
+    readonly requests: number;
+    readonly failures: number;
+    readonly estimatedCostUsd: number;
+    readonly costLabel: AIAgentCostLabel;
+  }[];
+  readonly byTrigger: readonly {
+    readonly trigger: string;
+    readonly runs: number;
+    readonly modelCalls: number;
+    readonly toolCalls: number;
+    readonly tokens: number;
+    readonly estimatedCostUsd: number;
+    readonly costLabel: AIAgentCostLabel;
   }[];
   readonly byProvider: readonly {
     readonly providerKey: string;
@@ -2100,7 +2141,34 @@ export interface AIAgentUsageView {
     readonly failures: number;
     readonly inputTokens: number;
     readonly outputTokens: number;
+    readonly tokens: number;
     readonly averageLatencyMs: number;
+    readonly estimatedCostUsd: number;
+    readonly costLabel: AIAgentCostLabel;
+    /** The price card the estimate came from, when one is configured. */
+    readonly priceCard: {
+      readonly id: string;
+      readonly providerKey: string;
+      readonly model: string;
+      readonly currency: string;
+      readonly inputPricePerMillion: number;
+      readonly outputPricePerMillion: number;
+      readonly cachedInputPricePerMillion: number;
+    } | null;
+  }[];
+  /** Phase 25.10 — soft-limit warnings, derived by the quota service from the same ledger. */
+  readonly warnings: readonly {
+    readonly policyId: string;
+    readonly scope: string;
+    readonly scopeRef: string | null;
+    readonly providerKey: string | null;
+    readonly agentId: string | null;
+    readonly period: string;
+    readonly warnPercent: number | null;
+    readonly dimension: string | null;
+    readonly used: number | null;
+    readonly limit: number | null;
+    readonly exhausted: boolean;
   }[];
 }
 

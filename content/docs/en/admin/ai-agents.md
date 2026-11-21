@@ -183,6 +183,14 @@ Budgets are policies with a day or month period and a global, user, team, agent 
 > [!NOTE]
 > A team-scoped budget is stored and its usage is shown, but the run-creation matcher selects only global, user, agent and provider scopes, so a team policy does not refuse a run in this build. Cost budgets depend on estimated cost: with no matching price card the estimate is zero, so a cost cap never trips.
 
+### The cost and usage report
+
+The Usage tab answers "which agent, which trigger, which model spent what" over a window you choose: this month, last month, this week, today, this quarter, this year, the last 30 days, or all time. The window is resolved on the server **in your own time zone**, so "this month" is the same period a chat answer would use. The breakdown lists runs, model calls, tool calls, tokens and cost per agent, per trigger type and per provider/model, next to the installation total. **Export CSV** writes the same numbers to a file: one flat table with a `dimension` column (`total`, `agent`, `trigger`, `model`) and the window on every row, so the file opens in any spreadsheet.
+
+Cost keeps its honest label everywhere it appears: **Estimate** when at least one request was priced from a price card, **No price data** when nothing in that group was priced, and **Unknown** when a provider-ledger write was dropped — the figure may then understate the real spend. Only provider keys and model ids are shown; a credential is never part of a report.
+
+A soft limit (`warnPercent`) warns **before** the hard limit stops work. When a run crosses the threshold, the module writes an in-app notification for the installation's administrators, naming the dimension that is near its limit — one notification per policy, dimension and period, so a busy installation is not flooded. The hard limit itself is unchanged: the run is still refused atomically, and that refusal is announced as well. The warning is raised when a run is created, so an installation that stops creating runs sees the state on the Usage tab and in the budget list rather than in a new notification.
+
 ## Troubleshooting
 
 | Symptom | What to check |
@@ -191,6 +199,7 @@ Budgets are policies with a day or month period and a global, user, team, agent 
 | Publishing is refused for the configuration | Missing provider or system prompt, a model or data class outside the connection, a disabled tool, a limit above a ceiling, an archived agent, or an identical version |
 | A run never starts | Execution is off or globally paused; you lack `use`; the concurrency ceiling or a hard budget is reached; the agent is not published. A triggered run that never starts is usually an empty allowlist (`eventTypes`/`eventEntities`/`integrationTypes`), a trigger switch that is off, or an owner who is missing or inactive — see [Triggers](#triggers) |
 | Cost is zero or shows no price data | No price card matches the provider and model, or no request was priced. Add a card, or a `*` card for the provider |
+| No notification about a near limit | The warning is raised when a run is created. Open the Usage tab or the budget list to see the current state |
 | An approval stays pending | Nobody with `approval` has decided it. It expires after the TTL and the run ends as expired; opening Approvals performs the sweep |
 
 ## Where to go next

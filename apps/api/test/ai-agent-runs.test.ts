@@ -62,6 +62,9 @@ const runIds: string[] = [];
 const attachmentIds: string[] = [];
 const pricingSnapshotIds: string[] = [];
 const budgetPolicyIds: string[] = [];
+// Every policy this suite created, kept even after the per-test DELETE, so the quota
+// notifications those policies raised are removed by the policy they name (25.10).
+const quotaPolicyIds: string[] = [];
 let taskId = '';
 
 async function call(method: Method, url: string, token?: string, payload?: unknown): Promise<CallResult> {
@@ -297,6 +300,15 @@ afterAll(async () => {
   await db.deleteFrom('ai_agent_pricing_snapshots').where('provider_key', '=', PROVIDER_KEY).execute();
   if (budgetPolicyIds.length > 0) {
     await db.deleteFrom('ai_agent_budget_policies').where('id', 'in', budgetPolicyIds).execute();
+  }
+  // 25.10: the quota pre-check raises an in-app warning per policy. Those rows name the policy
+  // they belong to, so the exact set this suite created is removable without touching anyone else's.
+  if (quotaPolicyIds.length > 0) {
+    await db
+      .deleteFrom('notifications')
+      .where('type', '=', 'AIAgentsQuotaWarning')
+      .where(sql`data ->> 'policyId'`, 'in', quotaPolicyIds)
+      .execute();
   }
   await db.deleteFrom('ai_provider_connections').where('key', '=', PROVIDER_KEY).execute();
   await db.deleteFrom('ai_provider_connections').where('key', '=', FALLBACK_PROVIDER_KEY).execute();
@@ -1347,6 +1359,7 @@ describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
     });
     expect(policy.status).toBe(201);
     budgetPolicyIds.push(String(policy.body['id']));
+    quotaPolicyIds.push(String(policy.body['id']));
 
     try {
       const first = await runAgent(agentId, 'First run inside the quota.');
@@ -1420,6 +1433,7 @@ describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
     });
     expect(policy.status).toBe(201);
     budgetPolicyIds.push(String(policy.body['id']));
+    quotaPolicyIds.push(String(policy.body['id']));
     try {
       // Ten simultaneous creations compete for ONE remaining slot. The transaction-scoped
       // FOR UPDATE lock must hand it to exactly one; the rest are refused, not queued.

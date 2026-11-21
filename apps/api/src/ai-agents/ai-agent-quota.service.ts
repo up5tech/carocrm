@@ -5,6 +5,14 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import type { Db } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import {
+  type QuotaLimitDimension,
+  quotaLimitPairs,
+  type QuotaLimitState,
+  quotaLimitState,
+  quotaPeriodStart,
+} from './ai-agent-quota-limits.js';
+import { AIAgentQuotaNotificationService } from './ai-agent-quota-notification.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 
 /**
@@ -71,6 +79,16 @@ export interface BudgetPolicyStatus extends BudgetPolicyView {
   readonly warning: boolean;
   /** A hard limit is reached; new runs in this scope are refused. */
   readonly exhausted: boolean;
+  /**
+   * Phase 25.10 — *which* limit the state belongs to. "Near the limit" is not actionable; "tokens
+   * 8,000 of 10,000" is. Derived from the same ledger, never stored.
+   */
+  readonly warningDimension: QuotaLimitDimension | null;
+  readonly warningUsed: number | null;
+  readonly warningLimit: number | null;
+  readonly exhaustedDimension: QuotaLimitDimension | null;
+  readonly exhaustedUsed: number | null;
+  readonly exhaustedLimit: number | null;
 }
 
 export interface QuotaCheckInput {
@@ -84,6 +102,7 @@ export class AIAgentQuotaService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(AIAgentsPermissionService) private readonly permissions: AIAgentsPermissionService,
+    @Inject(AIAgentQuotaNotificationService) private readonly notifier: AIAgentQuotaNotificationService,
   ) {}
 
   async list(): Promise<{ list: BudgetPolicyView[] }> {
@@ -180,11 +199,13 @@ export class AIAgentQuotaService {
     const list: BudgetPolicyStatus[] = [];
     for (const row of rows) {
       const usage = await this.usageFor(row);
+      const state = quotaLimitState(row, usage);
       list.push({
         ...this.toView(row),
         usage,
-        warning: this.overThreshold(row, usage),
-        exhausted: this.exhausted(row, usage),
+        warning: state.warningDimension !== null,
+        exhausted: state.exhaustedDimension !== null,
+        ...state,
       });
     }
     return { list };
@@ -193,20 +214,28 @@ export class AIAgentQuotaService {
   /**
    * Cheap unlocked pre-check. The run service calls it **before** resolving a conversation so a
    * refused run never leaves an empty thread behind; it is a fast path, not the guarantee.
+   *
+   * Phase 25.10 — this is also where the **soft-limit warning** is raised: the unlocked path sees
+   * the same ledger as the locked one but writes nothing that the enforcement depends on, so the
+   * operator is told "near the limit" while the run still works, and told "the hard limit stopped
+   * this run" when it does not.
    */
   async assertRunAllowedUnlocked(input: QuotaCheckInput): Promise<void> {
     const policies = await this.matchingPolicies(this.database.db, input, false);
-    await this.checkAll(policies, input, this.database.db);
+    await this.checkAll(policies, input, this.database.db, true);
   }
 
   /**
    * The atomic gate. Called by the run service inside the run-creation transaction with the same
    * transaction handle, so the lock, the aggregate and the insert commit together: two concurrent
    * creations sharing a policy row cannot both observe "one slot left" (§12.3).
+   *
+   * The locked path notifies nobody: enforcement stays a pure decision, and the warning has
+   * already been raised by the unlocked pre-check.
    */
   async assertRunAllowed(trx: Db, input: QuotaCheckInput): Promise<void> {
     const policies = await this.matchingPolicies(trx, input, true);
-    await this.checkAll(policies, input, trx);
+    await this.checkAll(policies, input, trx, false);
   }
 
   private async matchingPolicies(db: Db, input: QuotaCheckInput, lock: boolean) {
@@ -239,18 +268,33 @@ export class AIAgentQuotaService {
       max_cost_usd: string | null;
       max_runs: number | null;
       max_concurrent_runs: number | null;
+      warn_percent: number | null;
       scope_ref: string | null;
       provider_key: string | null;
       agent_id: string | null;
     }[],
     input: QuotaCheckInput,
     db: Db,
+    notify: boolean,
   ): Promise<void> {
     for (const policy of policies) {
       const usage = await this.usageFor(policy, db);
       const concurrent = await this.concurrentFor(policy, input, db);
       const merged = { ...usage, concurrentRuns: concurrent };
-      if (this.exhausted(policy, merged)) {
+      const state = quotaLimitState(policy, merged);
+      if (notify) {
+        await this.notifier.report({
+          policyId: policy.id,
+          scope: policy.scope,
+          scopeRef: policy.scope_ref,
+          providerKey: policy.provider_key,
+          agentId: policy.agent_id,
+          period: policy.period,
+          warnPercent: policy.warn_percent,
+          state,
+        });
+      }
+      if (state.exhaustedDimension !== null) {
         throw new ValidationError(
           `A ${policy.scope} quota stops this run: ${this.describe(policy)} already used ${this.describeUsage(policy, merged)}.`,
           { policyId: policy.id, scope: policy.scope, period: policy.period },
@@ -263,12 +307,6 @@ export class AIAgentQuotaService {
   // internals
   // -------------------------------------------------------------------------
 
-  private periodStart(period: 'run' | 'day' | 'month', now: Date): Date | null {
-    if (period === 'day') return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    if (period === 'month') return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    return null;
-  }
-
   private async usageFor(
     policy: {
       scope: string;
@@ -280,7 +318,7 @@ export class AIAgentQuotaService {
     maybeTrx?: Db,
   ): Promise<{ runs: number; requests: number; tokens: number; costUsd: number; concurrentRuns: number }> {
     const db = maybeTrx ?? this.database.db;
-    const start = this.periodStart(policy.period as 'run' | 'day' | 'month', new Date());
+    const start = quotaPeriodStart(policy.period as 'run' | 'day' | 'month', new Date());
     const usage = { runs: 0, requests: 0, tokens: 0, costUsd: 0, concurrentRuns: 0 };
     if (start === null) return usage;
 
@@ -402,62 +440,6 @@ export class AIAgentQuotaService {
     return Number(row?.count ?? 0);
   }
 
-  /** Every configured hard limit paired with its current usage; null limits are unbounded. */
-  private limitsWithUsage(
-    row: {
-      max_requests: number | null;
-      max_tokens: string | null;
-      max_cost_usd: string | null;
-      max_runs: number | null;
-      max_concurrent_runs: number | null;
-    },
-    usage: { runs: number; requests: number; tokens: number; costUsd: number; concurrentRuns: number },
-  ): { name: string; limit: number; used: number }[] {
-    const pairs = [
-      { name: 'runs', limit: row.max_runs, used: usage.runs },
-      { name: 'requests', limit: row.max_requests, used: usage.requests },
-      { name: 'tokens', limit: row.max_tokens, used: usage.tokens },
-      { name: 'costUsd', limit: row.max_cost_usd, used: usage.costUsd },
-      { name: 'concurrentRuns', limit: row.max_concurrent_runs, used: usage.concurrentRuns },
-    ] as const;
-    return pairs.map((pair) => ({
-      name: pair.name,
-      limit: pair.limit === null ? Number.POSITIVE_INFINITY : Number(pair.limit),
-      used: pair.used,
-    }));
-  }
-
-  private exhausted(
-    row: {
-      max_requests: number | null;
-      max_tokens: string | null;
-      max_cost_usd: string | null;
-      max_runs: number | null;
-      max_concurrent_runs: number | null;
-    },
-    usage: { runs: number; requests: number; tokens: number; costUsd: number; concurrentRuns: number },
-  ): boolean {
-    return this.limitsWithUsage(row, usage).some((pair) => pair.used >= pair.limit);
-  }
-
-  private overThreshold(
-    row: {
-      max_requests: number | null;
-      max_tokens: string | null;
-      max_cost_usd: string | null;
-      max_runs: number | null;
-      max_concurrent_runs: number | null;
-      warn_percent: number | null;
-    },
-    usage: { runs: number; requests: number; tokens: number; costUsd: number; concurrentRuns: number },
-  ): boolean {
-    if (row.warn_percent === null) return false;
-    const factor = row.warn_percent / 100;
-    return this.limitsWithUsage(row, usage).some(
-      (pair) => pair.used >= pair.limit * factor && pair.used < pair.limit,
-    );
-  }
-
   private describe(row: { scope: string; period: string }): string {
     return `${row.scope} ${row.period}`;
   }
@@ -472,7 +454,7 @@ export class AIAgentQuotaService {
     },
     usage: { runs: number; requests: number; tokens: number; costUsd: number; concurrentRuns: number },
   ): string {
-    const hit = this.limitsWithUsage(row, usage).find((pair) => pair.used >= pair.limit);
+    const hit = quotaLimitPairs(row, usage).find((pair) => pair.used >= pair.limit);
     if (hit === undefined) return '';
     const money = hit.name === 'costUsd';
     const used = money ? `$${hit.used.toFixed(4)}` : String(hit.used);

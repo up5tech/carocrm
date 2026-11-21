@@ -1,6 +1,7 @@
 import type { Provider } from '@nestjs/common';
 
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
+import { AIAgentCostReportService } from './ai-agent-cost-report.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
@@ -9,9 +10,9 @@ import { AIAgentMcpDirectService } from './ai-agent-mcp-direct.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
+import { AIAgentQuotaNotificationService } from './ai-agent-quota-notification.service.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
 import { AIAgentSkillService } from './ai-agent-skills.service.js';
-import { AIWebSearchService, FetchWebSearchPort, WEB_SEARCH_PORT } from './ai-web-search.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AIAgentsController } from './ai-agents.controller.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
@@ -24,10 +25,23 @@ import { AIProviderConnectionService } from './ai-provider-connections.service.j
 import { FakeProviderAdapter } from './ai-provider-fake.js';
 import { AIProviderGateway } from './ai-provider-gateway.service.js';
 import { OpenAICompatibleProviderAdapter } from './ai-provider-openai-compatible.js';
+import { AIWebSearchService, FetchWebSearchPort, WEB_SEARCH_PORT } from './ai-web-search.js';
 
 export type { AIAgentActorContext, AIAgentActorTeam } from './ai-agent-actor.js';
 export { actorPromptLines, promptSafe, systemPrompt } from './ai-agent-actor.js';
 export { AIAgentApprovalService } from './ai-agent-approvals.service.js';
+export type {
+  CostReport,
+  CostReportAgentRow,
+  CostReportModelRow,
+  CostReportPriceCard,
+  CostReportTotals,
+  CostReportTriggerRow,
+  CostReportWindow,
+} from './ai-agent-cost-report.js';
+export { aggregateCostReport, costReportCsv } from './ai-agent-cost-report.js';
+export type { CostReportQuery, CostReportView, CostReportWarning } from './ai-agent-cost-report.service.js';
+export { AIAgentCostReportService } from './ai-agent-cost-report.service.js';
 export type { AgentVersionDetail, AgentView } from './ai-agent-definitions.service.js';
 export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 export type { AIAgentActorProfile } from './ai-agent-directory.service.js';
@@ -42,10 +56,25 @@ export type { PeriodToken, ResolvedPeriod } from './ai-agent-periods.js';
 export { isPeriodToken, localDateString, PERIOD_TOKENS, resolvePeriod } from './ai-agent-periods.js';
 export { AIAgentPricingService } from './ai-agent-pricing.service.js';
 export { AIAgentQuotaService } from './ai-agent-quota.service.js';
+export type { QuotaLimitDimension, QuotaLimitPair, QuotaLimitState } from './ai-agent-quota-limits.js';
+export { quotaLimitPairs, quotaLimitState, quotaPeriodStart } from './ai-agent-quota-limits.js';
+export { AI_AGENTS_QUOTA_NOTIFICATION_TYPE, AIAgentQuotaNotificationService } from './ai-agent-quota-notification.service.js';
 export type { AIAgentRunView, RunCreateInput, RunExecutionResult } from './ai-agent-runs.service.js';
 export { AIAgentRunService } from './ai-agent-runs.service.js';
 export type { SkillView } from './ai-agent-skills.service.js';
 export { AIAgentSkillService } from './ai-agent-skills.service.js';
+export type { AIToolContext, AIToolDefinition, AIToolProposal, AIToolResult } from './ai-agent-tools.js';
+export { AIToolRegistry } from './ai-agent-tools.js';
+export type { EffectClass, RunStatus, RunTrigger } from './ai-agents-module.js';
+export type { AIAgentErrorCode } from './ai-agents-module.js';
+export { AI_AGENTS_ERROR_CODES, EFFECT_CLASSES, RUN_STATUSES, RUN_TRIGGERS } from './ai-agents-module.js';
+export { AI_AGENTS_MODULE } from './ai-agents-module.js';
+export { AIAgentsPermissionService } from './ai-agents-permission.service.js';
+export { AIAgentsPolicyService } from './ai-agents-policy.service.js';
+export { AIAgentsSettingsService } from './ai-agents-settings.service.js';
+export { AIProviderRegistry } from './ai-provider.js';
+export { AnthropicProviderAdapter } from './ai-provider-anthropic.js';
+export { AI_PROVIDER_PRESETS, providerPresets } from './ai-provider-presets.js';
 export type { WebSearchHit, WebSearchOutcome, WebSearchPort } from './ai-web-search.js';
 export {
   AIWebSearchService,
@@ -59,18 +88,6 @@ export {
   WEB_SEARCH_REF_KIND,
   webSearchLedgerRow,
 } from './ai-web-search.js';
-export type { AIToolContext, AIToolDefinition, AIToolProposal, AIToolResult } from './ai-agent-tools.js';
-export { AIToolRegistry } from './ai-agent-tools.js';
-export type { EffectClass, RunStatus, RunTrigger } from './ai-agents-module.js';
-export type { AIAgentErrorCode } from './ai-agents-module.js';
-export { AI_AGENTS_ERROR_CODES, EFFECT_CLASSES, RUN_STATUSES, RUN_TRIGGERS } from './ai-agents-module.js';
-export { AI_AGENTS_MODULE } from './ai-agents-module.js';
-export { AIAgentsPermissionService } from './ai-agents-permission.service.js';
-export { AIAgentsPolicyService } from './ai-agents-policy.service.js';
-export { AIAgentsSettingsService } from './ai-agents-settings.service.js';
-export { AIProviderRegistry } from './ai-provider.js';
-export { AnthropicProviderAdapter } from './ai-provider-anthropic.js';
-export { AI_PROVIDER_PRESETS, providerPresets } from './ai-provider-presets.js';
 
 /**
  * `AIAgents` barrel (AGENTS.md §5.1, docs/module-guide.md).
@@ -99,7 +116,9 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentEvaluationService,
   AIAgentMemoryService,
   AIAgentPricingService,
+  AIAgentQuotaNotificationService,
   AIAgentQuotaService,
+  AIAgentCostReportService,
   AIAgentRunService,
   AIAgentApprovalService,
   AIAgentMcpDirectService,

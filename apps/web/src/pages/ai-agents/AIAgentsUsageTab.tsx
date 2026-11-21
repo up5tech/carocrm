@@ -1,5 +1,6 @@
+import { DownloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Skeleton, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Skeleton, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -16,14 +17,33 @@ import { t } from '../../state/i18n.js';
  * no price data and the total is an exact zero — never an invented number (§12.1). The quota
  * section shows each policy's consumption, its soft-limit warning before the hard stop, and the
  * hard limit once reached; a soft limit never refuses work by itself (§12.3).
+ *
+ * Phase 25.10 — the report is **windowed**: the operator picks a period (`this_month`,
+ * `rolling:30d`, `all`), the server resolves it in their own zone, and the same window is what the
+ * CSV export contains. Cost and tokens are broken down by agent, by trigger type and by
+ * provider/model next to the installation total. Nothing here is a billing surface: there is no
+ * credit balance, no per-seat allowance and no payment flow — only what the ledgers recorded.
  */
+const PERIOD_OPTIONS = [
+  { value: 'this_month', label: 'periodThisMonth' },
+  { value: 'last_month', label: 'periodLastMonth' },
+  { value: 'this_week', label: 'periodThisWeek' },
+  { value: 'today', label: 'periodToday' },
+  { value: 'this_quarter', label: 'periodThisQuarter' },
+  { value: 'this_year', label: 'periodThisYear' },
+  { value: 'rolling:30d', label: 'periodLast30Days' },
+  { value: 'all', label: 'periodAll' },
+] as const;
+
 export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Record<string, boolean> }) {
   const canRead = capabilities['usage'] === true;
   const canAdmin = capabilities['policyAdmin'] === true;
   const queryClient = useQueryClient();
+  const { message } = AntApp.useApp();
+  const [period, setPeriod] = useState<string>('this_month');
   const usage = useQuery({
-    queryKey: ['aiAgents', 'usage'],
-    queryFn: () => api.aiAgentsUsage(),
+    queryKey: ['aiAgents', 'usage', period],
+    queryFn: () => api.aiAgentsUsage({ period }),
     enabled: canRead,
     staleTime: 30_000,
   });
@@ -50,7 +70,6 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
     void queryClient.invalidateQueries({ queryKey: ['aiAgents', 'quotaStatus'] });
     void queryClient.invalidateQueries({ queryKey: ['aiAgents', 'pricing'] });
   };
-
   const savePricing = useMutation({
     mutationFn: (values: Record<string, unknown>) => api.aiAgentsCreatePricing({
       providerKey: String(values['providerKey']),
@@ -96,6 +115,30 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
     onSuccess: refresh,
   });
 
+  /**
+   * Phase 25.10 — the exported view. The file carries the same numbers as the screen: one
+   * implementation, two renderings. The download is a blob, not a route change, so the SPA state
+   * survives it.
+   */
+  const exportCsv = useMutation({
+    mutationFn: () => api.aiAgentsUsageCsv({ period }),
+    onSuccess: (file) => {
+      const url = URL.createObjectURL(new Blob([file.csv], { type: 'text/csv;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = file.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      // Revoking synchronously can cancel the download in Chromium; release it later.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      void message.success(t('web.aiAgents.usageExportDone'));
+    },
+    onError: (error: unknown) => {
+      void message.error(errorMessage(error, t('web.aiAgents.usageExportFailed')));
+    },
+  });
+
   if (!canRead) {
     return <Alert type="info" showIcon message={t('web.aiAgents.usageNoAccess')} description={t('web.aiAgents.usageNoAccessHint')} />;
   }
@@ -109,6 +152,59 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
   const costIsUnknown = view.totals.costLabel === 'unknown';
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Card className="carocrm-card" size="small">
+        <Space size={12} wrap>
+          <Space size={6}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('web.aiAgents.usagePeriod')}
+            </Typography.Text>
+            <Select
+              size="small"
+              value={period}
+              onChange={(value: string) => setPeriod(value)}
+              options={PERIOD_OPTIONS.map((option) => ({ value: option.value, label: t(`web.aiAgents.${option.label}`) }))}
+              style={{ minWidth: 180 }}
+            />
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {view.window.from === null
+              ? t('web.aiAgents.usageWindowAll')
+              : t('web.aiAgents.usageWindow', { label: view.window.label, zone: view.window.timezone })}
+          </Typography.Text>
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            loading={exportCsv.isPending}
+            onClick={() => exportCsv.mutate()}
+          >
+            {t('web.aiAgents.usageExport')}
+          </Button>
+        </Space>
+      </Card>
+
+      {view.warnings.length > 0 ? (
+        <Alert
+          type={view.warnings.some((warning) => warning.exhausted) ? 'error' : 'warning'}
+          showIcon
+          message={t('web.aiAgents.usageWarningTitle')}
+          description={
+            <Space direction="vertical" size={4}>
+              {view.warnings.map((warning) => (
+                <Typography.Text key={warning.policyId} style={{ fontSize: 12 }}>
+                  {t('web.aiAgents.usageWarningLine', {
+                    scope: warning.scope,
+                    period: warning.period,
+                    dimension: warning.dimension ?? '—',
+                    used: String(warning.used ?? '—'),
+                    limit: String(warning.limit ?? '—'),
+                  })}
+                </Typography.Text>
+              ))}
+            </Space>
+          }
+        />
+      ) : null}
+
       <Row gutter={[12, 12]}>
         <Col xs={12} lg={6}>
           <Card className="carocrm-card" size="small">
@@ -324,7 +420,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
             rowKey="agentId"
             size="small"
             pagination={false}
-            scroll={{ x: 560 }}
+            scroll={{ x: 700 }}
             dataSource={[...view.byAgent]}
             columns={[
               { title: t('web.aiAgents.agent'), dataIndex: 'agentName', key: 'agentName' },
@@ -332,6 +428,50 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
               { title: t('web.aiAgents.modelCalls'), dataIndex: 'modelCalls', key: 'modelCalls', width: 120 },
               { title: t('web.aiAgents.toolCalls'), dataIndex: 'toolCalls', key: 'toolCalls', width: 110 },
               { title: t('web.aiAgents.usageTokens'), dataIndex: 'tokens', key: 'tokens', width: 120 },
+              {
+                title: t('web.aiAgents.quotaCost'),
+                dataIndex: 'estimatedCostUsd',
+                key: 'estimatedCostUsd',
+                width: 130,
+                render: (value: number, row) => (
+                  <Space size={4}>
+                    <Typography.Text>${value.toFixed(4)}</Typography.Text>
+                    {row.costLabel === 'unknown' ? (
+                      <Tag color="orange" style={{ fontSize: 11 }}>{t('web.aiAgents.costUnknown')}</Tag>
+                    ) : row.costLabel === 'none' ? (
+                      <Tag style={{ fontSize: 11 }}>{t('web.aiAgents.costNone')}</Tag>
+                    ) : null}
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Card>
+
+      <Card className="carocrm-card" size="small" title={t('web.aiAgents.usageByTrigger')}>
+        {view.byTrigger.length === 0 ? (
+          <EmptyState description={t('web.aiAgents.noUsage')} />
+        ) : (
+          <Table
+            rowKey="trigger"
+            size="small"
+            pagination={false}
+            scroll={{ x: 560 }}
+            dataSource={[...view.byTrigger]}
+            columns={[
+              { title: t('web.aiAgents.usageTrigger'), dataIndex: 'trigger', key: 'trigger' },
+              { title: t('web.aiAgents.usageRuns'), dataIndex: 'runs', key: 'runs', width: 100 },
+              { title: t('web.aiAgents.modelCalls'), dataIndex: 'modelCalls', key: 'modelCalls', width: 120 },
+              { title: t('web.aiAgents.toolCalls'), dataIndex: 'toolCalls', key: 'toolCalls', width: 110 },
+              { title: t('web.aiAgents.usageTokens'), dataIndex: 'tokens', key: 'tokens', width: 120 },
+              {
+                title: t('web.aiAgents.quotaCost'),
+                dataIndex: 'estimatedCostUsd',
+                key: 'estimatedCostUsd',
+                width: 130,
+                render: (value: number) => `$${value.toFixed(4)}`,
+              },
             ]}
           />
         )}
@@ -345,7 +485,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
             rowKey={(row) => `${row.providerKey}:${row.model}`}
             size="small"
             pagination={false}
-            scroll={{ x: 680 }}
+            scroll={{ x: 860 }}
             dataSource={[...view.byProvider]}
             columns={[
               { title: t('web.aiAgents.provider'), dataIndex: 'providerKey', key: 'providerKey', width: 170 },
@@ -359,6 +499,22 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
                 render: (value: number) => (value === 0 ? <Tag color="green">0</Tag> : <Tag color="red">{value}</Tag>),
               },
               { title: t('web.aiAgents.usageTokens'), key: 'tokens', width: 140, render: (_value, row) => row.inputTokens + row.outputTokens },
+              {
+                title: t('web.aiAgents.quotaCost'),
+                dataIndex: 'estimatedCostUsd',
+                key: 'estimatedCostUsd',
+                width: 130,
+                render: (value: number, row) => (
+                  <Space size={4}>
+                    <Typography.Text>${value.toFixed(4)}</Typography.Text>
+                    {row.costLabel === 'unknown' ? (
+                      <Tag color="orange" style={{ fontSize: 11 }}>{t('web.aiAgents.costUnknown')}</Tag>
+                    ) : row.costLabel === 'none' ? (
+                      <Tag style={{ fontSize: 11 }}>{t('web.aiAgents.costNone')}</Tag>
+                    ) : null}
+                  </Space>
+                ),
+              },
               {
                 title: t('web.aiAgents.latency'),
                 dataIndex: 'averageLatencyMs',

@@ -13,8 +13,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
 import type { ZodTypeAny } from 'zod';
 import { z } from 'zod';
 
@@ -24,16 +26,18 @@ import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import type { ApprovalStatusFilter } from './ai-agent-approvals.service.js';
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
+import { AIAgentCostReportService, type CostReportQuery } from './ai-agent-cost-report.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AIAgentMcpDirectService } from './ai-agent-mcp-direct.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
+import { isPeriodToken, PERIOD_TOKENS } from './ai-agent-periods.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import { AIAgentRunService, hashArguments } from './ai-agent-runs.service.js';
 import { AIAgentSkillService, SKILL_STATUS_SET } from './ai-agent-skills.service.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
-import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
+import { AGENT_STATUSES, type AgentStatus, RUN_TRIGGERS, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
@@ -96,6 +100,7 @@ export class AIAgentsController {
     @Inject(AIAgentMemoryService) private readonly memory: AIAgentMemoryService,
     @Inject(AIAgentPricingService) private readonly pricing: AIAgentPricingService,
     @Inject(AIAgentQuotaService) private readonly quotas: AIAgentQuotaService,
+    @Inject(AIAgentCostReportService) private readonly costs: AIAgentCostReportService,
     @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(AIAgentMcpDirectService) private readonly mcpDirect: AIAgentMcpDirectService,
@@ -792,9 +797,29 @@ export class AIAgentsController {
     });
   }
 
+  /**
+   * Phase 25.10 — the installation-level cost and usage report.
+   *
+   * One windowed read-out over the run counters and the provider ledger: cost and tokens by agent,
+   * by trigger type, by provider/model, and the installation total. The optional `period` token
+   * (`this_month`, `rolling:30d`, `all`) is resolved by the module's own period grammar, so "this
+   * month" means the same thing here and in an answer.
+   */
   @Get('action/usage')
-  async usage() {
-    return this.runs.usage();
+  async usage(@Query() query: unknown) {
+    return this.costs.report(costReportQuery(query));
+  }
+
+  /**
+   * The same report as a CSV file (plan §16 acceptance: "from an exported view"). The file carries
+   * the same numbers as the screen — one implementation, two renderings.
+   */
+  @Get('action/usage/export')
+  async usageExport(@Query() query: unknown, @Res({ passthrough: true }) reply: FastifyReply) {
+    const result = await this.costs.exportCsv(costReportQuery(query));
+    reply.header('content-type', 'text/csv; charset=utf-8');
+    reply.header('content-disposition', `attachment; filename="${result.filename}"`);
+    return result.csv;
   }
 
   // -------------------------------------------------------------------------
@@ -1106,4 +1131,34 @@ function parse<T extends ZodTypeAny>(schema: T, body: unknown): T['_output'] {
     });
   }
   return parsed.data;
+}
+
+/**
+ * Phase 25.10 — the report's query shape.
+ *
+ * `period` and `timezone` are validated by the period grammar itself (an unknown token or zone is
+ * refused with a stable error before any query runs). `trigger` is checked here, because it is a
+ * closed enumeration of the module's own run triggers.
+ */
+function costReportQuery(query: unknown): CostReportQuery {
+  const q = asRecord(query);
+  const trigger = typeof q['trigger'] === 'string' ? q['trigger'].trim() : '';
+  if (trigger !== '' && !(RUN_TRIGGERS as readonly string[]).includes(trigger)) {
+    throw new InvalidQueryError('Unknown trigger type.', { allowed: [...RUN_TRIGGERS] });
+  }
+  const agentId = typeof q['agentId'] === 'string' ? q['agentId'].trim() : '';
+  if (agentId.length > 120) throw new InvalidQueryError('The agent id is too long.');
+  const period = typeof q['period'] === 'string' ? q['period'].trim() : '';
+  // `all` is this report's own unbounded window; every other token comes from the module's own
+  // period grammar, so "this month" means here what it means in an answer.
+  if (period !== '' && period !== 'all' && !isPeriodToken(period)) {
+    throw new InvalidQueryError('Unknown period.', { period, allowed: [...PERIOD_TOKENS, 'all'] });
+  }
+  const timezone = typeof q['timezone'] === 'string' ? q['timezone'].trim() : '';
+  return {
+    ...(period === '' ? {} : { period }),
+    ...(timezone === '' ? {} : { timezone }),
+    ...(agentId === '' ? {} : { agentId }),
+    ...(trigger === '' ? {} : { trigger }),
+  };
 }

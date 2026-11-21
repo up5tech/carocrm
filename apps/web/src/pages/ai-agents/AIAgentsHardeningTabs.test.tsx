@@ -63,18 +63,52 @@ function approval(overrides: Partial<AIAgentApprovalView> = {}): AIAgentApproval
 
 function usageView(costLabel: 'estimate' | 'none' | 'unknown', ledgerWriteFailures = 0) {
   return {
+    window: { token: 'this_month', label: '2026-11', from: '2026-11-01T00:00:00.000Z', to: '2026-12-01T00:00:00.000Z', timezone: 'UTC' },
     totals: {
       runs: 12,
       modelCalls: 30,
       toolCalls: 8,
       inputTokens: 1000,
       outputTokens: 500,
+      tokens: 1500,
+      requests: 20,
+      failures: 1,
       estimatedCostUsd: 0.0123,
       costLabel,
       ledgerWriteFailures,
     },
-    byAgent: [{ agentId: 'a1', agentName: 'Agent', runs: 12, modelCalls: 30, toolCalls: 8, tokens: 1500 }],
-    byProvider: [],
+    byAgent: [
+      {
+        agentId: 'a1',
+        agentKey: 'helper',
+        agentName: 'Agent',
+        runs: 12,
+        modelCalls: 30,
+        toolCalls: 8,
+        tokens: 1500,
+        requests: 20,
+        failures: 1,
+        estimatedCostUsd: 0.0123,
+        costLabel,
+      },
+    ],
+    byTrigger: [{ trigger: 'manual', runs: 12, modelCalls: 30, toolCalls: 8, tokens: 1500, estimatedCostUsd: 0.0123, costLabel }],
+    byProvider: [
+      {
+        providerKey: 'fake',
+        model: 'fake-1',
+        requests: 20,
+        failures: 1,
+        inputTokens: 1000,
+        outputTokens: 500,
+        tokens: 1500,
+        averageLatencyMs: 12,
+        estimatedCostUsd: 0.0123,
+        costLabel,
+        priceCard: null,
+      },
+    ],
+    warnings: [],
   };
 }
 
@@ -147,7 +181,7 @@ describe('AIAgentsUsageTab (19-AI.27)', () => {
 
   it('labels an estimate honestly and hides admin actions from a reader', () => {
     const client = clientWith([
-      [['aiAgents', 'usage'], usageView('estimate')],
+      [['aiAgents', 'usage', 'this_month'], usageView('estimate')],
       [['aiAgents', 'quotaStatus'], { list: [] }],
     ]);
     const html = renderToStaticMarkup(
@@ -162,7 +196,7 @@ describe('AIAgentsUsageTab (19-AI.27)', () => {
 
   it('reports costLabel unknown with the dropped-ledger-write count (19-AI.24)', () => {
     const client = clientWith([
-      [['aiAgents', 'usage'], usageView('unknown', 3)],
+      [['aiAgents', 'usage', 'this_month'], usageView('unknown', 3)],
       [['aiAgents', 'quotaStatus'], { list: [] }],
     ]);
     const html = renderToStaticMarkup(
@@ -174,6 +208,52 @@ describe('AIAgentsUsageTab (19-AI.27)', () => {
     // Admin controls are present for a policy admin.
     expect(html).toContain('web.aiAgents.quotaAdd');
     expect(html).toContain('web.aiAgents.pricingAdd');
+  });
+
+  it('offers the window selector, the export and the trigger breakdown (25.10)', () => {
+    const client = clientWith([
+      [['aiAgents', 'usage', 'this_month'], usageView('estimate')],
+      [['aiAgents', 'quotaStatus'], { list: [] }],
+    ]);
+    const html = renderToStaticMarkup(
+      withQuery(client, <AIAgentsUsageTab capabilities={{ usage: true }} />),
+    );
+    expect(html).toContain('web.aiAgents.usagePeriod');
+    expect(html).toContain('web.aiAgents.usageExport');
+    expect(html).toContain('web.aiAgents.usageByTrigger');
+    expect(html).toContain('manual');
+  });
+
+  it('warns about a soft limit before the hard one stops the work (25.10)', () => {
+    const client = clientWith([
+      [
+        ['aiAgents', 'usage', 'this_month'],
+        {
+          ...usageView('estimate'),
+          warnings: [
+            {
+              policyId: 'policy-1',
+              scope: 'global',
+              scopeRef: null,
+              providerKey: null,
+              agentId: null,
+              period: 'month',
+              warnPercent: 80,
+              dimension: 'tokens',
+              used: 8_000,
+              limit: 10_000,
+              exhausted: false,
+            },
+          ],
+        },
+      ],
+      [['aiAgents', 'quotaStatus'], { list: [] }],
+    ]);
+    const html = renderToStaticMarkup(
+      withQuery(client, <AIAgentsUsageTab capabilities={{ usage: true }} />),
+    );
+    expect(html).toContain('web.aiAgents.usageWarningTitle');
+    expect(html).toContain('web.aiAgents.usageWarningLine');
   });
 });
 

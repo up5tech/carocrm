@@ -1010,7 +1010,38 @@ export const api = {
   aiAgentsRetentionDryRun: () => request<AIAgentRetentionReport>('/AIAgents/action/retention/dryRun'),
   aiAgentsRetentionRun: () =>
     request<AIAgentRetentionReport>('/AIAgents/action/retention/run', post({})),
-  aiAgentsUsage: () => request<AIAgentUsageView>('/AIAgents/action/usage'),
+  /**
+   * Phase 25.10 — the installation-level cost and usage report.
+   *
+   * `period` is a token of the module's own period grammar (`this_month`, `rolling:30d`, `all`);
+   * the server resolves it in the caller's zone, so the browser never computes a date.
+   */
+  aiAgentsUsage: (params: { period?: string; timezone?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.period !== undefined) query.set('period', params.period);
+    if (params.timezone !== undefined) query.set('timezone', params.timezone);
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    return request<AIAgentUsageView>(`/AIAgents/action/usage${suffix}`);
+  },
+  /**
+   * The same report as a CSV file. The file is fetched with the stored token, because a download
+   * is a navigation, not a route change — and the credential never travels in the query string.
+   */
+  aiAgentsUsageCsv: async (params: { period?: string; timezone?: string } = {}): Promise<{ csv: string; filename: string }> => {
+    const query = new URLSearchParams();
+    if (params.period !== undefined) query.set('period', params.period);
+    if (params.timezone !== undefined) query.set('timezone', params.timezone);
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    const token = getStoredToken();
+    const response = await fetch(`/api/v1/AIAgents/action/usage/export${suffix}`, {
+      headers: token === null ? {} : { authorization: `Bearer ${token}` },
+      credentials: 'same-origin',
+    });
+    if (!response.ok) throw new Error('download_failed');
+    const disposition = response.headers.get('content-disposition') ?? '';
+    const named = /filename="([^"]+)"/.exec(disposition);
+    return { csv: await response.text(), filename: named?.[1] ?? 'ai-usage.csv' };
+  },
   aiAgentsEvalSuites: () => request<{ list: unknown[] }>('/AIAgents/action/evaluations'),
   aiAgentsEnsureEvalSuite: () => request<unknown>('/AIAgents/action/evaluations', post({})),
   aiAgentsCreateEvalCase: (suiteKey: string, input: { caseKey: string; title: string; grader: string; graderConfig?: Record<string, unknown> }) =>
