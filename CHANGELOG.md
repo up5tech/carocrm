@@ -18,12 +18,14 @@ compatibility for its internal APIs while it is in alpha.
   blockers in `docs/quality/known-gaps.md` and `docs/security/exception-register.md` close or are
   owner-accepted.
 
-## [Unreleased] — Phase 24 and Phase 25 in progress
+## [Unreleased] — Phase 24 in progress; Phase 25 complete
 
-### Phase 25 — AI capability parity (in progress, not a release)
+### Phase 25 — AI capability parity (complete as a phase; not a production release)
 
-Documentation came first; 25.2–25.7 added code changes in this phase. Phase 25 produces
-**alpha/pilot evidence only** while the Phase 24.12 production gate stays open; it is not a second
+Sub-phases 25.0–25.12 are implemented and the AI-capability review is complete. Final automated
+verification remains pending (G103; see `docs/quality/phase-25-release-review.md` §9); no green gate
+is claimed. The recorded decision is **GO for alpha/pilot — AI capability only** and **NO-GO for
+production** while the Phase 24.12 production gate stays open. Phase 25 is not a product release or a
 production go/no-go.
 
 - **25.0** Read-only parity baseline and owner defaults D1–D7:

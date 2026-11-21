@@ -15,13 +15,14 @@ Customer Success (19-CS), Service Desk (19-SD), Marketing Automation (19-MA), Vo
 (19-ES) — plus Phase 20 (settings, administration and end-user UX) and Phase 21 (the in-app
 handbook).**
 
-Phase 25 (AI capability parity) is **in progress**: 25.0's read-only baseline, 25.1's documentation
-truthfulness, 25.2's version-pinned agent principal, 25.3's provider capability table with the
-Anthropic structured-output fallback, 25.4's reusable versioned skills, 25.5's bounded workflow AI
-action, 25.6's watched-field/condition trigger filters, 25.7's bounded attachment input and 25.8's
-grounded web search are implemented, with the single canonical claim source at
-[`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md). These are
-alpha/pilot capabilities and evidence only while the Phase 24.12 production gate remains open.
+Phase 25 (AI capability parity) is **complete as an implementation and AI-capability review**:
+sub-phases 25.0–25.12 are delivered, including page-aware CRM Chat, installation-level cost visibility,
+and the golden evaluation gate. The canonical capability matrix is
+[`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md), and the closing
+review is [`docs/quality/phase-25-release-review.md`](docs/quality/phase-25-release-review.md). The final
+automated verification remains pending (G103; see the review for the exact commands and unrun suites),
+so this is **GO for alpha/pilot — AI capability only**, not a claim that the gates are green. Production
+remains **NO-GO** while the Phase 24.12 production gate is open.
 
 _Roadmap_ — [plans/PLAN.md](plans/PLAN.md) for the kernel and module roadmap, plus the phase-level plans
 [Projects](plans/PLAN_Phase_19_Projects.md) · [Sales](plans/PLAN_Phase_19_Sales.md) ·
