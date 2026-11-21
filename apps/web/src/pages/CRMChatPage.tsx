@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Input, Skeleton, Space, Tooltip, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client.js';
@@ -27,6 +27,10 @@ import { CRMChatDiagnosticsDrawer } from './crm-chat/CRMChatDiagnosticsDrawer.js
 import { CRMChatMessageList } from './crm-chat/CRMChatMessageList.js';
 import { CRMChatSettingsModal } from './crm-chat/CRMChatSettingsModal.js';
 import { CRMChatSuggestions } from './crm-chat/CRMChatSuggestions.js';
+import {
+  type CRMChatPageContextState,
+  parsePageContextRef,
+} from './crm-chat/crm-chat-page-context.js';
 /**
  * The server state is kebab-case (`not-configured`); the catalog forbids hyphens in a key segment
  * (`KEY_RE` in `apps/api/src/i18n/i18n.service.ts`), so the label key uses underscores.
@@ -99,6 +103,16 @@ export function CRMChatPage() {
     setSearchParams(next, { replace: true });
   }, []);
 
+  /**
+   * 25.9 — the page context of this workspace: the record the user was looking at when they came
+   * here (`?ctx=Contact:<id>`). The URL carries **identifiers only**; the server resolves the record
+   * under the caller's own ACL and answers `applied` or `dropped`. Nothing about the record is read
+   * from the URL, and the URL cannot make the assistant read a record the caller may not read.
+   */
+  const contextRef = useMemo(() => parsePageContextRef(searchParams.get('ctx')), [searchParams]);
+  const [dismissedContext, setDismissedContext] = useState<string | null>(null);
+  const contextKey = contextRef === undefined ? null : `${contextRef.entity}:${contextRef.id}`;
+
   const capabilities = useQuery({
     queryKey: ['crmChat', 'capabilities'],
     queryFn: () => api.crmChatCapabilities(),
@@ -107,6 +121,37 @@ export function CRMChatPage() {
   });
 
   const workspaceEnabled = capabilities.data?.workspace.enabled === true;
+
+  const pageContext = useQuery({
+    queryKey: ['crmChat', 'pageContext', contextRef?.entity, contextRef?.id],
+    queryFn: () =>
+      api.crmChatPageContext({ entity: contextRef?.entity ?? '', id: contextRef?.id ?? '' }),
+    enabled: contextRef !== undefined && workspaceEnabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const activePageContext: CRMChatPageContextState | undefined =
+    contextRef === undefined || pageContext.data === undefined
+      ? undefined
+      : {
+          entity: pageContext.data.entity,
+          id: pageContext.data.id,
+          label: pageContext.data.label,
+          status: pageContext.data.status,
+        };
+
+  const removePageContext = (): void => {
+    if (contextKey === null) return;
+    setDismissedContext(contextKey);
+    const next = new URLSearchParams(searchParams);
+    next.delete('ctx');
+    setSearchParams(next, { replace: true });
+  };
+
+  // A context the user removed stays removed, even when the resolve query refetches.
+  const visiblePageContext =
+    contextKey !== null && dismissedContext === contextKey ? undefined : activePageContext;
 
   // 19-CHAT.4 — the caller's own threads. Reads only: a conversation is created by the first turn
   // (contract D2), which arrives with 19-CHAT.5, so there is nothing here that can write.
@@ -424,6 +469,8 @@ export function CRMChatPage() {
               canManagePrompts={promptsGranted}
               resetSignal={composerReset}
               prefill={prefill}
+              pageContext={visiblePageContext}
+              onRemovePageContext={removePageContext}
               onTurnSubmitted={(result) => {
                 // The first turn creates the conversation (contract D2); select it so the streamed
                 // answer and the history render instead of leaving the thread empty.

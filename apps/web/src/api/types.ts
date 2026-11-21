@@ -3071,12 +3071,29 @@ export interface CRMChatUsageSummary {
   readonly costLabel: 'estimate' | 'none';
 }
 
+/**
+ * Phase 25.9 — the page context of a turn: the record the user was looking at when they wrote the
+ * message, resolved server-side under the caller's own ACL.
+ *
+ * `dropped` is the honest answer for a record the caller may no longer read. The reason never
+ * distinguishes "no such record" from "not yours" — the endpoint must not be an existence oracle.
+ */
+export interface CRMChatPageContextView {
+  readonly status: 'applied' | 'dropped';
+  readonly entity: string;
+  readonly id: string;
+  readonly label: string | null;
+  readonly reason: 'not_accessible' | 'not_readable_entity' | null;
+}
+
 /** Phase 19-CHAT.5 — turn submission result (contract §8.2). */
 export interface CRMChatTurnResult {
   readonly turnId: string;
   readonly runId: string;
   readonly status: string;
   readonly conversationId: string | null;
+  /** Phase 25.9 — what happened to the page context of this turn. */
+  readonly pageContext?: CRMChatPageContextView | null | undefined;
 }
 
 /** Phase 19-CHAT.5 — turn status view. */

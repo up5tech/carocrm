@@ -8,6 +8,7 @@ import { api } from '../../api/client.js';
 import type { CRMChatTurnResult } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 import { CRMChatActionCard } from './CRMChatActionCard.js';
+import { CRMChatPageContextChip, type CRMChatPageContextState } from './CRMChatPageContextChip.js';
 import { CRMChatPromptTemplates } from './CRMChatPromptTemplates.js';
 import { useCrmChatStream } from './useCrmChatStream.js';
 
@@ -33,6 +34,14 @@ export interface CRMChatComposerProps {
    * nonce makes a repeated suggestion of the same text a new event.
    */
   readonly prefill?: { readonly text: string; readonly nonce: number } | undefined;
+  /**
+   * 25.9 — the record the user was looking at. The composer sends its **identifiers** with every
+   * turn; the server resolves the record under the caller's own ACL and drops it when the caller may
+   * no longer read it. The composer never sends the record's content itself.
+   */
+  readonly pageContext?: CRMChatPageContextState | undefined;
+  /** Called when the user removes the page context from the composer. */
+  readonly onRemovePageContext?: (() => void) | undefined;
 }
 
 interface PendingAttachment {
@@ -55,15 +64,33 @@ type TurnPhase = 'idle' | 'queued' | 'thinking' | 'tool' | 'finishing';
  * - 19-CHAT.14 — saved prompt templates, inserted as plain text
  * - 19-CHAT.12 — the action proposal card, when a turn asks for a write to be confirmed
  * - 25.7 — optional, already-uploaded PNG/JPEG/PDF attachments sent as bounded file references
+ * - 25.9 — the page context: the record the user was on, sent as identifiers and resolved by the
+ *   server under the caller's own ACL
  */
 export function CRMChatComposer(props: CRMChatComposerProps) {
-  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted, resetSignal, prefill } = props;
+  const {
+    conversationId,
+    enabled,
+    maxMessageChars,
+    turnTimeoutSeconds,
+    canManagePrompts = false,
+    onTurnSubmitted,
+    resetSignal,
+    prefill,
+    pageContext,
+    onRemovePageContext,
+  } = props;
 
   const [prompt, setPrompt] = useState('');
   const [attachments, setAttachments] = useState<readonly PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
+  /**
+   * 25.9 — the server re-checks the page context on every turn. When it says the record is no
+   * longer readable, the answer was produced without it and the user is told why.
+   */
+  const [pageContextDropped, setPageContextDropped] = useState(false);
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [turnPhase, setTurnPhase] = useState<TurnPhase>('idle');
   const [toolLabel, setToolLabel] = useState<string | null>(null);
@@ -96,6 +123,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     setPrompt('');
     setAttachments([]);
     setStreamError(null);
+    setPageContextDropped(false);
     if (fileInputRef.current !== null) fileInputRef.current.value = '';
     textAreaRef.current?.focus();
   }, [resetSignal]);
@@ -225,6 +253,9 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         prompt,
         conversationId,
         idempotencyKey,
+        // 25.9 — identifiers only. The server resolves the record under the caller's ACL; it never
+        // sees a client-written description of the record.
+        ...(pageContext === undefined ? {} : { pageContext: { entity: pageContext.entity, id: pageContext.id } }),
         attachments: attachments.map((attachment) => attachment.id),
       });
     },
@@ -235,6 +266,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
       setPrompt('');
       setAttachments([]);
       setStreamError(null);
+      setPageContextDropped(result.pageContext?.status === 'dropped');
       conversationRef.current = result.conversationId ?? conversationRef.current;
       onTurnSubmitted?.(result);
 
@@ -356,6 +388,20 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         />
       )}
 
+      {/* 25.9 — the record the user was on could not be read any more. The answer was produced
+          without it; saying so is better than an answer that quietly ignores the page. */}
+      {pageContextDropped ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t('web.crmChat.pageContext.droppedTitle')}
+          description={t('web.crmChat.pageContext.droppedHint')}
+          closable
+          onClose={() => setPageContextDropped(false)}
+          style={{ marginBottom: 12 }}
+        />
+      ) : null}
+
       {/* 19-CHAT.12 — the pending write proposal. The card is the only thing that can decide it. */}
       {pendingApprovalId === null ? null : (
         <CRMChatActionCard
@@ -411,6 +457,16 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
             ))}
           </div>
         ) : null}
+
+        {/* 25.9 — the record this conversation is about. A reference the user can drop. */}
+        {pageContext === undefined ? null : (
+          <div className="carocrm-chat-page-context-bar">
+            <CRMChatPageContextChip
+              context={pageContext}
+              {...(onRemovePageContext === undefined ? {} : { onRemove: onRemovePageContext })}
+            />
+          </div>
+        )}
 
         <TextArea
           ref={textAreaRef}

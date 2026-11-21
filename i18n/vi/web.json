@@ -2950,7 +2950,14 @@
     "quickEmpty": "Hỏi một câu và câu trả lời sẽ hiện ngay tại đây.",
     "quickOpenFull": "Mở chat đầy đủ",
     "quickActionPending": "Lượt này cần bạn xác nhận. Hãy mở chat đầy đủ để xem chi tiết.",
-    "sourceRetrieved": "Lấy lúc {at} — trang bên ngoài"
+    "sourceRetrieved": "Lấy lúc {at} — trang bên ngoài",
+    "pageContext": {
+      "applied": "Câu trả lời sẽ dùng bản ghi bạn đang xem.",
+      "dropped": "Bản ghi này không còn truy cập được, nên không có trong câu trả lời.",
+      "droppedTitle": "Không dùng được ngữ cảnh trang",
+      "droppedHint": "Bạn không còn đọc được bản ghi đang xem, nên câu trả lời được tạo mà không có bản ghi đó.",
+      "ariaLabel": "Ngữ cảnh trang"
+    }
   },
   "adminDocs": {
     "title": "Tài liệu trong ứng dụng",
@@ -3158,7 +3165,6 @@
   "ai": {
     "inline": {
       "askAboutRecord": "Hỏi AI về bản ghi này",
-      "recordContext": "Về {entity} \"{name}\":",
       "summarizeRecord": "Tóm tắt bản ghi này.",
       "nextStepRecord": "Tôi nên làm gì tiếp theo với bản ghi này?",
       "draftFollowUpRecord": "Soạn email theo dõi cho bản ghi này.",

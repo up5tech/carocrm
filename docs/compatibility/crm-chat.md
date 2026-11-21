@@ -6,8 +6,10 @@
 > **Module:** `CRMChat` — registry key and route slug `crm-chat`, SPA route `/crm-chat`, no `Ua` prefix.
 > **Status:** 19-CHAT.0 → 19-CHAT.24 delivered; 19-CHAT.25 → 19-CHAT.29 hardening shipped
 > 2026-11-08 (contract v1.3.0, 27 implemented routes, module v1.3.0). P1 domain tools shipped
-> 2026-11-05. Web grounding shipped in 25.8 (one operator-configured endpoint, cited results); page
-> context and conversation sharing (D12) are not implemented — the canonical claim source is
+> 2026-11-05. Web grounding shipped in 25.8 (one operator-configured endpoint, cited results); the
+> page context shipped in 25.9 (contract v1.4.0, 28 implemented routes, module v1.4.0) — the client
+> sends the record's identifiers, the server resolves it under the caller's ACL. Conversation sharing
+> (D12) is **Accepted — not implemented** — the canonical claim source is
 > `docs/architecture/ai-capability-matrix.md`.
 
 ---
@@ -98,7 +100,7 @@ workspace, quick-chat panel, citations, feedback, saved prompts and settings —
 | Surface | Status |
 | --- | --- |
 | `/api/v1/CRMChat/action/*` (conversations, turns, events SSE, query, help, prompts, feedback, actions, cross-module, usage, citations, settings, health, capabilities) | available; **no generated OpenAPI** (G1 deferred to Phase 22.22) — routes are pinned by `crm-chat-contract.test.ts` and the contract catalog |
-| Module version | `CRMChat` v1.3.0 (P1, 2026-11-05) / `AIAgents` v1.2.0; contract v1.3.0 since 19-CHAT.25 → 29 (limits, all `contextRefs`, timeout and stream-id hardening; no route added or removed); see the canonical AI matrix |
+| Module version | `CRMChat` v1.4.0 (25.9, 2026-11-21 — page context) / `AIAgents` v1.9.0; contract v1.4.0 since 25.9 (one route, one request field, one response field, the `?lastEventId=` resume parameter); v1.3.0 was the 19-CHAT.25 → 29 hardening (limits, all `contextRefs`, timeout and stream-id hardening); see the canonical AI matrix |
 | Navigation key `crmChat`, route `/crm-chat`, quick-chat panel in the app header, inline instances on record headers + list bulk bar + email designer | available; gated by `CRMChatConversation:read` (`/crm-chat`); inline instances reuse the same turn API, ACL and SSE stream |
 | Home "Today's briefing" card | available; deterministic (tasks/agenda/approvals the user already sees), no provider call, no new endpoint |
 | `crmChat` settings row in `app_settings` | available; strict Zod validation; unknown keys refused |
@@ -106,7 +108,7 @@ workspace, quick-chat panel, citations, feedback, saved prompts and settings —
 | `ai_agent_conversations` / `ai_agent_messages` / `ai_agent_runs` / `ai_agent_approvals` | reused read-only-ish: Chat submits runs and renders approvals; it never writes their internals |
 | i18n `web.crmChat.*` | `en` and `vi` catalogs complete |
 | In-app handbook | `en` pages: `user/chat-and-voice`, `admin/crm-chat`, `admin/ai-agents` (updated 2026-11-03/05); `vi` pages: `user/chat-and-voice`, `user/ai-agents` (2026-11-05, awaiting native review) |
-| Browser e2e | `e2e/crm-chat.spec.ts` (2 tests, chromium, verified 2026-11-05) — renders, diagnostics drawer, settings open/cancel, quick-chat panel; writes nothing |
+| Browser e2e | `e2e/crm-chat.spec.ts` (3 tests, chromium) — renders, diagnostics drawer, settings open/cancel, quick-chat panel, and the 25.9 page-context chip on a record page; writes only the record it creates, and deletes it again |
 
 ---
 

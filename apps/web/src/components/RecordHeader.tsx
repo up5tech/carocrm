@@ -188,13 +188,12 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
         ) : null}
       </div>
       <Space className="carocrm-record-header-actions" wrap>
-        {/* P2 inline AI: ask about this exact record without leaving the page. The turn
-            API still enforces ACL; this is only context + suggestions. */}
+        {/* P2 inline AI: ask about this exact record without leaving the page.
+            25.9 — the record travels as **identifiers**, not as a sentence the client wrote: the
+            server resolves it under the caller's ACL and puts the record's own fields in front of
+            the model. The turn API still enforces ACL; this is only context + suggestions. */}
         <CRMChatQuickAccess
-          contextPrefix={t('web.ai.inline.recordContext', {
-            entity: definition?.label ?? entity,
-            name,
-          })}
+          pageContext={{ entity, id, label: name }}
           suggestions={[
             t('web.ai.inline.summarizeRecord'),
             t('web.ai.inline.nextStepRecord'),

@@ -3,7 +3,7 @@
 # (conversations, turns via crm-chat-ai-agents-client, streaming, query, help,
 # citations, actions, prompts, feedback, cross-module, observability, settings,
 # permission and policy). The machine-readable route table is
-# crm-chat-contract.ts (27 implemented routes); docs/architecture/crm-chat-contract.md is the prose.
+# crm-chat-contract.ts (28 implemented routes); docs/architecture/crm-chat-contract.md is the prose.
 #
 # Auth: the controller has no @Public() route and the global auth guard requires a
 # session on every path, so every endpoint is `authenticated`. Authorization is a
@@ -104,14 +104,26 @@ endpoints:
     path: /api/v1/CRMChat/action/turns
     auth: authenticated
     permissions: "CRM Chat capability use plus the workspace and readTools feature flags; the assistant agent must be ready"
-    request: "CRMChatTurnCreateSchema { prompt (1–20000 chars; enforced bound is limits.maxMessageChars), conversationId?, idempotencyKey? (8–120 chars), contextRefs? (max 10 {entity,id} pairs; count bounded by limits.maxContextRefs), attachments? (max 10 already-uploaded fileIds; PNG/JPEG/PDF, <=10MB each, ACL-checked) } — strict object"
-    response: "201 CrmChatTurnResult { turnId, runId, status, conversationId } — turnId equals the AIAgents run id"
+    request: "CRMChatTurnCreateSchema { prompt (1–20000 chars; enforced bound is limits.maxMessageChars), conversationId?, idempotencyKey? (8–120 chars), contextRefs? (max 10 {entity,id} pairs; count bounded by limits.maxContextRefs), pageContext? ({entity,id} of the record the user was viewing; identifiers only, resolved server-side under the caller's ACL, dropped when it may not be read; counts towards limits.maxContextRefs), attachments? (max 10 already-uploaded fileIds; PNG/JPEG/PDF, <=10MB each, ACL-checked) } — strict object"
+    response: "201 CrmChatTurnResult { turnId, runId, status, conversationId, pageContext? ({status:'applied'|'dropped', entity, id, label, reason}) } — turnId equals the AIAgents run id"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY, VALIDATION_FAILED, NOT_FOUND, RATE_LIMITED, CHAT_TURN_LIMITED, CHAT_CONVERSATION_LIMIT, CHAT_CONTEXT_TOO_LARGE]
     pagination: none
     sorting: none
     filtering: none
     sideEffects: [ai_agent_runs row and run events, ai_agent_conversations/ai_agent_messages via memory, BullMQ job or inline execution depending on settings.execution.mode, provider calls under the caller's ACL, per-user turn/conversation/rate budgets enforced]
     idempotency: "client-supplied idempotencyKey or a server-generated one; AIAgents returns the existing run for a repeated key"
+  - method: GET
+    path: /api/v1/CRMChat/action/page-context
+    auth: authenticated
+    permissions: "CRM Chat capability use plus the workspace and readTools feature flags"
+    request: "query ?entity=<entity name>&id=<record id> — the record the user is viewing; identifiers only"
+    response: "200 CRMChatPageContextView { status: 'applied'|'dropped', entity, id, label (the record's own name, null when dropped), reason (null | 'not_accessible' | 'not_readable_entity') } — 'dropped' never says whether the record exists"
+    errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
+    pagination: none
+    sorting: none
+    filtering: none
+    sideEffects: none
+    idempotency: safe to repeat; the answer reflects the caller's access at that moment
   - method: GET
     path: /api/v1/CRMChat/action/turns/:turnId
     auth: authenticated
@@ -140,7 +152,7 @@ endpoints:
     path: /api/v1/CRMChat/action/turns/:turnId/events
     auth: authenticated
     permissions: "CRM Chat capability use plus the workspace feature flag; the run must be visible to the caller"
-    request: "header Last-Event-ID? (resume cursor; numeric run-event seq)"
+    request: "header Last-Event-ID? (resume cursor; numeric run-event seq) or query ?lastEventId= (same cursor, for a fresh connection that cannot set the header)"
     response: "200 text/event-stream — SSE frames turn.started, tool.started, tool.completed, action.proposed, approval.required, assistant.message, usage.summary, turn.completed, turn.failed, turn.cancelled, heartbeat; user-safe data only"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
     pagination: none

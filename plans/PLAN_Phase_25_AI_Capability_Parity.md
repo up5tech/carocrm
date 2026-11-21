@@ -1,7 +1,7 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7 and 25.8 implemented (25.0–25.4 on 2026-11-18;
-> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8 and 25.9 implemented (25.0–25.4 on 2026-11-18;
+> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9 on 2026-11-21; canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
 > JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
@@ -12,8 +12,11 @@
 > message JSON payloads. 25.8 adds additive migration 100 for the external citation source type and
 > a nullable `retrieved_at`; it stores the search endpoint in the existing settings row, so no new
 > table, secret store or provider account is involved and no adapter declares native web search
-> (D6's operator-endpoint branch). No dependency or release action.
-> Work continues at 25.9.
+> (D6's operator-endpoint branch). 25.9 needs no migration either: the page context travels in the
+> existing run input JSON, and the chat contract moved 1.3.0 → 1.4.0 for the new
+> `GET action/page-context` route, the `pageContext` request/response field and the
+> `?lastEventId=` resume parameter. No dependency or release action.
+> Work continues at 25.10.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -418,6 +421,12 @@ Match Twenty's most visible chat differentiator: answers grounded in current ext
 
 ## 15. Phase 25.9 — CRM Chat Page Context and UX Parity (P1)
 
+> **Status (2026-11-21): implemented; tests added; automated checks skipped by the coding agent per
+> `AGENTS.MD` §4 and left to the developer.** No migration: the page context travels in the existing
+> run input JSON. The chat contract moved 1.3.0 → 1.4.0 (one route, one request field, one response
+> field, one resume parameter). D12 (conversation sharing) is recorded as **Accepted — not
+> implemented**; the remaining limitations are filed as **G100**.
+
 ### Objective
 
 Close the chat experience gap: Twenty understands "this company" / "this opportunity" from the current page; CaroCRM has actor context but no page context.
@@ -429,6 +438,35 @@ Close the chat experience gap: Twenty understands "this company" / "this opportu
 3. Fix the contract drift: correct the status wording and route count in `docs/architecture/crm-chat-contract.md` (its version already agrees with `crm-chat-contract.ts` at 1.3.0); record D12 (conversation sharing) as `Accepted — not implemented` or implement it with its own ACL design — no silent claim.
 4. Refresh suggestion chips and skill picker from the developer-facing tool list; keep the `requiresTool` filtering honest so a chip never advertises a grant the assistant lacks.
 5. Add browser coverage for page context, context drop on ACL denial, and SSE resume with `Last-Event-ID`.
+
+### What shipped
+
+1. **Page context (identifiers only).** `pageContext: { entity, id }` on the turn body and
+   `GET action/page-context` for the chip. The browser sends identifiers; the server resolves the
+   record under the submitting user's ACL into a bounded summary (the `crm_read_record` allowlist and
+   the run's own summary fields) and puts it in front of the model as context, not as an instruction
+   (`apps/api/src/crm-chat/crm-chat-page-context.service.ts`,
+   `apps/api/src/ai-agents/runs/transcript.ts`). The record page's quick panel now sends the record
+   instead of a sentence the client wrote (`apps/web/src/components/RecordHeader.tsx`).
+2. **Dropped, not refused; re-checked every turn.** A record the caller may not read is dropped: the
+   turn still runs, the answer does not contain that record, and the response says so
+   (`pageContext.status = "dropped"`). The context is resolved again on every turn and re-read under
+   the acting principal when the prompt is built, and it never reaches the stream — so a resumed
+   stream cannot replay a page the caller may not see. The refusal never distinguishes "no such
+   record" from "not yours".
+3. **Contract drift fixed.** `docs/architecture/crm-chat-contract.md` states 28 routes at contract
+   1.4.0, the route table matches, the §15 change log records 1.3.0 and 1.4.0, and D12 is
+   **Accepted — not implemented** with its reason. The SSE stream accepts `?lastEventId=` beside the
+   `Last-Event-ID` header, so a reloaded page can resume a stream a browser `EventSource` cannot.
+4. **Honest promises.** The chip table is pinned against the tool registry by a test that reads the
+   SPA source and the API registry (`apps/api/test/crm-chat-tool-promises.test.ts`), and the agent
+   editor's skill picker is asserted to offer published skill versions only.
+5. **Coverage.** `apps/api/test/crm-chat-page-context.test.ts` (resolve, drop, no-leak, per-turn
+   re-check, the reference bound, stream safety, resume), web component coverage in
+   `crm-chat-components.test.tsx`, and `e2e/crm-chat.spec.ts` for the chip on a record page. The
+   browser suite cannot drive a turn: the seeded deployment publishes no answering agent and leaves
+   `crmChat.features.readTools` off, so the ACL-drop and resume paths are proven at the HTTP level —
+   filed as **G100**.
 
 ### Acceptance criteria
 

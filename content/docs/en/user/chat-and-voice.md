@@ -6,7 +6,7 @@ order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
 aliases: ["trò chuyện với trợ lý", "cách dùng chat", "khung nhắn tin", "hộp thư thoại"]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-11-06
+updated: 2026-11-21
 ---
 
 There are two surfaces here and they do not talk to each other. [CRM Chat](/crm-chat) is a thread
@@ -63,7 +63,10 @@ The same panel also appears inline where the question is already about something
 
 - On a [record page](user/record-page) header, it opens with that record as context, and offers suggestions
   such as summarizing the record, naming the next step or drafting a follow-up. Asking about the record does
-  not need the record's name typed out.
+  not need the record's name typed out. The panel shows a chip with the record it will use, and the browser
+  sends only the record's identity — the server reads the record itself, under your own access rights, and
+  puts it in front of the model. If you may no longer read that record, the context is dropped, the answer is
+  produced without it, and the panel says so; it never describes a record you cannot open.
 - On a [list screen](user/lists-and-views) bulk bar, it opens with the selection (how many records of which
   type) as context, with suggestions for summarizing or prioritizing them.
 - The email template designer carries a **Draft with AI** link that opens the chat workspace with the

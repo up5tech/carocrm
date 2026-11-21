@@ -2,12 +2,11 @@
 
 > **Plan:** `plans/PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.1`); decisions rest on
 > `docs/modules/crm-chat/repository-audit.md` (19-CHAT.0).
-> **Status:** delivered in 19-CHAT.1 and hardened through 19-CHAT.29
-> (`apps/api/src/crm-chat/`); all 27 routes in §6 are implemented and served by the controller. The
-> route table in `crm-chat-contract.ts` is pinned against the controller by
-> `apps/api/test/crm-chat-contract.test.ts`. Page context and conversation sharing (D12) are **not**
-> implemented; see the canonical AI matrix (`docs/architecture/ai-capability-matrix.md`).
-> **Contract version:** `1.3.0`. Any breaking change to a path, a request shape, a response shape, a
+> **Status:** delivered in 19-CHAT.1, hardened through 19-CHAT.29 and extended by the Phase 25 work
+> (`apps/api/src/crm-chat/`); all **28** routes in §6 are implemented and served by the controller.
+> The route table in `crm-chat-contract.ts` is pinned against the controller by
+> `apps/api/test/crm-chat-contract.test.ts`.
+> **Contract version:** `1.4.0`. Any breaking change to a path, a request shape, a response shape, a
 > stream event or an error code bumps the minor version and is recorded in §15.
 > **1.3.0 (19-CHAT.25 → 19-CHAT.29 hardening):** every `limits.*` bound is now enforced server-side
 > (`maxMessageChars`, `maxActiveTurnsPerUser`, `maxTurnsPerMinute`, `maxConversationsPerUser`,
@@ -15,6 +14,13 @@
 > `contextRefs` are forwarded to the run input instead of only the first; new error codes
 > `CHAT_CONVERSATION_LIMIT` and stream failure `CHAT_TURN_TIMEOUT`; heartbeat frames carry a
 > non-resumable id. No route was added or removed.
+> **1.4.0 (Phase 25.9 — page context):** one route added (`GET action/page-context`), one request
+> field added (`pageContext`, identifiers only), one response field added (`pageContext` on the turn
+> result) and the SSE stream accepts `?lastEventId=` beside the `Last-Event-ID` header. The page
+> context is the record the user was looking at; the client sends identifiers, the server resolves
+> the record under the caller's own ACL, and a record the caller may not read is **dropped** with an
+> explanation rather than described. Conversation sharing (D12) remains **Accepted — not
+> implemented**.
 > **Naming:** module `CRMChat`, route slug `crm-chat`, API prefix `/api/v1/CRMChat`, SPA route
 > `/crm-chat`. No `Ua` prefix anywhere.
 
@@ -56,7 +62,7 @@ Each decision is final for v1. The alternatives are recorded because they keep c
 | D9 | A malformed **body** is `400 INVALID_QUERY`; an invalid **value** that reaches a service is `422 VALIDATION_FAILED`. | Matches `AIAgents`, whose controller parses shape and whose service validates meaning. | Uniform 422, which would break parity with the module Chat depends on. |
 | D10 | Streaming is SSE, added once, with polling as the guaranteed fallback. | No streaming transport exists today (audit §8); `@Sse()` with the Fastify adapter must be proven by a spike before the SPA depends on it. | A WebSocket stack for one unidirectional feed. |
 | D11 | Markdown is **not** rendered in v1: assistant text renders as plain text with safe structured blocks. | The SPA has no markdown parser and no HTML sanitizer; adding two dependencies to render model output is a larger decision than the first slice deserves. | `dangerouslySetInnerHTML` — never. |
-| D12 | Conversations are private to their owner. Sharing is not implemented. | The plan makes sharing an explicit, audited feature; inferring access from team membership is exactly the escalation the audit warns about. | Team-visible threads by default. |
+| D12 | Conversations are private to their owner. Sharing is **Accepted — not implemented**. | The plan makes sharing an explicit, audited feature; inferring access from team membership is exactly the escalation the audit warns about. | Team-visible threads by default. |
 
 ---
 
@@ -236,9 +242,9 @@ Pagination decisions that the implementation fixes, so the client cannot get the
 
 | Method | Path | Gate | Request | Response |
 | --- | --- | --- | --- | --- |
-| `POST` | `action/turns` | `use` + `readTools` effective + assistant `ready` | `{ conversationId?, prompt, idempotencyKey?, contextRefs?, attachments? (≤10 fileIds, 25.7) }` | `CRMChatTurnView` (202) |
+| `POST` | `action/turns` | `use` + `readTools` effective + assistant `ready` | `{ conversationId?, prompt, idempotencyKey?, contextRefs?, pageContext?, attachments? (≤10 fileIds, 25.7) }` | `CRMChatTurnView` (202) |
 | `GET` | `action/turns/:turnId` | `use` + owner | — | `CRMChatTurnView` |
-| `GET` | `action/turns/:turnId/events` | `use` + owner | `Last-Event-ID` | `text/event-stream` (§8) |
+| `GET` | `action/turns/:turnId/events` | `use` + owner | `Last-Event-ID` (header) or `?lastEventId=` (25.9) | `text/event-stream` (§8) |
 | `POST` | `action/turns/:turnId/cancel` | `use` + owner | `{}` | `CRMChatTurnView` |
 | `GET` | `action/help/search` | `use` + `helpRetrieval` | `?q=query` | `HelpSearchResult` (§11) |
 | `POST` | `action/query/execute` | `use` | `QueryPlan` | `QueryResult` (§12) |
@@ -264,6 +270,30 @@ ten per turn, restricted to PNG/JPEG/PDF and 10MB per file. The server resolves 
 bounded metadata in the existing run/message JSON payloads, and re-checks the same ACL before every
 model call. A revoked file blocks the run before a provider request; no file bytes, client-supplied
 filename or storage key is accepted in the turn body.
+
+`pageContext` (25.9) is the third reference-only field: the record the user was looking at when
+they wrote the message — "this company", "this opportunity". It is `{ entity, id }` and **nothing
+else**: the browser never describes the record, and a client-written description of a record is not
+accepted at all. The server resolves it under the submitting user's ACL into a bounded record
+summary (the same field set and the same `crm_read_record` allowlist the read tool uses) and puts
+it in front of the model as context, not as an instruction.
+
+Three rules make it safe:
+
+1. **It is re-checked on every turn.** A record the caller may no longer read is **dropped**: the
+   turn still runs, the answer simply does not contain that record, and the response says so
+   (`pageContext.status = "dropped"`). A page the caller cannot read must not break the chat.
+2. **It is re-read under the acting principal when the prompt is built.** A record that became
+   unreadable between the turn and the model call is withheld from the prompt rather than leaked.
+3. **It never reaches the stream.** The events a client may read carry no record content, so a
+   resumed stream cannot replay a page the caller may not see.
+
+`contextRefs` and `pageContext` are counted together against `limits.maxContextRefs`: a turn may
+look at no more records than the installation allows. They differ in what happens when a reference
+cannot be read — an unreadable `contextRefs` entry **fails the turn at creation**, while an
+unreadable page context is dropped with an explanation, because a page is not a choice the user
+made. `GET action/page-context` answers the same question before the first turn, so the SPA can show
+what the answer will be about; it never distinguishes "no such record" from "not yours".
 
 `prompt` is the field name the implementation uses; an earlier draft of this contract called it
 `message`. The implemented name is the one clients send, and it is the name the SPA and the tests
@@ -345,6 +375,26 @@ Chat never maintains a usage counter of its own: the numbers are read from the A
 provider ledger, and `costLabel` keeps AIAgents' meaning — `estimate` when the cost came from an
 administrator-maintained pricing snapshot, `none` when the deployment has no price data and the
 total is an exact `0` rather than a guess.
+
+### 6.9 Page context — delivered in 25.9
+
+| Method | Path | Gate | Request | Response |
+| --- | --- | --- | --- | --- |
+| `GET` | `action/page-context` | `use` + `readTools` effective | `?entity=<entity name>&id=<record id>` | `CRMChatPageContextView` |
+
+`CRMChatPageContextView` is `{ status: 'applied' | 'dropped', entity, id, label, reason }`:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `applied` — the caller may read the record and it is usable as context; `dropped` — it is not, and the turn continues without it. |
+| `entity`, `id` | The reference that was asked about, echoed back. |
+| `label` | The record's own name, or `null` when the context was dropped. |
+| `reason` | `null` when applied; `not_accessible` or `not_readable_entity` when dropped. |
+
+The endpoint answers the same question the turn asks, before the user sends anything, so the SPA can
+show what the answer will be about. It resolves the record under the caller's own ACL and returns the
+same verdict the turn would reach. It never distinguishes "no such record" from "not yours", and it
+never returns a record's content: the label is the record's own name and nothing else.
 
 ## 7. Data contracts
 
@@ -837,6 +887,8 @@ states the reasons they are safe.
 | `1.2.0` | 19-CHAT.24 | `assistant.tools` documented as load-bearing: the workspace renders only the suggestions whose tool the answering agent holds. Module version 1.1.0 → 1.2.0; `implementedPhases` now lists 19-CHAT.20–24. No payload changed, so the contract version stays `1.2.0`. |
 | `1.2.0` | G38 (2026-11-03) | `features.readTools` is now **enforced** on `POST action/turns` and `POST action/query/execute`, which is what §6 already declared; `actions.canStartTurn` reports the same rule so the composer cannot offer a refused send. No path or shape changed — the behaviour moved to match the contract, and the enforcement is a **deployment-visible change**: an installation with the flag off stops answering until an administrator switches it on. |
 | `1.2.0` | G39 (2026-11-03) | `GET action/turns/:turnId` re-authorizes `result.sources` with the citation rule (§10) instead of replaying what the run recorded, so a revoked record stops being named. Response *shape* is unchanged — one array can now be shorter — so the contract version stays `1.2.0`. |
+| `1.3.0` | 19-CHAT.25 → 19-CHAT.29 | Post-release hardening: every `limits.*` bound enforced server-side, all `contextRefs` forwarded to the run input, new error codes `CHAT_CONVERSATION_LIMIT` and `CHAT_TURN_TIMEOUT`, heartbeat frames carry a non-resumable id. No route, request shape, response shape, stream event or error code was **removed**; the bounds moved from advertised to enforced, which is why the minor version moved. |
+| `1.4.0` | 25.9 | **Page context.** `GET action/page-context` added; `pageContext` added to the turn body and to the turn result. The client sends identifiers, the server resolves the record under the caller's ACL and drops it when it may not be read. The SSE stream accepts `?lastEventId=` beside the `Last-Event-ID` header, so a reloaded page can resume a stream. D12 (conversation sharing) recorded as **Accepted — not implemented**. Module version 1.3.0 → 1.4.0; `implementedPhases` unchanged (the Phase 25 work is not a 19-CHAT phase). |
 
 ---
 

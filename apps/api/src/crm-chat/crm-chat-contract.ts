@@ -16,7 +16,7 @@ import type { CRMChatCapabilityKey, CRMChatFeatureKey } from './crm-chat-module.
  */
 
 /** Bumped whenever a path, request shape, response shape, event or error code changes incompatibly. */
-export const CRM_CHAT_CONTRACT_VERSION = '1.3.0';
+export const CRM_CHAT_CONTRACT_VERSION = '1.4.0';
 
 export type CRMChatHttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -125,6 +125,15 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     phase: '19-CHAT.5',
     implemented: true,
     summary: 'Submit a turn; creates the conversation on first use and returns a run-backed turn.',
+  },
+  {
+    method: 'GET',
+    path: 'action/page-context',
+    capability: 'use',
+    feature: 'readTools',
+    phase: '25.9',
+    implemented: true,
+    summary: 'Resolve the record the user is viewing into a bounded, ACL-checked page context.',
   },
   {
     method: 'GET',

@@ -11,6 +11,11 @@ import { CRMChatFeedbackService } from './crm-chat-feedback.service.js';
 import { CRMChatHelpService } from './crm-chat-help.service.js';
 import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
 import { CRMChatObservabilityService } from './crm-chat-observability.service.js';
+import {
+  type CRMChatPageContextRef,
+  type CRMChatPageContextView,
+  CRMChatPageContextService,
+} from './crm-chat-page-context.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 import { CRMChatPromptService } from './crm-chat-prompts.service.js';
@@ -79,6 +84,12 @@ export type { CRMChatModuleHealthView } from './crm-chat-module-health.service.j
 export { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
 export type { CRMChatUsageSummary } from './crm-chat-observability.service.js';
 export { CRMChatObservabilityService } from './crm-chat-observability.service.js';
+export {
+  type CRMChatPageContextDropReason,
+  type CRMChatPageContextRef,
+  CRMChatPageContextService,
+  type CRMChatPageContextView,
+} from './crm-chat-page-context.service.js';
 export { CRMChatPermissionService } from './crm-chat-permission.service.js';
 export { CRMChatPolicyService } from './crm-chat-policy.service.js';
 export type { CRMChatPromptView } from './crm-chat-prompts.service.js';
@@ -99,7 +110,14 @@ export {
 export type { CrmChatStreamEvent, CrmChatStreamEventType } from './crm-chat-streaming.service.js';
 export { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 export { CRM_CHAT_MENU_INVALIDATOR, type MenuInvalidator, noopMenuInvalidator } from './crm-chat-tokens.js';
-export { type CRMChatSettingsPatch, CRMChatSettingsPatchSchema } from './dto/crm-chat-shapes.js';
+export {
+  type CRMChatPageContextQueryShape,
+  CRMChatPageContextQuerySchema,
+  type CRMChatPageContextShape,
+  CRMChatPageContextSchema,
+  type CRMChatSettingsPatch,
+  CRMChatSettingsPatchSchema,
+} from './dto/crm-chat-shapes.js';
 
 /**
  * `CRMChat` barrel (AGENTS.md §5.1, docs/module-guide.md).
@@ -126,6 +144,7 @@ export const CRM_CHAT_PROVIDERS: Provider[] = [
   CRMChatHelpService,
   CRMChatObservabilityService,
   CRMChatPromptService,
+  CRMChatPageContextService,
   CRMChatQueryService,
   CRMChatStreamingService,
   CRMChatActionService,

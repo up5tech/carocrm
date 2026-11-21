@@ -2950,7 +2950,14 @@
     "quickEmpty": "Ask a question and the answer appears right here.",
     "quickOpenFull": "Open full chat",
     "quickActionPending": "This turn asks for a decision. Open the full chat to review it.",
-    "sourceRetrieved": "Retrieved {at} — external page"
+    "sourceRetrieved": "Retrieved {at} — external page",
+    "pageContext": {
+      "applied": "The answer will use the record you are looking at.",
+      "dropped": "This record is not available to you, so it is not part of the answer.",
+      "droppedTitle": "Page context unavailable",
+      "droppedHint": "You can no longer read the record you were viewing, so the answer was produced without it.",
+      "ariaLabel": "Page context"
+    }
   },
   "adminDocs": {
     "title": "The in-app handbook",
@@ -3158,7 +3165,6 @@
   "ai": {
     "inline": {
       "askAboutRecord": "Ask AI about this record",
-      "recordContext": "About the {entity} \"{name}\":",
       "summarizeRecord": "Summarize this record.",
       "nextStepRecord": "What should I do next on this record?",
       "draftFollowUpRecord": "Draft a follow-up email for this record.",

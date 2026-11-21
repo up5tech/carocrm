@@ -6,7 +6,7 @@ order: 145
 tags: [crm-chat, chat, assistant, feature-flags, settings]
 aliases: ["bật CRM Chat", "chọn trợ lý trả lời", "cài đặt chat", "cờ tính năng chat"]
 related: [admin/settings-overview, admin/module-settings, user/chat-and-voice, user/ai-agents]
-updated: 2026-10-23
+updated: 2026-11-21
 ---
 
 One validated settings document named `crmChat` decides whether [CRM Chat](/crm-chat) opens, which
@@ -152,15 +152,20 @@ The schema enforces these ranges on every write:
 
 The schema validates the numbers; it does not make every one of them effective in this build.
 
-- `maxMessageChars` drives the composer counter and its client-side refusal, but the turn endpoint
-  accepts at most 4,000 characters, so a larger setting does not raise the server ceiling.
-- `turnTimeoutSeconds` appears in the composer hint and does not time out a run. AI Agents'
-  `limits.maxElapsedSeconds` (default 120) is the real run ceiling.
-- `maxConversationsPerUser` is shown in the list footer and not enforced; `heartbeatSeconds` is not
-  read at all, because the event stream sends a heartbeat every 15 seconds.
-- `maxActiveTurnsPerUser`, `maxContextRefs`, `maxConcurrentQueries`, `maxTurnsPerMinute` and
-  `maxQueryResults` are stored and returned but no Chat code reads them. A turn accepts up to 10
-  context references regardless of the setting.
+- `maxMessageChars` drives the composer counter and the client-side refusal, and the turn endpoint
+  enforces it against the stored value — but the AI Agents run behind it accepts a task of at most
+  4,000 characters, so a prompt between those two numbers is refused by the runtime rather than by
+  Chat.
+- `turnTimeoutSeconds` is the real run ceiling on the streaming path: a turn that runs past it is
+  cancelled and reported as `CHAT_TURN_TIMEOUT`.
+- `maxActiveTurnsPerUser`, `maxTurnsPerMinute` and `maxConversationsPerUser` are enforced when a
+  turn is accepted, and `maxContextRefs` bounds the record references of a turn: the explicit
+  `contextRefs` **and** the page context — the record the user is looking at — are counted together
+  (25.9).
+- `maxConcurrentQueries` and `maxQueryResults` are enforced on the query route: a query plan asking
+  for more rows than `maxQueryResults` is refused, and no more than `maxConcurrentQueries` queries
+  run at the same time.
+- `heartbeatSeconds` is the interval the event stream sends a heartbeat on.
 - `retention.conversationsDays` is not read by a sweeper. Conversation expiry and deletion are executed
   by the AI Agents retention settings, and an agent's own retention is capped by that instance ceiling.
   The Chat value is stored and returned but changes nothing.

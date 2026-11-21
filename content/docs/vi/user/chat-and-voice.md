@@ -6,7 +6,7 @@ order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
 aliases: ["trò chuyện với trợ lý", "cách dùng chat", "khung nhắn tin", "hộp thư thoại"]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-11-06
+updated: 2026-11-21
 ---
 
 Có hai bề mặt ở đây và chúng không liên quan đến nhau. [CRM Chat](/crm-chat) là một luồng trò chuyện
@@ -64,7 +64,10 @@ Cùng panel đó cũng xuất hiện inline nơi câu hỏi vốn đã gắn v�
 
 - Trên thanh đầu của [trang bản ghi](user/record-page), panel mở kèm bản ghi đó làm ngữ cảnh, với các
   gợi ý như tóm tắt bản ghi, nêu bước tiếp theo hay soạn thư follow-up. Hỏi về bản ghi không cần gõ lại tên
-  của nó.
+  của nó. Panel hiện một chip với bản ghi sẽ dùng, và trình duyệt chỉ gửi *định danh* của bản ghi — server
+  tự đọc bản ghi, dưới chính quyền truy cập của bạn, rồi đưa vào cho model. Nếu bạn không còn đọc được bản
+  ghi đó, ngữ cảnh sẽ bị bỏ qua, câu trả lời vẫn được tạo nhưng không có bản ghi ấy, và panel sẽ nói rõ điều
+  đó; nó không bao giờ mô tả một bản ghi mà bạn không mở được.
 - Trên thanh bulk của [màn hình danh sách](user/lists-and-views), panel mở kèm phần đang chọn (bao nhiêu bản
   ghi thuộc loại nào) làm ngữ cảnh, với gợi ý tóm tắt hoặc ưu tiên chúng.
 - Trình thiết kế email template có link **Draft with AI** mở workspace chat kèm template làm ngữ cảnh, và

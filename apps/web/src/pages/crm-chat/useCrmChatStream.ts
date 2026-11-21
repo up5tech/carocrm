@@ -11,6 +11,10 @@ import type { CRMChatStreamEvent, CRMChatStreamEventType } from '../../api/types
 export interface UseCrmChatStreamOptions {
   readonly turnId: string | null;
   readonly enabled?: boolean;
+  /**
+   * 25.9 — the last event id this client has seen. A fresh connection says where it wants to
+   * continue; the browser's own reconnect sends the same value as a header.
+   */
   readonly lastEventId?: string | undefined;
   readonly onEvent?: (event: CRMChatStreamEvent) => void;
   readonly onError?: (error: Error) => void;
@@ -89,12 +93,15 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
     setEvents([]);
     setError(null);
 
-    // Build URL with Last-Event-ID as query param for initial resume position.
-    const url = `/api/v1/CRMChat/action/turns/${encodeURIComponent(turnId)}/events`;
-
-    // Note: Standard EventSource doesn't support custom headers, so we can't send Last-Event-ID
-    // header directly. The server supports it via query param or we rely on the browser's built-in
-    // Last-Event-ID tracking for reconnections.
+    // Build the stream URL. A browser's `EventSource` sends the `Last-Event-ID` header on its own
+    // automatic reconnect, but it cannot set that header on a *fresh* connection — so a page that
+    // reloads says where it wants to continue through the query parameter instead (25.9). The
+    // server accepts either; the header wins when both are present.
+    const base = `/api/v1/CRMChat/action/turns/${encodeURIComponent(turnId)}/events`;
+    const url =
+      lastEventId === undefined || lastEventId === ''
+        ? base
+        : `${base}?lastEventId=${encodeURIComponent(lastEventId)}`;
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
     // An old source can outlive its render (for example React's development StrictMode cleanup).

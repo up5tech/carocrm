@@ -254,6 +254,10 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     const entity = typeof record['entity'] === 'string' ? record['entity'] : undefined;
     const recordId = typeof record['id'] === 'string' ? record['id'] : undefined;
     const storedRefs = storedInput['records'];
+    const storedPageContext = asRecord(storedInput['pageContext']);
+    const pageContextEntity =
+      typeof storedPageContext['entity'] === 'string' ? storedPageContext['entity'] : undefined;
+    const pageContextId = typeof storedPageContext['id'] === 'string' ? storedPageContext['id'] : undefined;
     const attachments = readStoredAttachments(storedInput['attachments']);
     const records = Array.isArray(storedRefs)
       ? storedRefs.flatMap((ref) => {
@@ -268,6 +272,9 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
         ...(text === undefined ? {} : { text }),
         ...(entity === undefined || recordId === undefined ? {} : { record: { entity, id: recordId } }),
         ...(records.length === 0 ? {} : { records }),
+        ...(pageContextEntity === undefined || pageContextId === undefined
+          ? {}
+          : { pageContext: { entity: pageContextEntity, id: pageContextId } }),
         ...(attachments.length === 0 ? {} : { attachments: attachments.map((attachment) => attachment.fileId) }),
       },
       ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
@@ -440,6 +447,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
       text?: string;
       record?: RunRecordRef;
       records?: RunRecordRef[];
+      pageContext?: RunRecordRef;
       attachments?: RunAttachment[];
       ref?: string;
     };
@@ -449,6 +457,10 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
       // then dropped, so they are refused instead (19-AI.28: never validate-and-drop).
       if (raw?.records !== undefined && raw.records.length > 0) {
         throw new ValidationError('A record-context agent takes a single record, not a list of references.');
+      }
+      // 25.9 — the page context is a second record for this agent, so it is refused the same way.
+      if (raw?.pageContext !== undefined) {
+        throw new ValidationError('A record-context agent takes a single record, not a page context.');
       }
       const record = raw?.record;
       const expected = config.input.entity ?? '';
@@ -472,6 +484,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
     if (text === '') throw new ValidationError('A run needs a task.');
     if (text.length > 4_000) throw new ValidationError('A run task may contain at most 4000 characters.');
     const records = await this.normalizeRecordRefs(raw?.records);
+    const pageContext = await this.normalizePageContextRef(raw?.pageContext);
     const attachments = await this.normalizeAttachments(raw?.attachments);
     // A text-mode run may still name the record it was started from. It is metadata (the model does
     // not read the record), and it lets the owning module bind a run to its subject.
@@ -480,6 +493,7 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
         text,
         ...(raw?.record === undefined ? {} : { record: raw.record }),
         ...(records.length === 0 ? {} : { records }),
+        ...(pageContext === undefined ? {} : { pageContext }),
         ...(attachments.length === 0 ? {} : { attachments }),
       },
     };
@@ -514,6 +528,26 @@ export abstract class AIAgentRunLifecycle extends AIAgentRunExecutor {
       refs.push({ entity, id });
     }
     return refs;
+  }
+
+  /**
+   * 25.9 — validate the page context a text-mode run carries: the record the user was looking at.
+   * The same rule as a context reference applies — a registered entity and a record the **starter**
+   * can read right now. `entities.get` applies the Entity Engine ACL under the current request
+   * scope, so a page the caller may not read never becomes a run. The caller (CRM Chat) resolves the
+   * context first and drops it when it is unreadable; this second check is the fail-closed backstop
+   * for the race between that resolution and the run being created.
+   */
+  private async normalizePageContextRef(raw: RunRecordRef | undefined): Promise<RunRecordRef | undefined> {
+    if (raw === undefined) return undefined;
+    const entity = raw.entity.trim();
+    const id = raw.id.trim();
+    if (entity === '' || id === '') throw new ValidationError('A page context needs an entity and an id.');
+    if (!this.metadata.registry.hasEntity(entity)) {
+      throw new ValidationError(`Entity "${entity}" is not registered.`);
+    }
+    await this.entities.get(entity, id);
+    return { entity, id };
   }
 
   /**

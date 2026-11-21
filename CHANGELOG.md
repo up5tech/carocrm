@@ -95,9 +95,23 @@ production go/no-go.
   no row, column or value is removed. Unconfigured installations keep working and the tool says so.
   Twitter/X search stays out of scope. AIAgents module version is now 1.9.0; automated checks are
   assigned to the developer by `AGENTS.MD` §4.
+- **25.9** CRM Chat page context and UX parity: a turn may now carry the record the user was looking
+  at. The client sends **identifiers** only (`pageContext: { entity, id }`); the server resolves the
+  record under the submitting user's ACL into a bounded summary (the `crm_read_record` allowlist and
+  the run's own summary fields) and puts it in front of the model as context, not as an instruction.
+  The record page's quick panel now sends that reference instead of a sentence the browser wrote.
+  A record the caller may no longer read is **dropped, not refused**: the turn still runs, the answer
+  does not contain that record, and the response says so — the context is re-checked on every turn and
+  re-read under the acting principal when the prompt is built, and it never reaches the stream, so a
+  resumed stream cannot replay a page the caller may not see. `GET action/page-context` answers the
+  same question before the first turn, so the composer shows what the answer will be about; it never
+  distinguishes "no such record" from "not yours". The chat contract moved 1.3.0 → 1.4.0 (one route,
+  one request field, one response field), and the SSE stream accepts `?lastEventId=` beside the
+  `Last-Event-ID` header so a reloaded page can resume a stream. Conversation sharing (D12) is
+  recorded as **Accepted — not implemented**. No migration, no new table, no new dependency.
 
-Not shipped by 25.8: assignable agent roles, code-defined agents, chat page context (25.9),
-installation cost view (25.10) and the golden evaluation gate (25.11).
+Not shipped by 25.9: assignable agent roles, code-defined agents, installation cost view (25.10) and
+the golden evaluation gate (25.11).
 
 ### Phase 24
 

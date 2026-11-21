@@ -6265,6 +6265,27 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
+/* 25.9 — the page context chip: the record the answer will be about. */
+.carocrm-chat-page-context-bar,
+.carocrm-quick-chat-page-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.carocrm-chat-page-context {
+  margin: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carocrm-chat-page-context.is-dropped {
+  opacity: 0.65;
+}
+
 .carocrm-workspace-dock-frame .ant-input {
   background: transparent;
   border: 0;

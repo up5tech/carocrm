@@ -44,6 +44,7 @@ import type {
   CRMChatFeedbackView,
   CRMChatHealthView,
   CRMChatMessagePage,
+  CRMChatPageContextView,
   CRMChatPromptView,
   CRMChatReauthorizedCitation,
   CRMChatSettingsView,
@@ -743,9 +744,22 @@ export const api = {
     conversationId?: string | undefined;
     idempotencyKey?: string | undefined;
     contextRefs?: readonly { entity: string; id: string }[] | undefined;
+    /**
+     * Phase 25.9 — the record the user is looking at. Identifiers only: the server resolves it
+     * under the caller's ACL and drops it when the caller may not read it.
+     */
+    pageContext?: { entity: string; id: string } | undefined;
     /** Phase 25.7 — already-uploaded attachment ids (max 10). */
     attachments?: readonly string[] | undefined;
   }) => request<CRMChatTurnResult>('/CRMChat/action/turns', post(input)),
+  /**
+   * Phase 25.9 — resolve the record the user is viewing into a bounded, ACL-checked page context.
+   * The SPA asks before the first send so the composer can say what the answer will be about.
+   */
+  crmChatPageContext: (ref: { entity: string; id: string }) =>
+    request<CRMChatPageContextView>(
+      `/CRMChat/action/page-context?entity=${encodeURIComponent(ref.entity)}&id=${encodeURIComponent(ref.id)}`,
+    ),
   /** Phase 19-CHAT.5 — get turn status. */
   crmChatGetTurn: (turnId: string) => request<CRMChatTurnStatus>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}`),
   /** Phase 19-CHAT.5 — cancel a running turn. */

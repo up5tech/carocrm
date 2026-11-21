@@ -8,6 +8,11 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { CRMChatCitationService } from './crm-chat-citations.service.js';
+import {
+  type CRMChatPageContextRef,
+  CRMChatPageContextService,
+  type CRMChatPageContextView,
+} from './crm-chat-page-context.service.js';
 import { type CRMChatSettings,CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
@@ -33,6 +38,8 @@ export interface CrmChatTurnSubmission {
   readonly idempotencyKey: string;
   /** Optional safe context references (record IDs the user is viewing). */
   readonly contextRefs?: readonly { readonly entity: string; readonly id: string }[] | undefined;
+  /** 25.9 — the record the user was looking at; identifiers only, resolved server-side. */
+  readonly pageContext?: CRMChatPageContextRef | undefined;
   /** 25.7 — already-uploaded file ids; AIAgents resolves and ACL-checks them. */
   readonly attachments?: readonly string[] | undefined;
 }
@@ -42,6 +49,11 @@ export interface CrmChatTurnResult {
   readonly runId: string;
   readonly status: string;
   readonly conversationId: string | null;
+  /**
+   * 25.9 — what happened to the page context of this turn. `dropped` means the caller may no
+   * longer read the record they were on; the answer was produced without it and the caller is told.
+   */
+  readonly pageContext: CRMChatPageContextView | null;
 }
 
 export interface CrmChatTurnStatus {
@@ -62,6 +74,7 @@ export class CRMChatAIAgentsClientService {
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
     @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
     @Inject(CRMChatCitationService) private readonly citations: CRMChatCitationService,
+    @Inject(CRMChatPageContextService) private readonly pageContexts: CRMChatPageContextService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -77,11 +90,21 @@ export class CRMChatAIAgentsClientService {
     // `records` carries the full list into the run input and the prompt. AIAgents re-checks each
     // ref under the starter's ACL at creation, so nothing unreadable reaches the model.
     const refs = input.contextRefs ?? [];
+    // 25.9 — the page context is resolved here, under the caller's own scope, before the run
+    // exists. An unreadable record is dropped: the turn still runs, the answer simply does not
+    // contain that record, and the caller is told the context was dropped. The run carries the
+    // reference, and the transcript re-reads the record under the acting principal before every
+    // model call — so a page that became unreadable in between is withheld, never leaked.
+    const pageContext =
+      input.pageContext === undefined ? null : await this.pageContexts.resolve(input.pageContext);
     const runInput: RunCreateInput = {
       input: {
         text: input.prompt,
         ...(refs.length > 0 ? { record: refs[0] } : {}),
         ...(refs.length > 0 ? { records: [...refs] } : {}),
+        ...(pageContext?.status === 'applied'
+          ? { pageContext: { entity: pageContext.entity, id: pageContext.id } }
+          : {}),
         ...(input.attachments === undefined ? {} : { attachments: [...input.attachments] }),
       },
       idempotencyKey: input.idempotencyKey,
@@ -111,6 +134,7 @@ export class CRMChatAIAgentsClientService {
       runId: run.id,
       status: run.status,
       conversationId: run.conversationId,
+      pageContext,
     };
   }
 

@@ -54,6 +54,14 @@ export interface RunCreateInput {
      * stores bounded metadata in this same JSON input; no column or separate table is added.
      */
     readonly attachments?: readonly string[] | undefined;
+    /**
+     * 25.9 — the record the user was looking at when they started the run ("this company",
+     * "this opportunity"). It is a **reference**, resolved and ACL-checked at creation and
+     * re-read under the acting principal when the prompt is built. It is kept apart from
+     * `records` because it is not an attachment the user chose: it is the page they were on,
+     * and the prompt says so.
+     */
+    readonly pageContext?: RunRecordRef | undefined;
   } | undefined;
   readonly idempotencyKey?: string | undefined;
   readonly trigger?: RunTrigger | undefined;

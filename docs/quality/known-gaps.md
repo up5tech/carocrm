@@ -110,6 +110,7 @@
 | G97 | Dependency-vulnerability audit is manual, not in the mandatory gate | platform | Low | Accepted (23.6) |
 | G98 | The three sample extension packages in `modules/` are unsigned | extensions | Low | Accepted (23.6) |
 | G99 | AI documentation drift: SPEC `MAX_TOOLS` 24 vs code 32; "schedule/integration triggers not implemented" vs shipped gated doors; chat contract status line stale | ai-agents / crm-chat (docs) | Low | Fixed (25.1) — see resolution and executed checks below |
+| G100 | The chat page context covers exactly one record; a list selection is still a client-written sentence, and the browser suite cannot exercise the ACL-drop path | crm-chat | Low | Deferred (25.9) — see the resolution below |
 
 **Phase 23.11 status note (2026-11-13).** The Phase 23 security workstream is finished and its release review is
 recorded in `docs/quality/phase-23-security-release-review.md` with a **NO-GO** decision. Two rows block a
@@ -1236,3 +1237,30 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
   database change was part of this documentation-only fix.
 - **Status:** Fixed (25.1, 2026-11-18). Filed by `docs/quality/phase-25-ai-parity-baseline.md` §3;
   disposition recorded in `plans/PLAN_Phase_25_AI_Capability_Parity.md` §7.
+
+---
+
+## G100 — The chat page context covers exactly one record, and the browser suite cannot exercise the ACL-drop path
+
+- **Module / contract:** crm-chat — Phase 25.9 (page context).
+- **Evidence (25.9, 2026-11-21):**
+  - `apps/api/src/crm-chat/crm-chat-page-context.service.ts` resolves **one** record: the one the page
+    is on. A multi-record selection is a different shape, and the list page still sends it as a
+    client-written sentence (`apps/web/src/pages/EntityListPage.tsx:971`, `web.ai.inline.selectionContext`).
+    A sentence the browser wrote is exactly the shape 25.9 removed from the record page.
+  - `e2e/crm-chat.spec.ts` can assert the page-context chip on a record page, but it cannot drive a
+    turn: the seeded deployment publishes no answering agent and leaves `crmChat.features.readTools`
+    off, so no run and therefore no SSE stream can be produced in the browser. The drop path and the
+    stream-resume path are proven at the HTTP level instead
+    (`apps/api/test/crm-chat-page-context.test.ts`).
+  - Conversation sharing (chat D12) stays **Accepted — not implemented**; a shared thread needs its own
+    ACL design, which 25.9 deliberately did not touch.
+- **Impact:** a question about a *selection* of records is not grounded the way a question about one
+  record is, and the browser suite does not cover the ACL-drop path end to end. No security or data
+  impact: the page context itself is resolved and re-checked server-side, under the caller's own ACL.
+- **Severity:** Low.
+- **Resolution (25.9, 2026-11-21):** **Deferred (P2).** A selection context is a bounded list of record
+  ids resolved server-side like `contextRefs`, which is a separate change from the single-record page
+  context. Browser coverage of a live turn needs a seeded assistant and the fake provider in the e2e
+  environment; the shipped e2e harness deliberately writes no settings, so that belongs to the test
+  environment, not to this feature.

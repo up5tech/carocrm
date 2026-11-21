@@ -1,13 +1,60 @@
-# CRM Chat Module — Release Notes v1.3
+# CRM Chat Module — Release Notes v1.4
+
+**Release Date:** 2026-11-21
+**Module:** CRMChat (`crm-chat`)
+**Version:** 1.4.0
+**Contract Version:** 1.4.0
+
+---
+
+## v1.4.0 — Page context and UX parity (P1) (2026-11-21)
+
+Phase 25.9. The assistant now knows what the user is looking at, not only who is asking. No migration,
+no new table, no new dependency.
+
+**The feature.** A turn may carry the record the user was on. The client sends **identifiers**
+(`pageContext: { entity, id }`) and never model text; the server resolves the record under the
+submitting user's own ACL into a bounded summary (the `crm_read_record` allowlist and the run's own
+summary fields) and puts it in front of the model as context, not as an instruction. The record page's
+quick panel now sends that reference instead of a sentence the browser wrote.
+
+**The rules that make it safe.**
+
+| Rule | Where |
+| --- | --- |
+| An unreadable record is **dropped, not refused**: the turn runs, the answer does not contain the record, and the caller is told. | `crm-chat-page-context.service.ts`, `crm-chat-ai-agents-client.service.ts` |
+| The context is re-checked **on every turn** and re-read under the acting principal when the prompt is built. | `crm-chat-ai-agents-client.service.ts`, `runs/lifecycle.ts`, `runs/transcript.ts` |
+| It never reaches the stream, so a resumed stream cannot replay a page the caller may not see. | `runs/transcript.ts` (prompt-side only) |
+| The refusal never distinguishes "no such record" from "not yours". | `crm-chat-page-context.service.ts` |
+| A turn may look at no more records than the installation allows: `contextRefs` and the page context count together. | `crm-chat.controller.ts` (`limits.maxContextRefs`) |
+
+**Surface.** `GET action/page-context` resolves the reference before the first turn, so the composer
+can show what the answer will be about (`CRMChatPageContextView`). The chat contract moved
+**1.3.0 → 1.4.0**: one route, one request field, one response field. The SSE stream accepts
+`?lastEventId=` beside the `Last-Event-ID` header, so a reloaded page can resume a stream a browser
+`EventSource` cannot.
+
+**Conversation sharing (D12)** stays **Accepted — not implemented**: a shared thread needs its own ACL
+design, which this phase deliberately did not touch. The remaining gap — a multi-record selection is
+still a client-written sentence — is filed as **G100**.
+
+**Verification**
+- `apps/api/test/crm-chat-page-context.test.ts` — new: resolve, drop, no-leak, per-turn re-check, the
+  reference bound, stream safety, resume.
+- `apps/api/test/crm-chat-tool-promises.test.ts` — new: the chip table may only name tools the registry
+  has; the agent editor's skill picker may only offer published skills.
+- `apps/web/src/pages/crm-chat/crm-chat-components.test.tsx` — the page-context chip, the dropped state,
+  and the URL reference parser.
+- `e2e/crm-chat.spec.ts` — the chip on a record page in the browser.
+
+---
+
+## v1.3.0 — Domain tools for the assistant (P1) (2026-11-05)
 
 **Release Date:** 2026-11-05
 **Module:** CRMChat (`crm-chat`)
 **Version:** 1.3.0
 **Contract Version:** 1.2.0 (unchanged)
-
----
-
-## v1.3.0 — Domain tools for the assistant (P1) (2026-11-05)
 
 Four read-only tools, contributed by the module that owns the service (the 19-CHAT.23 pattern),
 plus one kernel tool. No migration, no contract change, no route change.

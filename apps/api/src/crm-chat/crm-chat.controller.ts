@@ -27,6 +27,10 @@ import {
 } from './crm-chat-module.js';
 import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
 import { CRMChatObservabilityService } from './crm-chat-observability.service.js';
+import {
+  CRMChatPageContextService,
+  type CRMChatPageContextView,
+} from './crm-chat-page-context.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 import { CRMChatPromptService } from './crm-chat-prompts.service.js';
@@ -38,6 +42,7 @@ import {
   CRMChatConversationPatchSchema,
   CRMChatFeedbackCreateSchema,
   CRMChatMessageListQuerySchema,
+  CRMChatPageContextQuerySchema,
   CRMChatPromptCreateSchema,
   CRMChatPromptPatchSchema,
   CRMChatSettingsPatchSchema,
@@ -130,6 +135,7 @@ export class CRMChatController {
     @Inject(CRMChatActionService) private readonly actions: CRMChatActionService,
     @Inject(CRMChatCrossModuleService) private readonly crossModule: CRMChatCrossModuleService,
     @Inject(CRMChatObservabilityService) private readonly observability: CRMChatObservabilityService,
+    @Inject(CRMChatPageContextService) private readonly pageContexts: CRMChatPageContextService,
   ) {}
 
   /**
@@ -235,6 +241,22 @@ export class CRMChatController {
   // -------------------------------------------------------------------------
 
   /**
+   * 25.9 — resolve the record the user is looking at ("this company", "this opportunity").
+   *
+   * The SPA calls this before the user sends anything, so the composer can show what the answer
+   * will be about — and can say so *before* the first turn when the record is not readable any more.
+   * The answer is deliberately blunt: `applied` with the record's own name, or `dropped` without a
+   * reason that distinguishes "no such record" from "not yours". This endpoint must never become an
+   * existence oracle for records the caller cannot read.
+   */
+  @Get('action/page-context')
+  async resolvePageContext(@Query() query: unknown): Promise<CRMChatPageContextView> {
+    // The same gate as a turn: it reads live CRM data, so it belongs behind `readTools`.
+    await this.policy.assertFeature('readTools');
+    return this.pageContexts.resolve(parse(CRMChatPageContextQuerySchema, query));
+  }
+
+  /**
    * Submit a user message to the assistant agent. The server verifies assistant readiness, creates or
    * continues a conversation thread, and submits the prompt to AIAgents. Returns a turn/run ID for
    * status polling.
@@ -260,8 +282,11 @@ export class CRMChatController {
     }
 
     // How many context references a turn may carry is a deployment limit, not a client choice.
+    // 25.9 — the page context is one more record the turn may see, so it counts towards the same
+    // bound: a turn can never look at more records than the installation allows.
     const { maxContextRefs } = limits;
-    if ((input.contextRefs?.length ?? 0) > maxContextRefs) {
+    const referenceCount = (input.contextRefs?.length ?? 0) + (input.pageContext === undefined ? 0 : 1);
+    if (referenceCount > maxContextRefs) {
       throw new AppError(
         'CHAT_CONTEXT_TOO_LARGE',
         `A turn may carry at most ${String(maxContextRefs)} context references on this installation.`,
@@ -288,6 +313,7 @@ export class CRMChatController {
       conversationId: input.conversationId,
       idempotencyKey,
       contextRefs: input.contextRefs,
+      pageContext: input.pageContext,
       attachments: input.attachments,
     });
 
@@ -313,11 +339,16 @@ export class CRMChatController {
   /**
    * SSE stream for a turn's events. The client can resume after a disconnect by sending the
    * Last-Event-ID header. Events are user-safe and never expose tool arguments or hidden reasoning.
+   *
+   * 25.9 — a browser's `EventSource` can only set that header on its own automatic reconnect, so a
+   * page that reloads cannot resume. The query parameter is the second door for the same value: a
+   * fresh connection may say where it wants to continue. The header wins when both are present.
    */
   @Get('action/turns/:turnId/events')
   async streamTurnEvents(
     @Param('turnId') turnId: string,
     @Headers('last-event-id') lastEventId: string | undefined,
+    @Query('lastEventId') lastEventIdQuery: string | undefined,
     @Res() reply: FastifyReply,
   ) {
     await this.policy.assertWorkspace();
@@ -355,7 +386,7 @@ export class CRMChatController {
     };
 
     // Stream events to the writer.
-    await this.streaming.streamToWriter(turnId, writer, lastEventId);
+    await this.streaming.streamToWriter(turnId, writer, lastEventId ?? lastEventIdQuery);
   }
 
   /**

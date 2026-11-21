@@ -8,6 +8,7 @@ import { CRMChatActionCardView } from './CRMChatActionCard.js';
 import { CRMChatComposer } from './CRMChatComposer.js';
 import { CRMChatFeedbackButtons } from './CRMChatFeedbackButtons.js';
 import { CitationLink, CitationReauthContext, CRMChatMessageList } from './CRMChatMessageList.js';
+import { parsePageContextRef } from './crm-chat-page-context.js';
 import { CRM_CHAT_LISTENED_STREAM_EVENTS } from './useCrmChatStream.js';
 
 /**
@@ -225,6 +226,55 @@ describe('CRMChatMessageList citations (19-CHAT.30)', () => {
     );
     expect(html).toContain('Acme Corp');
     expect(html).not.toContain('/entity/Account/acc-1');
+  });
+});
+
+describe('CRM Chat page context (25.9)', () => {
+  it('shows the record the answer will be about, and nothing when there is none', () => {
+    const withContext = renderToStaticMarkup(
+      withQuery(
+        <CRMChatComposer
+          enabled
+          maxMessageChars={8000}
+          turnTimeoutSeconds={180}
+          pageContext={{ entity: 'Contact', id: 'c-1', label: 'Jane Doe', status: 'applied' }}
+        />,
+      ),
+    );
+    expect(withContext).toContain('carocrm-chat-page-context');
+    expect(withContext).toContain('Jane Doe');
+    expect(withContext).toContain('web.crmChat.pageContext.ariaLabel');
+
+    const withoutContext = renderToStaticMarkup(
+      withQuery(<CRMChatComposer enabled maxMessageChars={8000} turnTimeoutSeconds={180} />),
+    );
+    expect(withoutContext).not.toContain('carocrm-chat-page-context');
+  });
+
+  it('marks a context the server dropped, so the chip cannot pass for a usable one', () => {
+    const html = renderToStaticMarkup(
+      withQuery(
+        <CRMChatComposer
+          enabled
+          maxMessageChars={8000}
+          turnTimeoutSeconds={180}
+          pageContext={{ entity: 'Contact', id: 'c-1', label: null, status: 'dropped' }}
+        />,
+      ),
+    );
+    expect(html).toContain('carocrm-chat-page-context');
+    expect(html).toContain('is-dropped');
+    // A dropped context has no label: the record's name is not shown when it may not be read.
+    expect(html).not.toContain('Jane Doe');
+  });
+
+  it('reads a page context reference out of a URL, and refuses a malformed one', () => {
+    expect(parsePageContextRef('Contact:c-1')).toEqual({ entity: 'Contact', id: 'c-1' });
+    expect(parsePageContextRef(null)).toBeUndefined();
+    expect(parsePageContextRef('')).toBeUndefined();
+    expect(parsePageContextRef('Contact')).toBeUndefined();
+    expect(parsePageContextRef('Contact; DROP TABLE:c-1')).toBeUndefined();
+    expect(parsePageContextRef('Contact:../../etc/passwd')).toBeUndefined();
   });
 });
 

@@ -73,6 +73,32 @@ export const CRMChatConversationPatchSchema = z
 export type CRMChatConversationPatchShape = z.infer<typeof CRMChatConversationPatchSchema>;
 
 /**
+ * Phase 25.9 — the page context: the record the user was looking at when they wrote the message.
+ *
+ * It is a **reference**, exactly like a context reference: the client sends the entity type and the
+ * record id and nothing else. The server resolves it into a bounded record summary under the
+ * caller's own ACL, so the model never sees a client-written description of the record, and a record
+ * the caller cannot read is dropped instead of being described.
+ */
+export const CRMChatPageContextSchema = z
+  .object({
+    entity: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_-]{0,119}$/, 'entity must be an entity name'),
+    id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,120}$/, 'id must be a record id'),
+  })
+  .strict();
+
+export type CRMChatPageContextShape = z.infer<typeof CRMChatPageContextSchema>;
+
+/**
+ * 25.9 — the same reference, read from the query string. The SPA asks "may I use this page as the
+ * context, and what is it called?" before the user sends anything, so the chip is honest from the
+ * first render instead of after the first turn.
+ */
+export const CRMChatPageContextQuerySchema = CRMChatPageContextSchema;
+
+export type CRMChatPageContextQueryShape = z.infer<typeof CRMChatPageContextQuerySchema>;
+
+/**
  * Phase 19-CHAT.5 — turn submission shapes (contract §8.2).
  *
  * A turn is a single user message submitted to the assistant agent. The server creates or continues
@@ -107,6 +133,12 @@ export const CRMChatTurnCreateSchema = z
       )
       .max(10)
       .optional(),
+    /**
+     * 25.9 — the record the page the user was on refers to. Identifiers only; the server resolves
+     * it into a bounded summary under the caller's ACL and drops it when the caller may not read it.
+     * It counts towards `limits.maxContextRefs`, because it is one more record the turn may see.
+     */
+    pageContext: CRMChatPageContextSchema.optional(),
     /**
      * 25.7 — already-uploaded file ids. Reuses the AIAgents run bound (max 10); the run service
      * ACL-checks every id under the submitting user before a run or conversation is created.

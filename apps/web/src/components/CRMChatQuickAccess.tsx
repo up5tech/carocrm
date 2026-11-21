@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import { errorMessage } from '../lib/errors.js';
+import { CRMChatPageContextChip } from '../pages/crm-chat/CRMChatPageContextChip.js';
 import { useCrmChatStream } from '../pages/crm-chat/useCrmChatStream.js';
 import { t } from '../state/i18n.js';
 
@@ -38,6 +39,7 @@ export function CRMChatQuickAccess({
   contextPrefix,
   suggestions,
   triggerLabel,
+  pageContext,
 }: {
   readonly compact?: boolean;
   /**
@@ -49,6 +51,12 @@ export function CRMChatQuickAccess({
   /** Inline suggestion chips shown in the empty state; clicking one prefills the composer. */
   readonly suggestions?: readonly string[] | undefined;
   readonly triggerLabel?: string | undefined;
+  /**
+   * 25.9 — the record the user is looking at, sent as **identifiers**. The server resolves it
+   * under the caller's own ACL, so the panel never describes a record in the user's words and
+   * never sends content the server did not read.
+   */
+  readonly pageContext?: { readonly entity: string; readonly id: string; readonly label?: string | undefined } | undefined;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -59,6 +67,8 @@ export function CRMChatQuickAccess({
   const [toolLabel, setToolLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** 25.9 — the server dropped the page context (the record is no longer readable). */
+  const [pageContextDropped, setPageContextDropped] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
@@ -222,11 +232,16 @@ export function CRMChatQuickAccess({
         prompt: contextPrefix === undefined ? text : `${contextPrefix} ${text}`,
         conversationId: conversationRef.current ?? undefined,
         idempotencyKey: `quick-${stamp}-${Math.random().toString(36).slice(2, 10)}`,
+        // 25.9 — identifiers only; the server resolves the record under the caller's ACL.
+        ...(pageContext === undefined
+          ? {}
+          : { pageContext: { entity: pageContext.entity, id: pageContext.id } }),
       })
       .then((result) => {
         if (result.conversationId !== null) {
           conversationRef.current = result.conversationId;
         }
+        setPageContextDropped(result.pageContext?.status === 'dropped');
         setTurnId(result.turnId);
         setPhase('queued');
       })
@@ -264,7 +279,19 @@ export function CRMChatQuickAccess({
           <Button size="small" type="text" onClick={startNew} disabled={messages.length === 0 && turnId === null}>
             {t('web.crmChat.newConversation')}
           </Button>
-          <Button size="small" type="text" onClick={() => navigate(CHAT_ROUTE)}>
+          <Button
+            size="small"
+            type="text"
+            onClick={() =>
+              // 25.9 — the workspace keeps the page context: the URL carries the record's
+              // identifiers, never its content.
+              navigate(
+                pageContext === undefined
+                  ? CHAT_ROUTE
+                  : `${CHAT_ROUTE}?ctx=${encodeURIComponent(`${pageContext.entity}:${pageContext.id}`)}`,
+              )
+            }
+          >
             {t('web.crmChat.quickOpenFull')}
           </Button>
         </Space>
@@ -329,6 +356,32 @@ export function CRMChatQuickAccess({
       {notice !== null ? (
         <Alert type="info" showIcon closable message={notice} onClose={() => setNotice(null)} />
       ) : null}
+
+      {/* 25.9 — the record the user was on could not be read; the answer was produced without it. */}
+      {pageContextDropped ? (
+        <Alert
+          type="info"
+          showIcon
+          closable
+          message={t('web.crmChat.pageContext.droppedTitle')}
+          description={t('web.crmChat.pageContext.droppedHint')}
+          onClose={() => setPageContextDropped(false)}
+        />
+      ) : null}
+
+      {/* 25.9 — what this thread is about. */}
+      {pageContext === undefined ? null : (
+        <div className="carocrm-quick-chat-page-context">
+          <CRMChatPageContextChip
+            context={{
+              entity: pageContext.entity,
+              id: pageContext.id,
+              label: pageContext.label ?? null,
+              status: pageContextDropped ? 'dropped' : 'applied',
+            }}
+          />
+        </div>
+      )}
 
       <div className="carocrm-quick-chat-compose">
         <TextArea

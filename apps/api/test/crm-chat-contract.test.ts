@@ -173,6 +173,7 @@ const EXPECTED_ENFORCEMENT: Readonly<Record<string, { capability: string; featur
   'PATCH action/conversations/:id': { capability: 'manage', feature: 'workspace' },
   'DELETE action/conversations/:id': { capability: 'delete', feature: 'workspace' },
   'POST action/turns': { capability: 'use', feature: 'readTools' },
+  'GET action/page-context': { capability: 'use', feature: 'readTools' },
   'GET action/turns/:turnId': { capability: 'use', feature: 'workspace' },
   'POST action/turns/:turnId/cancel': { capability: 'use', feature: 'workspace' },
   'GET action/turns/:turnId/events': { capability: 'use', feature: 'workspace' },
@@ -205,10 +206,11 @@ describe('CRMChat route enforcement (19-CHAT.27)', () => {
     }
   });
 
-  it('serves exactly the 27 routes the contract document describes', () => {
-    // Audit 2026-11-07: the shipped surface is 27 routes; an earlier doc claimed 28.
+  it('serves exactly the 28 routes the contract document describes', () => {
+    // Audit 2026-11-07: the shipped surface was 27 routes; an earlier doc claimed 28. Phase 25.9
+    // added one (`GET action/page-context`), so the surface is 28 and the document says 28.
     const implemented = CRM_CHAT_ROUTES.filter((route) => route.implemented);
-    expect(implemented).toHaveLength(27);
-    expect(servedRoutes()).toHaveLength(27);
+    expect(implemented).toHaveLength(28);
+    expect(servedRoutes()).toHaveLength(28);
   });
 });
