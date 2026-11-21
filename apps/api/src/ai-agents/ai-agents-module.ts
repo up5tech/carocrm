@@ -382,7 +382,7 @@ export type AIAgentErrorCode = (typeof AI_AGENTS_ERROR_CODES)[number];
 export const AI_AGENTS_MODULE = {
   id: 'AIAgents',
   name: 'AI Agents',
-  version: '1.8.0',
+  version: '1.9.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; AI Agents runs after Marketing Automation (`380`). */
   loadOrder: 390,
@@ -426,6 +426,7 @@ export const AI_AGENTS_MODULE = {
     '25.5',
     '25.6',
     '25.7',
+    '25.8',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

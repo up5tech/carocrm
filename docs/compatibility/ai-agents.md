@@ -52,6 +52,7 @@ OpenAI-compatible chat-completions contract; no vendor SDK is vendored.
 | 19-AI.21 | **The self-approval policy (2026-11-07).** A `material_write` / `high_impact` proposal may not be approved by the person it was requested from. `approval.selfApprovalPolicy` is `forbidden` (default) or `permitted_with_audit`; the decision path refuses with the stable codes `AI_APPROVAL_SELF_APPROVAL_FORBIDDEN` (403) and `AI_APPROVAL_SECOND_APPROVER_REQUIRED` (403). Permissive mode records the requester's signature and still needs a second approver. Rejecting one's own proposal stays allowed, and a stale proposal is still invalidated first. Service code and one additive settings field — no migration, no schema change. Covered by `apps/api/test/ai-agent-self-approval.test.ts`; the existing approval cases now decide with a second approver. |
 | 19-AI.22 | **Per-user run admission fairness (2026-11-08).** `limits.maxRunsPerUserPerMinute` (default 120, range 1–600) caps run creation per principal per minute. It is enforced inside `createInternal` — unlocked pre-check before conversation resolution, serialized re-check under a per-user advisory lock inside the insert transaction — so the manual door and every trigger door (event/schedule/integration) share the same budget, charged to the acting principal. A refusal answers the standard `429 RATE_LIMITED` envelope, and trigger doors report it as `rate_limited` rather than an internal error. No migration; rollback is a settings change. Covered by `ai-agent-runs.test.ts` (burst throttled, other principal unaffected) and `ai-agent-triggers.test.ts` (a trigger storm respects the cap). |
 | 19-AI.23 | **MCP direct-call idempotency (2026-11-08).** `POST action/mcp/call` accepts an optional `idempotencyKey`; a write-capable tool (`low_write` — `material_write`/`high_impact` were already refused for lack of a run to attach a decision to) **requires** one. Receipts live in the additive `ai_agent_mcp_direct_calls` table keyed by `(principal_id, idempotency_key)`, claimed before execution so a concurrent duplicate sees "in flight" (409 `AI_CALL_IN_FLIGHT`) instead of double-executing. A replay returns the stored `toolCallId` and result without re-running; the same key with different arguments is refused (`AI_IDEMPOTENCY_CONFLICT`); a failed execution releases its claim so a retry may proceed. Read tools keep a generated key and are never receipted. Covered by `ai-agent-mcp-idempotency.test.ts`. |
+| 25.8 | **Grounded web search (2026-11-20).** One `web_search` tool over one operator-configured endpoint (`settings.search`: `enabled`, `endpoint`, `allowLoopback`, `providerKey`, `maxResults`, `timeoutMs`, `costPerCallUsd`; off by default). The model sends only `query`/`maxResults`; the endpoint passes `assertSafeProviderBaseUrl` on every call (metadata, private ranges and non-opted-in loopback refused) and redirects are refused. Bounds: 200-char query, ≤5 installation-capped results, 400-char snippet, 256 KiB body, ≤12 s timeout. Hits pass `promptSafe`, are marked `untrusted`, and only http(s) URLs are kept. Each hit carries URL + retrieval instant, returned as a self-contained `web_source:` reference that Chat materialises as `approved_external_source` citations (additive migration 100 adds the source type and a nullable `retrieved_at`). Each call writes one `ai_agent_provider_requests` row under the configured label with the run id, so search spend lands in the same ledger and run cost counter. Unconfigured → the tool answers "not configured", the turn still succeeds. Covered by `apps/api/test/ai-web-search.test.ts` (fake transport, no network) and the citation batch suite. |
 
 ---
 
@@ -80,11 +81,19 @@ OpenAI-compatible chat-completions contract; no vendor SDK is vendored.
    implemented (19-AI.25) but require operator enablement and setup before they fire: event and
    schedule flags default to `false`, and allowlists default to empty. 25.6 added bounded watched-field
    and condition filters; 25.7 added ≤10 ACL-checked attachment references to runs and chat turns,
-   with metadata only crossing the vendor-neutral provider contract. The canonical claim source is
-   `docs/architecture/ai-capability-matrix.md`.
+   with metadata only crossing the vendor-neutral provider contract. 25.8 added one **outbound**
+   tool, `web_search`, which is off by default and fail-closed: the endpoint is operator
+   configuration re-checked by the provider SSRF guard on every call, the model supplies only a query
+   string, hits are bounded and untrusted, and every hit is cited with its URL and retrieval time. No
+   search endpoint means the tool answers "not configured" and chat still works. The canonical claim
+   source is `docs/architecture/ai-capability-matrix.md`.
 8. **19-AI.18 retrieval stays deferred.** No vector index or RAG layer exists in this module; the
    plan itself declares retrieval optional and ACL-preserving sources mandatory, so absent retrieval
    is simply not claimed.
+9. **Web search is not model-native.** No registered adapter declares `nativeWebSearch`, so provider
+   web-search configuration is not used (D6's "otherwise" branch: one operator-configured endpoint).
+   Twitter/X search is out of scope. A search call is written to the same usage ledger as a model call
+   under the configured label, so it spends from the same budget and appears in the same report.
 
 ---
 

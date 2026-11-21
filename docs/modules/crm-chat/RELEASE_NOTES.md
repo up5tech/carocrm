@@ -482,7 +482,8 @@ Usage metrics are logged with correlation IDs. Check application logs for:
 1. **No Markdown Rendering**: Assistant text renders as plain text (v1 decision)
 2. **No Cross-User Sharing**: Conversations are private only (future feature)
 3. **No Real-time Collaboration**: Single user per conversation
-4. **Help Search Limited to Knowledge Base**: No general web search
+4. **Help Search Limited to Knowledge Base**: No general web search in 19-CHAT; the separate
+   `web_search` tool arrived with 25.8 and needs an operator-configured endpoint
 5. **Action Proposals Require AIAgents Integration**: Full workflow needs AIAgents approval system setup
 6. **The Assistant Must Be Configured**: The workspace shell, the history and the templates work
    without a model, but no answer can be produced until an administrator publishes an answering

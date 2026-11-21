@@ -129,6 +129,35 @@ export const AIAgentsSettingsSchema = z
       })
       .strict()
       .prefault({}),
+    /**
+     * Phase 25.8 (plan §14, decision D6) — grounded web search.
+     *
+     * Off by default and fail-closed: no `web_search` tool call leaves the installation until an
+     * operator names an endpoint. The endpoint is operator data, not model data — the model supplies
+     * only a query string and a result count, never a URL — and it is re-checked by
+     * `assertSafeProviderBaseUrl` on every call. Everything else here is a bound: result count,
+     * timeout and the per-call price recorded in the usage ledger (0 = price not configured).
+     */
+    search: z
+      .object({
+        enabled: z.boolean().default(false),
+        endpoint: z.string().trim().max(500).default(''),
+        /** Only for a self-hosted search endpoint on localhost; refused in an ordinary deployment. */
+        allowLoopback: z.boolean().default(false),
+        /** The ledger label a search call is recorded under, so its cost is separable from model calls. */
+        providerKey: z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .regex(/^[a-z0-9][a-z0-9._-]*$/, 'Use lower-case letters, digits, dot, dash or underscore.')
+          .default('web_search'),
+        maxResults: z.number().int().min(1).max(5).default(3),
+        timeoutMs: z.number().int().min(1_000).max(12_000).default(8_000),
+        costPerCallUsd: z.number().min(0).max(10).default(0),
+      })
+      .strict()
+      .prefault({}),
     dataPolicy: z
       .object({
         /**
@@ -178,6 +207,13 @@ export function aiAgentsSettingsWarnings(settings: AIAgentsSettings): AIAgentsSe
     warnings.push({
       code: 'providerNotConfigured',
       message: 'No default provider is configured. An agent must name an enabled provider connection before it can publish.',
+    });
+  }
+  if (settings.search.enabled && settings.search.endpoint === '') {
+    warnings.push({
+      code: 'searchEndpointMissing',
+      message:
+        'Web search is enabled but no endpoint is configured, so the web_search tool reports that it is not configured.',
     });
   }
   if (settings.limits.maxSteps < settings.limits.maxModelCalls) {

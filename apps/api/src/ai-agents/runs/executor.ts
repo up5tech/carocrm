@@ -758,6 +758,8 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
       step: input.step,
       actorUserId: input.row.initiated_by_user_id ?? 'system',
       idempotencyKey: input.idempotencyKey,
+      agentId: input.row.agent_id,
+      agentVersion: input.row.agent_version,
       ...(input.expectedTargetVersions === undefined ? {} : { expectedTargetVersions: input.expectedTargetVersions }),
     };
     const started = Date.now();
@@ -787,6 +789,9 @@ export abstract class AIAgentRunExecutor extends AIAgentRunCore {
         resultRef: result.resultRef ?? null,
         truncated: bounded.truncated,
       });
+      // 25.8 — a priced tool (web search) wrote its own ledger row; fold it into the run counter so
+      // the per-run cost budget sees it exactly as it sees a model call.
+      if (result.costUsd !== undefined && result.costUsd > 0) await this.reconcileRunCost(input.row.id);
       return {
         kind: 'succeeded',
         message: `${input.definition.key}: ${result.summary}\n${safeJson(bounded.value, 6_000)}`,

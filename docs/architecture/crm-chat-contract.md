@@ -111,7 +111,7 @@ presentation of one thread, and the thread it opens is the same conversation the
 | Turn (run) status | `queued`, `running`, `waiting_for_approval`, `waiting_for_input`, `retry_wait`, `cancel_requested`, `succeeded`, `partially_succeeded`, `failed`, `canceled`, `expired`, `blocked_by_policy`, `outcome_unknown` | `AIAgents` |
 | Message role | `user`, `assistant`, `tool`, `system` | `AIAgents` store |
 | Message redaction | `none`, `summary`, `hashed` | `AIAgents` store |
-| Citation source type | `crm_record`, `query_result`, `report`, `help_document` | Chat (19-CHAT.8) |
+| Citation source type | `crm_record`, `query_result`, `report`, `help_document`, `approved_external_source` | Chat (19-CHAT.8; the external value is 25.8) |
 | Feedback rating | `up`, `down` | Chat (19-CHAT.14) |
 
 ### 4.2 Turn state projection
@@ -536,17 +536,26 @@ the same rule, so a record the reader has lost since the answer was written stop
 anything not shaped `Entity:id`) is returned as it is — there is nothing to look up. The answer text
 itself is not rewritten: shortening this list is a visibility rule, not a content edit.
 
-interface CRMChatCitationView {              // 19-CHAT.8
-  id: string; sourceType: 'crm_record' | 'query_result' | 'report' | 'help_document';
-  sourceRef: string;                         // `Entity:id` — opaque to the client
+interface CRMChatCitationView {              // 19-CHAT.8; `approved_external_source` added by 25.8
+  id: string;
+  messageId: string;
+  sourceType: 'crm_record' | 'query_result' | 'report' | 'help_document' | 'approved_external_source';
+  entity: string | null;                     // null for every non-record source
+  recordId: string | null;                   // idem
   label: string;                             // resolved server-side, after an ACL re-check
-  route: string | null;                      // trusted builder output, or null when access was revoked
-  retrievedAt: string;
+  route: string;                             // trusted builder output; an absolute URL only for an external source
+  ordinal: number;
+  recheckedAt: string;                       // when the source was last checked under the caller's rights
+  retrievedAt: string;                       // when an external page was fetched; equals recheckedAt otherwise
 }
 ```
 
-`route` is produced by a server-side builder from an allowlisted entity/record pair. The model cannot
-supply a URL, and the client never concatenates one.
+`route` is produced by a server-side builder from an allowlisted entity/record pair, and the client
+never concatenates one. **The single exception is an external (web) source**: its route is the URL the
+`web_search` tool retrieved, re-validated as http(s) on read and on re-authorization, so a
+`javascript:` value can never reach an anchor. An external citation has no ACL row to re-read — nothing
+in the installation owns the page — so it is not dropped by a revocation; its `retrievedAt` is the fact
+that makes it checkable, and `recheckedAt` records when the citation itself was rendered.
 
 ---
 
@@ -751,6 +760,8 @@ caller's ACL and only then builds the label and the route. Asserted in
 2. A record the caller may no longer read produces **no** citation — not a stale label, and not a
    "forbidden" marker that would disclose that the record exists.
 3. The stored citation row carries the `rechecked_at` stamp that says when the check happened.
+4. 25.8 — an external citation is materialized from the tool's own reference (never model text), one
+   row per hit, with its URL and retrieval instant, and a hit whose URL is not http(s) is dropped.
 
 19-CHAT.6 — accepted when the stream carries the run's real timeline. The translator maps the
 `AIAgents` event types (`run.queued`, `run.started`, `tool.proposed`, `tool.succeeded`/`failed`/`denied`/

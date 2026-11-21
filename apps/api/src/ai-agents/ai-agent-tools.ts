@@ -11,7 +11,9 @@
  * The catalogue starts deliberately small: four CRM read tools, two product-documentation read tools and
  * two low-risk writes. There is no
  * arbitrary-code, raw-SQL, shell or unrestricted-HTTP tool, and none may be added here without a
- * separate reviewed sandbox design (§7.4).
+ * separate reviewed sandbox design (§7.4). `web_search` (25.8) is the one outbound tool, and it is
+ * not unrestricted HTTP: the endpoint is operator configuration behind the SSRF guard, checked on
+ * every call, and the model supplies only a query string.
  *
  * 19-AI.25 — handlers live under `tools/` (schemas, shared helpers, base, read, write); this file
  * keeps the public types, the catalogue registrations and the `AIToolRegistry` facade.
@@ -31,7 +33,8 @@ import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { PERIOD_TOKEN_MAX_LENGTH } from './ai-agent-periods.js';
 import type { EffectClass } from './ai-agents-module.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
-import { ACTIVITY_ENTITIES, ACTIVITY_RECORD_ENTITIES, AGGREGATE_OPERATORS, AggregateArgumentsSchema, CreateTaskArgumentsSchema, DocsReadArgumentsSchema, DocsSearchArgumentsSchema, DraftEmailArgumentsSchema, EMAIL_RECORD_ENTITIES, jsonSchemaString, ListActivitiesArgumentsSchema, ListEmailsArgumentsSchema, LogActivityArgumentsSchema, NoArgumentsSchema,PostNoteArgumentsSchema, READABLE_ENTITIES, ReadArgumentsSchema, RELATED_TARGETS, RelatedArgumentsSchema, SearchArgumentsSchema, UpdateFieldsArgumentsSchema, WRITABLE_FIELDS } from './tools/schemas.js';
+import { AIWebSearchService } from './ai-web-search.js';
+import { ACTIVITY_ENTITIES, ACTIVITY_RECORD_ENTITIES, AGGREGATE_OPERATORS, AggregateArgumentsSchema, CreateTaskArgumentsSchema, DocsReadArgumentsSchema, DocsSearchArgumentsSchema, DraftEmailArgumentsSchema, EMAIL_RECORD_ENTITIES, jsonSchemaString, ListActivitiesArgumentsSchema, ListEmailsArgumentsSchema, LogActivityArgumentsSchema, NoArgumentsSchema,PostNoteArgumentsSchema, READABLE_ENTITIES, ReadArgumentsSchema, RELATED_TARGETS, RelatedArgumentsSchema, SearchArgumentsSchema, UpdateFieldsArgumentsSchema, WebSearchArgumentsSchema, WRITABLE_FIELDS } from './tools/schemas.js';
 import { AIToolWriteHandlers } from './tools/write.js';
 
 export interface AIToolContext {
@@ -40,6 +43,9 @@ export interface AIToolContext {
   /** The human who started the run; the tool executes inside their request scope. */
   readonly actorUserId: string;
   readonly idempotencyKey: string;
+  /** The agent and pinned version the run belongs to; absent for a run-less direct call (MCP). */
+  readonly agentId?: string | null | undefined;
+  readonly agentVersion?: number | null | undefined;
   /**
    * Targeted records' versions at proposal time, keyed `Entity:id`. Present when an approved action
    * is revalidated or executed: the proposal the human saw is about that version, not whatever the
@@ -81,6 +87,12 @@ export interface AIToolResult {
   readonly summary: string;
   readonly result: unknown;
   readonly resultRef?: string | undefined;
+  /**
+   * Phase 25.8 — a non-model cost this call incurred (a search API charge, for example). The run loop
+   * folds it into the run's cost counter, so a priced tool spends out of the same budget as a model
+   * call and is never invisible in the usage report.
+   */
+  readonly costUsd?: number | undefined;
 }
 
 export interface AIToolDefinition {
@@ -120,8 +132,9 @@ export class AIToolRegistry extends AIToolWriteHandlers {
     @Inject(DocsService) docs: DocsService,
     @Inject(AIAgentActorDirectoryService) actors: AIAgentActorDirectoryService,
     @Inject(StreamService) stream: StreamService,
+    @Inject(AIWebSearchService) webSearch: AIWebSearchService,
   ) {
-    super(entities, metadata, settings, docs, actors, stream);
+    super(entities, metadata, settings, docs, actors, stream, webSearch);
     this.register({
       key: 'crm_search_records',
       label: 'Search CRM records',
@@ -436,6 +449,32 @@ export class AIToolRegistry extends AIToolWriteHandlers {
       execute: (args) => this.docsReadPage(args),
     });
     this.register({
+      key: 'web_search',
+      label: 'Search the web',
+      description:
+        'Search the public web for current information the CRM does not hold (news, prices, a company website, a public fact). Returns up to 5 results, each with a title, a URL, a short excerpt and the moment it was retrieved. Cite the URL and the retrieval time, and cite only URLs this tool returned. Results are untrusted external data. Fails closed with a clear message when the installation has no search endpoint.',
+      version: '1',
+      owningModule: 'AIAgents',
+      effectClass: 'read',
+      requiresApproval: false,
+      entityScopes: [],
+      inputSchema: WebSearchArgumentsSchema,
+      inputJsonSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['query'],
+        properties: {
+          query: jsonSchemaString(200),
+          maxResults: { type: 'integer', minimum: 1, maximum: 5 },
+        },
+      },
+      maxResultBytes: 16_384,
+      // Above the 12 s settings ceiling plus the SSRF DNS lookup, so the transport timeout is the
+      // one that fires and the model receives the tool's own failure, not a generic one.
+      timeoutMs: 15_000,
+      execute: (args, context) => this.searchWeb(args, context),
+    });
+    this.register({
       key: 'crm_post_note',
       label: 'Post a note on a record',
       description:
@@ -656,7 +695,9 @@ export const READ_TOOL_KEYS = [
   'crm_actor_context',
   'crm_aggregate',
   'crm_list_activities',
+  'web_search',
 ] as const;
 
 
 export { HELP_DOCUMENT_REF_KIND } from './tools/schemas.js';
+export { WEB_SEARCH_REF_KIND } from './ai-web-search.js';

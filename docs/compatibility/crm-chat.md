@@ -6,8 +6,9 @@
 > **Module:** `CRMChat` — registry key and route slug `crm-chat`, SPA route `/crm-chat`, no `Ua` prefix.
 > **Status:** 19-CHAT.0 → 19-CHAT.24 delivered; 19-CHAT.25 → 19-CHAT.29 hardening shipped
 > 2026-11-08 (contract v1.3.0, 27 implemented routes, module v1.3.0). P1 domain tools shipped
-> 2026-11-05. Page context, web grounding and conversation sharing (D12) are not implemented — the
-> canonical claim source is `docs/architecture/ai-capability-matrix.md` (25.1).
+> 2026-11-05. Web grounding shipped in 25.8 (one operator-configured endpoint, cited results); page
+> context and conversation sharing (D12) are not implemented — the canonical claim source is
+> `docs/architecture/ai-capability-matrix.md`.
 
 ---
 
@@ -128,8 +129,9 @@ nothing and changes no setting.
 - **Feature flags off by default**; assistant must be published and configured before the first
   answer (`docs/runbooks/crm-chat-first-run.md`).
 - **Single-user conversations**; no sharing by design (would be a separate reviewed migration).
-- **Help is the handbook plus the knowledge corpus** — no web search, no vector index/RAG (decided;
-  revisit only when the corpus outgrows keyword retrieval).
+- **Help is the handbook plus the knowledge corpus**; **the web is a separate, operator-configured
+  tool** (`web_search`, 25.8) with no vector index/RAG (decided; revisit retrieval only when the
+  corpus outgrows keyword retrieval). Without an endpoint the web tool reports "not configured".
 - **Cross-module paths are curated** — a user cannot define one; adding one is a code change.
 - **`retention.conversationsDays` stores but does not execute** — the AI Agents retention settings
   are the executor.

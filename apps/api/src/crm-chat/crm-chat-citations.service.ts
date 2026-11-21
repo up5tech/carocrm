@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { HELP_DOCUMENT_REF_KIND } from '../ai-agents/ai-agent-tools.js';
+import { decodeWebSourceRef, WEB_SEARCH_REF_KIND } from '../ai-agents/ai-web-search.js';
 import type { AIAgentMessagesTable, CRMChatCitationsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { DocsService } from '../docs/docs.service.js';
@@ -36,6 +37,13 @@ import { EntityCrudService as EntityService } from '../entity/entity.service.js'
  * page is re-read through `DocsService`, so audience filtering and the page's `requires` gate apply
  * exactly as they do on the `/docs` screen; a page the caller cannot read yields no citation.
  *
+ * Phase 25.8 adds `web_source:<payload>`: an external page found by the `web_search` tool. Nothing in
+ * the installation can re-read it, so the tool records the title, URL and retrieval instant in the
+ * reference itself and this service materialises one `approved_external_source` citation per hit. The
+ * URL is validated against http(s) on the way in, so a result can never smuggle `javascript:` into a
+ * rendered link. A web citation is not ACL-checked on read — it belongs to no record — but it is
+ * ordered with the rest and re-authorized through the same endpoint, where the URL is re-validated.
+ *
  * ## Why citations are materialised on read
  *
  * The citation row is written the first time the answer is read, not when the run finishes. That
@@ -54,7 +62,22 @@ export interface CRMChatCitationView {
   readonly ordinal: number;
   /** When the record was last read under the caller's ACL. */
   readonly recheckedAt: string;
+  /**
+   * 25.8 — the instant the external page was retrieved. An external citation cannot be re-read, so
+   * this is the retrieval that the answer rests on; for every other source type it equals
+   * `recheckedAt` and means the same thing as before.
+   */
+  readonly retrievedAt: string;
 }
+
+/** The columns a citation materialiser fills; `retrieved_at` is only set for an external source. */
+type CitationTarget = Pick<
+  CRMChatCitationsTable,
+  'source_type' | 'entity' | 'record_id' | 'label' | 'route' | 'retrieved_at'
+>;
+
+/** An external route is a URL and needs more room than a built-in `/entity/...` path. */
+const MAX_EXTERNAL_ROUTE_CHARS = 1_000;
 
 @Injectable()
 export class CRMChatCitationService {
@@ -86,21 +109,18 @@ export class CRMChatCitationService {
     const rows: CRMChatCitationsTable[] = [];
     let ordinal = 0;
     for (const reference of references) {
-      const built =
-        reference.kind === 'help_document'
-          ? await this.buildHelpDocument(reference.key)
-          : await this.buildRecord(reference.entity, reference.id);
-      if (built === null) continue;
-      rows.push({
-        id: `${message.id}:${String(ordinal)}`,
-        message_id: message.id,
-        conversation_id: message.conversation_id,
-        ordinal,
-        rechecked_at: new Date(),
-        created_at: new Date(),
-        ...built,
-      });
-      ordinal += 1;
+      for (const built of await this.buildReference(reference)) {
+        rows.push({
+          id: `${message.id}:${String(ordinal)}`,
+          message_id: message.id,
+          conversation_id: message.conversation_id,
+          ordinal,
+          rechecked_at: new Date(),
+          created_at: new Date(),
+          ...built,
+        });
+        ordinal += 1;
+      }
     }
     if (rows.length === 0) return [];
 
@@ -201,21 +221,21 @@ export class CRMChatCitationService {
       const rows: CRMChatCitationsTable[] = [];
       let ordinal = 0;
       for (const reference of references) {
-        const built =
-          reference.kind === 'help_document'
-            ? await this.buildHelpDocument(reference.key)
-            : this.buildRecordFrom(records.get(`${reference.entity}:${reference.id}`), reference.entity, reference.id);
-        if (built === null) continue;
-        rows.push({
-          id: `${message.id}:${String(ordinal)}`,
-          message_id: message.id,
-          conversation_id: message.conversation_id,
-          ordinal,
-          rechecked_at: new Date(),
-          created_at: new Date(),
-          ...built,
-        });
-        ordinal += 1;
+        // The batch path shares the per-reference builder except for the record read, which is
+        // served from the ACL-checked set above rather than one `get` per reference.
+        const built = await this.buildBatchReference(reference, records);
+        for (const target of built) {
+          rows.push({
+            id: `${message.id}:${String(ordinal)}`,
+            message_id: message.id,
+            conversation_id: message.conversation_id,
+            ordinal,
+            rechecked_at: new Date(),
+            created_at: new Date(),
+            ...target,
+          });
+          ordinal += 1;
+        }
       }
       if (rows.length > 0) {
         inserts.push(...rows);
@@ -254,6 +274,31 @@ export class CRMChatCitationService {
     return out;
   }
 
+  /** The single-message path: every reference is resolved on its own. */
+  private async buildReference(reference: MessageReference): Promise<CitationTarget[]> {
+    if (reference.kind === 'web_source') return this.buildWebSources(reference.payload);
+    if (reference.kind === 'help_document') {
+      const built = await this.buildHelpDocument(reference.key);
+      return built === null ? [] : [built];
+    }
+    const built = await this.buildRecord(reference.entity, reference.id);
+    return built === null ? [] : [built];
+  }
+
+  /** The batch path: a record reference is answered from the ACL-checked batch read, not a `get`. */
+  private async buildBatchReference(
+    reference: MessageReference,
+    records: ReadonlyMap<string, Record<string, unknown>>,
+  ): Promise<CitationTarget[]> {
+    if (reference.kind === 'web_source') return this.buildWebSources(reference.payload);
+    if (reference.kind === 'help_document') {
+      const built = await this.buildHelpDocument(reference.key);
+      return built === null ? [] : [built];
+    }
+    const built = this.buildRecordFrom(records.get(`${reference.entity}:${reference.id}`), reference.entity, reference.id);
+    return built === null ? [] : [built];
+  }
+
   /**
    * A record citation from an already ACL-checked batch read, or nothing when the record was not in
    * the readable set — which is exactly the set `entities.list` returned under the caller's rights.
@@ -262,7 +307,7 @@ export class CRMChatCitationService {
     record: Record<string, unknown> | undefined,
     entity: string,
     id: string,
-  ): Pick<CRMChatCitationsTable, 'source_type' | 'entity' | 'record_id' | 'label' | 'route'> | null {
+  ): CitationTarget | null {
     if (record === undefined) return null;
     return {
       source_type: 'crm_record',
@@ -270,14 +315,12 @@ export class CRMChatCitationService {
       record_id: id,
       label: displayLabel(entity, record),
       route: buildRoute(entity, id),
+      retrieved_at: null,
     };
   }
 
   /** A record citation, or nothing when the caller may no longer read the record. */
-  private async buildRecord(
-    entity: string,
-    id: string,
-  ): Promise<Pick<CRMChatCitationsTable, 'source_type' | 'entity' | 'record_id' | 'label' | 'route'> | null> {
+  private async buildRecord(entity: string, id: string): Promise<CitationTarget | null> {
     const record = await this.entities.get(entity, id).catch(() => null);
     // A record the caller may not read produces no citation at all.
     if (record === null) return null;
@@ -287,6 +330,7 @@ export class CRMChatCitationService {
       record_id: id,
       label: displayLabel(entity, record),
       route: buildRoute(entity, id),
+      retrieved_at: null,
     };
   }
 
@@ -295,9 +339,7 @@ export class CRMChatCitationService {
    * it. The key comes from the tool's own `result_ref`, never from the model, and the route is rebuilt
    * here from the page the server just re-read.
    */
-  private async buildHelpDocument(
-    key: string,
-  ): Promise<Pick<CRMChatCitationsTable, 'source_type' | 'entity' | 'record_id' | 'label' | 'route'> | null> {
+  private async buildHelpDocument(key: string): Promise<CitationTarget | null> {
     const page = await this.readDocsPage(key);
     if (page === null) return null;
     return {
@@ -306,7 +348,26 @@ export class CRMChatCitationService {
       record_id: null,
       label: page.title.slice(0, 200),
       route: `/docs/${page.key}`,
+      retrieved_at: null,
     };
+  }
+
+  /**
+   * Phase 25.8 — the external citations behind one `web_source` reference.
+   *
+   * The reference carries its own hits, so no network call happens here; the URL and the retrieval
+   * instant were validated when the reference was decoded. One reference deliberately yields several
+   * citations: a single search returns several sources and the answer may cite any of them.
+   */
+  private buildWebSources(payload: string): CitationTarget[] {
+    return decodeWebSourceRef(payload).map((hit) => ({
+      source_type: 'approved_external_source',
+      entity: null,
+      record_id: null,
+      label: hit.title.slice(0, 200),
+      route: hit.url,
+      retrieved_at: new Date(hit.retrievedAt),
+    }));
   }
 
   /** The page behind a `help_document` reference, re-read under the caller's documentation rights. */
@@ -341,6 +402,17 @@ export class CRMChatCitationService {
           page === null
             ? { accessible: false, label: null, route: null, reason: 'The cited documentation page is no longer available to you.' }
             : { accessible: true, label: page.title.slice(0, 200), route: `/docs/${page.key}`, reason: null },
+        );
+        continue;
+      }
+      // 25.8 — an external page has no ACL row to re-read; the URL itself is re-validated, so a
+      // citation that somehow arrived with another scheme stops linking instead of becoming a
+      // `javascript:` anchor.
+      if (citation.sourceType === 'approved_external_source') {
+        out.push(
+          /^https?:\/\//i.test(citation.route) && citation.route.length <= MAX_EXTERNAL_ROUTE_CHARS
+            ? { accessible: true, label: citation.label, route: citation.route, reason: null }
+            : { accessible: true, label: citation.label, route: null, reason: null },
         );
         continue;
       }
@@ -388,13 +460,20 @@ export class CRMChatCitationService {
       const separator = entry.indexOf(':');
       const entity = separator > 0 ? entry.slice(0, separator) : '';
       const id = separator > 0 ? entry.slice(separator + 1) : '';
-      if (entity === '' || id === '' || !/^[A-Z][A-Za-z0-9_]*$/.test(entity)) {
-        visible.push(entry);
-        continue;
-      }
+      // 25.8 — the two reference kinds that are not `Entity:id` are tested first. Both are lowercase,
+      // so the `Entity:id` shape guard below would otherwise wave them through unchecked; each is
+      // validated on its own terms instead (a page re-read, a payload decoded).
       if (entity === HELP_DOCUMENT_REF_KIND) {
         const page = await this.readDocsPage(id);
         if (page !== null) visible.push(entry);
+        continue;
+      }
+      if (entity === WEB_SEARCH_REF_KIND) {
+        if (decodeWebSourceRef(id).length > 0) visible.push(entry);
+        continue;
+      }
+      if (entity === '' || id === '' || !/^[A-Z][A-Za-z0-9_]*$/.test(entity)) {
+        visible.push(entry);
         continue;
       }
       const record = await this.entities.get(entity, id).catch(() => null);
@@ -425,6 +504,9 @@ export class CRMChatCitationService {
       route: row.route,
       ordinal: row.ordinal,
       recheckedAt: row.rechecked_at.toISOString(),
+      // An external citation was retrieved, not re-checked; when no retrieval was recorded (every
+      // other source type), the re-check instant is the honest value for both fields.
+      retrievedAt: (row.retrieved_at ?? row.rechecked_at).toISOString(),
     };
   }
 }
@@ -432,7 +514,8 @@ export class CRMChatCitationService {
 /** The record and handbook references the runtime wrote onto the assistant message. */
 type MessageReference =
   | { readonly kind: 'record'; readonly entity: string; readonly id: string }
-  | { readonly kind: 'help_document'; readonly key: string };
+  | { readonly kind: 'help_document'; readonly key: string }
+  | { readonly kind: 'web_source'; readonly payload: string };
 
 function readReferences(contentMeta: unknown): readonly MessageReference[] {
   if (typeof contentMeta !== 'object' || contentMeta === null) return [];
@@ -447,6 +530,11 @@ function readReferences(contentMeta: unknown): readonly MessageReference[] {
     if (typeof id !== 'string' || id === '') continue;
     if (entity === HELP_DOCUMENT_REF_KIND) {
       out.push({ kind: 'help_document', key: id });
+      continue;
+    }
+    // 25.8 — the `id` of a `web_source` reference is its encoded payload, not a record id.
+    if (entity === WEB_SEARCH_REF_KIND) {
+      out.push({ kind: 'web_source', payload: id });
       continue;
     }
     out.push({ kind: 'record', entity, id });

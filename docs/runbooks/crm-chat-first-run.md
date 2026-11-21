@@ -74,7 +74,9 @@ switch modes to hide a broken worker.
 
 `crm_search_records`, `crm_read_record`, `crm_record_summary`, `crm_list_related`, `crm_aggregate`,
 `crm_actor_context`, `crm_list_activities`, `docs_search`, `docs_read_page` — read-only, ACL-enforced,
-safe to grant. Add `crm_post_note` / `crm_log_activity` / `crm_create_task` for a working loop.
+safe to grant. `web_search` is read-only too but needs `settings.search.endpoint` (Settings → AI
+agents → Web search); it is off and fail-closed until then. Add `crm_post_note` /
+`crm_log_activity` / `crm_create_task` for a working loop.
 `crm_update_record_fields` is `material_write` and always stops at an approval card; leave it out
 until step 7 is done.
 

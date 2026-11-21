@@ -922,6 +922,14 @@ const TOOL_EVAL_CASES: readonly ToolEvalCase[] = [
     en: 'Which emails went out to this account?',
     args: () => ({ scope: 'record', record: { entity: 'Account', id: fx.accountId }, maxSize: 5 }),
   },
+  {
+    // 25.8 — no endpoint is configured in the suite, so this case also proves the unconfigured path
+    // answers (succeeded, non-empty summary) instead of failing the turn.
+    tool: 'web_search',
+    vi: 'Tra cứu giá thị trường mới nhất trên web',
+    en: 'Look up the latest market pricing on the web',
+    args: () => ({ query: 'market pricing 2026', maxResults: 3 }),
+  },
 ];
 
 /**

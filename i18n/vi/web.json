@@ -2564,7 +2564,17 @@
     "skillStatus_archived": "Đã lưu trữ",
     "skillVisibility_private": "Riêng tư",
     "skillVisibility_team": "Nhóm",
-    "skillVisibility_organization": "Tổ chức"
+    "skillVisibility_organization": "Tổ chức",
+    "settingsWebSearch": "Tìm kiếm web",
+    "settingsWebSearchHint": "Neo câu trả lời vào thông tin bên ngoài hiện thời. Mặc định tắt và fail-closed: tool web_search báo chưa cấu hình cho tới khi có endpoint. Endpoint phải trả JSON (`{ results: [{ title, url, snippet }] }`; chấp nhận thêm `items`, `web.results`, `webPages.value`). Kết quả là dữ liệu không tin cậy và luôn được trích dẫn kèm URL cùng thời điểm lấy.",
+    "settingsSearchEnabled": "Bật tìm kiếm web",
+    "settingsSearchEndpoint": "Endpoint tìm kiếm",
+    "settingsSearchEndpointHint": "URL http(s) tuyệt đối. Metadata cloud, dải IP nội bộ và redirect bị từ chối; endpoint localhost cần bật công tắc bên dưới.",
+    "settingsSearchMaxResults": "Số kết quả mỗi lần",
+    "settingsSearchTimeout": "Thời gian chờ (ms)",
+    "settingsSearchCost": "Giá mỗi lần gọi (USD)",
+    "settingsSearchProviderKey": "Nhãn trong sổ usage",
+    "settingsSearchLoopback": "Cho phép endpoint localhost"
   },
   "adminLayout": {
     "entityTitle": "Bản ghi",
@@ -2939,7 +2949,8 @@
     "quickPlaceholder": "Hỏi agent một câu hỏi...",
     "quickEmpty": "Hỏi một câu và câu trả lời sẽ hiện ngay tại đây.",
     "quickOpenFull": "Mở chat đầy đủ",
-    "quickActionPending": "Lượt này cần bạn xác nhận. Hãy mở chat đầy đủ để xem chi tiết."
+    "quickActionPending": "Lượt này cần bạn xác nhận. Hãy mở chat đầy đủ để xem chi tiết.",
+    "sourceRetrieved": "Lấy lúc {at} — trang bên ngoài"
   },
   "adminDocs": {
     "title": "Tài liệu trong ứng dụng",

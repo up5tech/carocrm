@@ -28,6 +28,9 @@ const PURE_API_TESTS = [
   'ai-agent-adversarial.test.ts',
   'ai-agent-actor.test.ts',
   'ai-agent-periods.test.ts',
+  // Phase 25.8: the web-search suite drives a fake transport and a stub ledger, so the bounded
+  // search tool, the SSRF refusals and the citation reference codec all run in the DB-free lane.
+  'ai-web-search.test.ts',
   'ai-providers.test.ts',
   'config-jwt-secret.test.ts',
   'crm-chat-contract.test.ts',

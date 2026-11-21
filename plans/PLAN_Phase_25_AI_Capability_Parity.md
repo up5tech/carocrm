@@ -1,7 +1,7 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6 and 25.7 implemented (25.0–25.4 on 2026-11-18;
-> 25.5 and 25.6 on 2026-11-19; 25.7 on 2026-11-20; canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7 and 25.8 implemented (25.0–25.4 on 2026-11-18;
+> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
 > JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
@@ -9,8 +9,11 @@
 > 098 was the first schema change in Phase 25; 25.5 adds additive migration 099 so a run can carry
 > `trigger = 'workflow'`. 25.6 needs no migration: filters live in the published JSONB config and
 > the outbox payload. 25.7 needs no migration: attachment ids and bounded metadata reuse the run and
-> message JSON payloads. No dependency, provider account or release action.
-> Work continues at 25.8.
+> message JSON payloads. 25.8 adds additive migration 100 for the external citation source type and
+> a nullable `retrieved_at`; it stores the search endpoint in the existing settings row, so no new
+> table, secret store or provider account is involved and no adapter declares native web search
+> (D6's operator-endpoint branch). No dependency or release action.
+> Work continues at 25.9.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -386,6 +389,12 @@ Support the useful shape of Twenty's `runAgent()` attachments without turning th
 ---
 
 ## 14. Phase 25.8 — Grounded Web Search (P2)
+
+> **Status (2026-11-20): implemented; tests added; automated checks skipped by the coding agent per
+> `AGENTS.MD` §4 and left to the developer.** Additive migration 100 adds the
+> `approved_external_source` citation source type and a nullable `retrieved_at`; the endpoint lives in
+> the existing `aiAgents` settings row, so there is no second store. No adapter declares
+> `nativeWebSearch`, so D6's operator-endpoint branch is what shipped.
 
 ### Objective
 

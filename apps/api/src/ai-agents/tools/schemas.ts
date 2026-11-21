@@ -6,6 +6,7 @@
 import { z } from 'zod';
 
 import { PERIOD_TOKEN_MAX_LENGTH } from '../ai-agent-periods.js';
+import { MAX_WEB_QUERY_CHARS, MAX_WEB_RESULTS } from '../ai-web-search.js';
 
 /** Entities a read tool may address. Internal administration entities are deliberately absent. */
 export const READABLE_ENTITIES = [
@@ -131,6 +132,17 @@ export const DocsSearchArgumentsSchema = z
   .object({
     query: z.string().trim().min(2).max(120),
     maxSize: z.number().int().min(1).max(5).default(3),
+  })
+  .strict();
+
+/**
+ * Phase 25.8 — one bounded web query. The model names no URL, host or header: the endpoint is
+ * operator configuration and the result count is capped again by the installation setting.
+ */
+export const WebSearchArgumentsSchema = z
+  .object({
+    query: z.string().trim().min(2).max(MAX_WEB_QUERY_CHARS),
+    maxResults: z.number().int().min(1).max(MAX_WEB_RESULTS).optional(),
   })
   .strict();
 

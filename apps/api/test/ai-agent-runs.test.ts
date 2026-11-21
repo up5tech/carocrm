@@ -367,9 +367,9 @@ const CRM_READ_SCOPE = [
  *
  * This is the assertion that makes each tool *owned*: unregister one, rename its effect class, widen
  * its entity scope or drop its approval gate, and this test names the tool and the field. The
- * twenty-four CRM and handbook tools are the Chat-facing catalogue; `omnichannel.send_message` is
- * the one module-owned tool outside it, and it is listed here because it shares the registry and the
- * same approval rule.
+ * twenty-four CRM and handbook tools plus the one outbound `web_search` tool (25.8) are the
+ * Chat-facing catalogue; `omnichannel.send_message` is the one module-owned tool outside it, and it
+ * is listed here because it shares the registry and the same approval rule.
  */
 const EXPECTED_CATALOGUE: readonly {
   readonly key: string;
@@ -385,6 +385,8 @@ const EXPECTED_CATALOGUE: readonly {
   { key: 'crm_record_summary', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
   { key: 'docs_search', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
   { key: 'docs_read_page', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
+  // 25.8 — the one outbound tool. The endpoint is operator configuration, so its entity scope is empty.
+  { key: 'web_search', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
   { key: 'crm_actor_context', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: [] },
   { key: 'crm_aggregate', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: CRM_READ_SCOPE },
   { key: 'crm_list_activities', owningModule: 'AIAgents', version: '1', effectClass: 'read', requiresApproval: false, entityScopes: ['Call', 'Meeting', 'Task'] },

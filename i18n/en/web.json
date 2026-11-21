@@ -2564,7 +2564,17 @@
     "skillStatus_archived": "Archived",
     "skillVisibility_private": "Private",
     "skillVisibility_team": "Team",
-    "skillVisibility_organization": "Organization"
+    "skillVisibility_organization": "Organization",
+    "settingsWebSearch": "Web search",
+    "settingsWebSearchHint": "Ground answers in current external information. Off by default and fail-closed: the web_search tool reports that it is not configured until an endpoint is named here. The endpoint must answer JSON (`{ results: [{ title, url, snippet }] }`; `items`, `web.results` and `webPages.value` are also accepted). Results are untrusted data and are always cited with their URL and retrieval time.",
+    "settingsSearchEnabled": "Enable web search",
+    "settingsSearchEndpoint": "Search endpoint",
+    "settingsSearchEndpointHint": "Absolute http(s) URL. Cloud metadata, private ranges and redirects are refused; a localhost endpoint needs the switch below.",
+    "settingsSearchMaxResults": "Results per call",
+    "settingsSearchTimeout": "Timeout (ms)",
+    "settingsSearchCost": "Price per call (USD)",
+    "settingsSearchProviderKey": "Ledger label",
+    "settingsSearchLoopback": "Allow a localhost endpoint"
   },
   "adminLayout": {
     "entityTitle": "Entity",
@@ -2939,7 +2949,8 @@
     "quickPlaceholder": "Ask the agent a question...",
     "quickEmpty": "Ask a question and the answer appears right here.",
     "quickOpenFull": "Open full chat",
-    "quickActionPending": "This turn asks for a decision. Open the full chat to review it."
+    "quickActionPending": "This turn asks for a decision. Open the full chat to review it.",
+    "sourceRetrieved": "Retrieved {at} — external page"
   },
   "adminDocs": {
     "title": "The in-app handbook",

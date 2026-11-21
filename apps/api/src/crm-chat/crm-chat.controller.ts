@@ -424,7 +424,8 @@ export class CRMChatController {
               entity: z.string().max(120).nullish(),
               recordId: z.string().max(120).nullish(),
               label: z.string().min(1).max(200),
-              route: z.string().max(400).default(''),
+              // 25.8 — an external citation carries its URL here, so the bound is a URL's, not a path's.
+              route: z.string().max(1_000).default(''),
             })
             .strict(),
         )

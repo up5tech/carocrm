@@ -230,6 +230,9 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
   );
 }
 
+/** An absolute http(s) route; `startsWith('/')` stays the test for an in-app route. */
+const EXTERNAL_ROUTE_RE = /^https?:\/\//i;
+
 interface CitationLinkProps {
   readonly citation: CRMChatCitation;
   readonly index: number;
@@ -272,8 +275,11 @@ export function CitationLink({ citation, index, messageId }: CitationLinkProps) 
   // The server answers with its own label and route after re-reading the source.
   const label = verdict.label ?? citation.label;
   const route = verdict.route ?? citation.route;
-  const hasRoute = route.startsWith('/');
-  return (
+  // 25.8 — an external (web) citation is an absolute URL the server validated; it is the only kind
+  // that leaves the app, and the retrieval time is the fact that makes it checkable later.
+  const external = EXTERNAL_ROUTE_RE.test(route);
+  const hasRoute = route.startsWith('/') || external;
+  const tag = (
     <Tag icon={hasRoute ? <LinkOutlined /> : undefined} color="blue" bordered={false} style={{ fontSize: 11 }}>
       {hasRoute ? (
         <a href={route} target="_blank" rel="noopener noreferrer">
@@ -284,4 +290,6 @@ export function CitationLink({ citation, index, messageId }: CitationLinkProps) 
       )}
     </Tag>
   );
+  if (!external) return tag;
+  return <Tooltip title={t('web.crmChat.sourceRetrieved', { at: formatDateTime(citation.retrievedAt) })}>{tag}</Tooltip>;
 }

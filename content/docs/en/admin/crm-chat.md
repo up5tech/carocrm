@@ -78,6 +78,20 @@ not a failure.
 The same pages are reachable by the reader at any time from [Documentation](/docs), and
 [Configuring AI agents](admin/ai-agents) covers the tool grants themselves.
 
+## Searching the web
+
+`web_search` lets an answer use information the CRM does not hold — public news, prices, a company
+website. It talks to **one** endpoint you configure under Settings → AI agents → Web search, and it is
+off until you do: with no endpoint the assistant is told it could not check the web and answers from
+CRM data.
+
+The endpoint must answer JSON — `{ "results": [ { "title", "url", "snippet" } ] }`; `items`,
+`web.results` and `webPages.value` are accepted too. Cloud metadata, private ranges and redirects are
+refused, so a localhost endpoint needs its own switch. Results are treated as untrusted external data:
+the answer cites a numbered source with its URL and the time it was fetched, and a URL the tool did not
+return cannot be cited. Set a price per call if your search provider charges, so the cost appears in
+the usage view next to model spend.
+
 ## Execution mode
 
 `execution.mode` accepts `queue` or `inline`, labelled Queue (worker) and Direct (API process). Both

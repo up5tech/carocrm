@@ -14,6 +14,7 @@ import type { MetadataStoreService } from '../metadata/metadata-store.service.js
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import type { AgentConfig } from './ai-agent-config.js';
 import { HELP_DOCUMENT_REF_KIND } from './ai-agent-tools.js';
+import { WEB_SEARCH_REF_KIND } from './ai-web-search.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import type { AIProviderMessage } from './ai-provider.js';
@@ -690,6 +691,9 @@ export class AIAgentMemoryService {
       // A handbook citation names a documentation page, not a record: it has no owner and no ACL row,
       // and Chat re-reads the page through `DocsService` when it renders the citation.
       if (entity === HELP_DOCUMENT_REF_KIND) continue;
+      // A web source is an external page too: nothing in the installation can re-read it, so the
+      // reference itself is the record and stays visible with the answer it supported.
+      if (entity === WEB_SEARCH_REF_KIND) continue;
       if (!this.metadata.registry.hasEntity(entity)) return false;
       try {
         await this.entities.get(entity, id, 'id');

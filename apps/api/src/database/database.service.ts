@@ -1011,6 +1011,8 @@ export interface CRMChatCitationsTable {
   route: string;
   ordinal: number;
   rechecked_at: Date;
+  /** Phase 25.8 — when an external (web) source was retrieved; null for every other source type. */
+  retrieved_at: Date | null;
   created_at: Date;
 }
 

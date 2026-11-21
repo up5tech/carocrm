@@ -18,8 +18,8 @@ handbook).**
 Phase 25 (AI capability parity) is **in progress**: 25.0's read-only baseline, 25.1's documentation
 truthfulness, 25.2's version-pinned agent principal, 25.3's provider capability table with the
 Anthropic structured-output fallback, 25.4's reusable versioned skills, 25.5's bounded workflow AI
-action, 25.6's watched-field/condition trigger filters and 25.7's bounded attachment input are
-implemented, with the single canonical claim source at
+action, 25.6's watched-field/condition trigger filters, 25.7's bounded attachment input and 25.8's
+grounded web search are implemented, with the single canonical claim source at
 [`docs/architecture/ai-capability-matrix.md`](docs/architecture/ai-capability-matrix.md). These are
 alpha/pilot capabilities and evidence only while the Phase 24.12 production gate remains open.
 
@@ -86,9 +86,9 @@ _Phase 19_ —
   Microsoft 365, Meta Lead Ads, Zoom, Kit and a generic REST adapter (Phases 19-INT.0–19-INT.27).
 - **CRM Chat** — an assistant over your own CRM data: conversations with SSE turn streams, tool steps
   and usage, citations re-read under the reader's permission, prompt templates, answer ratings and
-  bounded cross-module analysis scenarios (contract v1.3.0, 27 routes, 25 registered tool keys;
-  24 Chat-facing). Page context, web grounding and conversation sharing are **not** shipped — see the
-  canonical AI capability matrix.
+  bounded cross-module analysis scenarios, plus cited web results from one operator-configured
+  search endpoint (contract v1.3.0, 27 routes, 26 registered tool keys; 25 Chat-facing). Page context
+  and conversation sharing are **not** shipped — see the canonical AI capability matrix.
 - **E-Signature** — provider-neutral signing requests (DocuSign and Dropbox Sign adapters; a simulator
   outside production): provider connections with an encrypted credential vault, draft/preview/prepare
   with an approval policy, a deliberate send with double-submit protection, reconciliation and

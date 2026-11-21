@@ -41,7 +41,7 @@ endpoints:
     auth: authenticated
     permissions: "capability policyAdmin (AIAgentPolicy edit)"
     request: none
-    response: "200 AIAgentsSettingsView { settings{features,provider,limits,approval,retention,safety,tools,dataPolicy}, version, updatedAt, updatedBy, defaults, warnings[] }"
+    response: "200 AIAgentsSettingsView { settings{features,provider,limits,approval,retention,safety,tools,dataPolicy,search}, version, updatedAt, updatedBy, defaults, warnings[] }"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
     pagination: none
     sorting: none
@@ -52,7 +52,7 @@ endpoints:
     path: /api/v1/AIAgents/action/settings
     auth: authenticated
     permissions: "capability policyAdmin (AIAgentPolicy edit); the service re-checks AIAgentPolicy edit"
-    request: "settings patch object (deep-merged into the aiAgents row, then validated by the strict AIAgentsSettingsSchema; unknown keys refused)"
+    request: "settings patch object (deep-merged into the aiAgents row, then validated by the strict AIAgentsSettingsSchema; unknown keys refused). `search{enabled,endpoint,allowLoopback,providerKey,maxResults,timeoutMs,costPerCallUsd}` configures the outbound `web_search` tool; the endpoint is SSRF-checked on every call and an empty endpoint keeps the tool fail-closed"
     response: "200 AIAgentsSettingsView"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED]
     pagination: none

@@ -1694,6 +1694,16 @@ export interface AIAgentsSettings {
     readonly allowedExternalDataClasses: readonly string[];
     readonly logPrompts: boolean;
   };
+  /** Phase 25.8 — grounded web search behind one operator-configured endpoint (fail-closed). */
+  readonly search: {
+    readonly enabled: boolean;
+    readonly endpoint: string;
+    readonly allowLoopback: boolean;
+    readonly providerKey: string;
+    readonly maxResults: number;
+    readonly timeoutMs: number;
+    readonly costPerCallUsd: number;
+  };
 }
 
 /** Phase 19-AI.2 — the settings row as the module returns it, with the warnings it reports. */
@@ -3108,7 +3118,8 @@ export interface CRMChatStreamEvent {
  * This is the server-materialised view (`CRMChatCitationView`): the label and route are produced
  * server-side after an ACL re-read, so the SPA renders exactly what it is given and never composes a
  * route of its own. `entity`/`recordId` are null for a citation that is not a CRM record, such as a
- * handbook page cited by `docs_read_page`.
+ * handbook page cited by `docs_read_page` or an external page cited by `web_search` (whose `route`
+ * is an absolute http(s) URL and whose `retrievedAt` is when that page was fetched).
  */
 export interface CRMChatCitation {
   readonly id: string;
@@ -3120,6 +3131,8 @@ export interface CRMChatCitation {
   readonly route: string;
   readonly ordinal: number;
   readonly recheckedAt: string;
+  /** 25.8 — when an external page was retrieved; equals `recheckedAt` for a re-readable source. */
+  readonly retrievedAt: string;
 }
 
 /** What `POST action/citations/reauthorize` answers for one citation. */

@@ -53,6 +53,7 @@ function citation(overrides: Partial<CRMChatCitation> = {}): CRMChatCitation {
     route: '/entity/Account/acc-1',
     ordinal: 0,
     recheckedAt: new Date().toISOString(),
+    retrievedAt: new Date().toISOString(),
     ...overrides,
   };
 }

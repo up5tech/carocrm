@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { encodeWebSourceRef } from '../src/ai-agents/ai-web-search.js';
 import { CRMChatCitationService } from '../src/crm-chat/crm-chat-citations.service.js';
 import type { AIAgentMessagesTable } from '../src/database/database.service.js';
 
@@ -141,6 +142,36 @@ describe('CRMChatCitationService.forMessages (19-CHAT.28)', () => {
     expect(result.get('msg-1')?.[0]?.label).toBe('Acme');
     expect(calls.entityLists).toBe(0);
     expect(calls.inserts).toBe(0);
+  });
+
+  it('materialises one external citation per web hit, with its URL and retrieval time (25.8)', async () => {
+    const retrievedAt = '2026-11-20T05:00:00.000Z';
+    const reference = encodeWebSourceRef([
+      { title: 'Pricing update', url: 'https://example.com/pricing', snippet: 's', retrievedAt },
+      { title: 'Analyst note', url: 'https://example.org/note', snippet: 's', retrievedAt },
+    ]);
+    // `parseReference` splits at the first colon, so the payload arrives as `entity`/`id`.
+    const webMessage = message('msg-web', [{ entity: 'web_source', id: reference.slice('web_source:'.length) }]);
+    const { service, calls } = harness({});
+
+    const result = await service.forMessages([webMessage]);
+    const views = result.get('msg-web') ?? [];
+
+    expect(views.map((view) => [view.sourceType, view.route, view.label])).toEqual([
+      ['approved_external_source', 'https://example.com/pricing', 'Pricing update'],
+      ['approved_external_source', 'https://example.org/note', 'Analyst note'],
+    ]);
+    expect(views.every((view) => view.entity === null && view.recordId === null)).toBe(true);
+    expect(views.map((view) => view.retrievedAt)).toEqual([retrievedAt, retrievedAt]);
+    // An external source needs no entity read and no handbook read.
+    expect(calls.entityLists).toBe(0);
+    expect(calls.docsReads).toBe(0);
+  });
+
+  it('drops an undecodable web reference instead of citing it', async () => {
+    const { service } = harness({});
+    const result = await service.forMessages([message('msg-web', [{ entity: 'web_source', id: 'not-base64' }])]);
+    expect(result.get('msg-web')).toEqual([]);
   });
 
   it('hides references the caller cannot read instead of erroring', async () => {

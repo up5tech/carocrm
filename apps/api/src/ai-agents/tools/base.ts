@@ -10,6 +10,7 @@ import type { MetadataStoreService } from '../../metadata/metadata-store.service
 import type { StreamService } from '../../stream/stream.service.js';
 import type { AIAgentActorDirectoryService } from '../ai-agent-directory.service.js';
 import type { AIAgentsSettingsService } from '../ai-agents-settings.service.js';
+import type { AIWebSearchService } from '../ai-web-search.js';
 import { ACTIVITY_ENTITIES, READABLE_ENTITIES } from './schemas.js';
 
 export class AIToolHandlerBase {
@@ -20,6 +21,7 @@ export class AIToolHandlerBase {
     protected readonly docs: DocsService,
     protected readonly actors: AIAgentActorDirectoryService,
     protected readonly stream: StreamService,
+    protected readonly webSearch: AIWebSearchService,
   ) {}
 
   protected assertReadableEntity(entity: string): void {

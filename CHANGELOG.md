@@ -83,9 +83,21 @@ production go/no-go.
   bounded future extraction seam are shaped by `boundRecord`/`promptSafe` as untrusted data. No file
   bytes, OCR, third-party vision call, new storage backend or migration. AIAgents module version is
   now 1.8.0; automated checks are assigned to the developer by `AGENTS.MD` §4.
+- **25.8** Grounded web search: one `web_search` tool over one operator-configured endpoint
+  (`settings.search`, off by default and fail-closed). The model supplies only a query; the endpoint
+  is operator data and passes `assertSafeProviderBaseUrl` on every call, with redirects refused.
+  Results are bounded (≤5, 200-char query, 400-char snippet, 256 KiB body, ≤12 s timeout),
+  `promptSafe`d, marked untrusted, and restricted to http(s). Every hit carries its URL and retrieval
+  instant and becomes an `approved_external_source` citation materialised from the tool's own
+  `web_source:` reference — never model text. Each call writes one `ai_agent_provider_requests` row
+  under the configured label with the run id, so search spend is in the same usage ledger and run
+  cost counter. Additive migration 100 adds the citation source type and a nullable `retrieved_at`;
+  no row, column or value is removed. Unconfigured installations keep working and the tool says so.
+  Twitter/X search stays out of scope. AIAgents module version is now 1.9.0; automated checks are
+  assigned to the developer by `AGENTS.MD` §4.
 
-Not shipped by 25.7: assignable agent roles, code-defined agents, web grounding (25.8), chat page
-context (25.9), installation cost view (25.10) and the golden evaluation gate (25.11).
+Not shipped by 25.8: assignable agent roles, code-defined agents, chat page context (25.9),
+installation cost view (25.10) and the golden evaluation gate (25.11).
 
 ### Phase 24
 

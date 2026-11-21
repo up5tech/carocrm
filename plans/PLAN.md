@@ -2945,11 +2945,13 @@ recovered from documented artifacts; and the final review records an honest go/n
 
 Status: **In progress** (2026-11-20): 25.0 baseline, 25.1 documentation truthfulness, 25.2
 version-pinned agent principal, 25.3 provider capability parity, 25.4 reusable versioned skills,
-25.5 bounded workflow AI action, 25.6 watched-field/condition trigger filters and 25.7 bounded
-attachment input implemented. 25.4
+25.5 bounded workflow AI action, 25.6 watched-field/condition trigger filters, 25.7 bounded
+attachment input and 25.8 grounded web search implemented. 25.4
 added the phase's first schema change (additive migration 098); 25.5 added additive migration 099
-for the `workflow` run trigger; 25.6 and 25.7 need no migration. No dependency or release action has been
-taken. 25.6 and 25.7 automated checks are assigned to the developer per `AGENTS.MD` §4.
+for the `workflow` run trigger; 25.6 and 25.7 need no migration; 25.8 added additive migration 100
+for the `approved_external_source` citation source type and a nullable `retrieved_at`, and keeps the
+search endpoint in the existing settings row. No dependency or release action has been taken. 25.6,
+25.7 and 25.8 automated checks are assigned to the developer per `AGENTS.MD` §4.
 Since 25.1 the single canonical AI claim source is `docs/architecture/ai-capability-matrix.md`. Scope, work order, owner decisions and
 acceptance criteria live in `plans/PLAN_Phase_25_AI_Capability_Parity.md`. This phase follows Phase 24 (`docs/quality/phase-24-12-release-review.md`
 still records an open production gate) and does **not** reopen that gate: its own review is AI-capability only and

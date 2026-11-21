@@ -176,8 +176,8 @@ endpoints:
     path: /api/v1/CRMChat/action/citations/reauthorize
     auth: authenticated
     permissions: "CRM Chat capability use plus the workspace feature flag"
-    request: "strict object { citations: array (max 20) of { sourceType (crm_record|query_result|report|help_document|approved_external_source), entity?, recordId?, label, route } }"
-    response: "200 { citations: [{ accessible, label, route, reason }] } — labels and routes are the server's, re-read under the caller's current rights"
+    request: "strict object { citations: array (max 20) of { sourceType (crm_record|query_result|report|help_document|approved_external_source), entity?, recordId?, label, route (max 1000, an absolute http(s) URL for an external source) } }"
+    response: "200 { citations: [{ accessible, label, route, reason }] } — labels and routes are the server's, re-read under the caller's current rights; an external (web) citation has no ACL row, so its URL is re-validated as http(s) instead"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, FEATURE_DISABLED, INVALID_QUERY]
     pagination: none
     sorting: none

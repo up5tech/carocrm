@@ -320,6 +320,49 @@ export function AIAgentsSettingsTab({ capabilities }: { readonly capabilities: R
               </Form.Item>
             </Card>
 
+            <Card className="carocrm-card" size="small" title={t('web.aiAgents.settingsWebSearch')} style={{ marginBottom: 16 }}>
+              <Typography.Paragraph type="secondary" style={{ marginTop: 0, fontSize: 12 }}>
+                {t('web.aiAgents.settingsWebSearchHint')}
+              </Typography.Paragraph>
+              <Form.Item name={['search', 'enabled']} label={t('web.aiAgents.settingsSearchEnabled')} valuePropName="checked">
+                <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+              </Form.Item>
+              <Form.Item
+                name={['search', 'endpoint']}
+                label={t('web.aiAgents.settingsSearchEndpoint')}
+                extra={t('web.aiAgents.settingsSearchEndpointHint')}
+              >
+                <Input maxLength={500} placeholder="https://search.example.com/v1/search" />
+              </Form.Item>
+              <Row gutter={12}>
+                <Col xs={12} sm={8}>
+                  <Form.Item name={['search', 'maxResults']} label={t('web.aiAgents.settingsSearchMaxResults')}>
+                    <InputNumber min={1} max={5} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8}>
+                  <Form.Item name={['search', 'timeoutMs']} label={t('web.aiAgents.settingsSearchTimeout')}>
+                    <InputNumber min={1_000} max={12_000} step={500} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8}>
+                  <Form.Item name={['search', 'costPerCallUsd']} label={t('web.aiAgents.settingsSearchCost')}>
+                    <InputNumber min={0} max={10} step={0.001} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={12}>
+                  <Form.Item name={['search', 'providerKey']} label={t('web.aiAgents.settingsSearchProviderKey')}>
+                    <Input maxLength={64} placeholder="web_search" />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={12}>
+                  <Form.Item name={['search', 'allowLoopback']} label={t('web.aiAgents.settingsSearchLoopback')} valuePropName="checked">
+                    <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+
             <Card className="carocrm-card" size="small" title={t('web.aiAgents.settingsDefaultProvider')}>
               <Typography.Paragraph type="secondary" style={{ marginTop: 0, fontSize: 12 }}>
                 {t('web.aiAgents.settingsDefaultProviderHint')}
