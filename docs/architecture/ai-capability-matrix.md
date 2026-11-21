@@ -6,14 +6,20 @@
 > 25.7 (bounded attachment input) and 25.8 (grounded web search) delivered 2026-11-19/20; 25.9
 > (CRM Chat page context and UX parity) delivered 2026-11-21; 25.10 (installation-level cost and
 > usage visibility) delivered 2026-11-21; 25.11 (golden evaluations and the tool-routing gate) delivered
-> 2026-11-21. Phase 25 as
-> a whole is **in progress**, not complete. This is the **single canonical AI parity document**; the 25.0 baseline
+> 2026-11-21; 25.12 (AI capability review and go/no-go) delivered 2026-11-21. Phase 25 is
+> **complete as a phase**: every sub-phase 25.0–25.12 is implemented, and the phase's own review
+> (`docs/quality/phase-25-release-review.md`) decides **GO for alpha/pilot, AI capability only** —
+> **NO-GO for production** while the Phase 24.12 gate is open. This is the **single canonical AI
+> parity document**; the 25.0 baseline
 > (`docs/quality/phase-25-ai-parity-baseline.md`) and the decision record
 > (`docs/quality/phase-25-priority-decisions.md`) are evidence inputs, not parallel matrices.
 > **Evidence rule:** CaroCRM claims carry a repository path and, where it matters, a line; Twenty claims
 > carry a primary-source URL and a verification state. `Implemented and verified` in this file means
 > source-level verification plus the existing cited test suite — **not** a fresh test run by 25.1.
 > Anything that cannot be traced is labelled `Hypothesis`, never `Implemented`.
+> **Machine-checked evidence:** every path/line citation in this file is verified by
+> `apps/api/test/ai-capability-matrix-evidence.test.ts`, which runs in the nightly DB-free lane — a
+> citation that stops resolving fails the gate.
 > **Release boundary:** the Phase 24.12 production gate is still open (`docs/quality/phase-24-12-release-review.md`,
 > `docs/releases/2026-11-15-phase-24.md`). All Phase 25 evidence is **alpha/pilot only** (decision D7).
 > **Decision boundary:** CaroCRM is single-tenant by design — one deployment serves one organisation.
@@ -56,8 +62,8 @@ version-pinned approvals, a deterministic fake provider, and trigger recursion/i
 | 8 | Permissions | **Partial → principal pinned in 25.2**: 12 synthetic AI capability entities through ACL (`ai-agents-module.ts`; 11 at 25.3, `skillAdmin` added in 25.4); published versions carry `principal.mode` (`ai-agent-config.ts:145-153,220`, strict schema, no service identity) and `apps/api/src/ai-agents/runs/lifecycle.ts` enforces `requesting_user` for manual/Chat and publisher-attribution for automated doors. Every event carries effective principal + pinned version (`ai-agent-run-events.ts:16-31`). **Assignable agent roles are still missing** — the user identity is pinned, not a Twenty-style role assignment. | Assignable agent roles (`roleUniversalIdentifier`, `SystemPermissionFlag.AI`) and per-object read/write — Live-verified (`https://docs.twenty.com/user-guide/ai/capabilities/permissions-access-control.md`, re-fetched 25.1; skills-and-agents.md). Autonomous runs may keep the agent's role (`runAsWorkspaceMemberId`), a deliberate deviation from D2. | Least-privilege mapping below; assignable roles remain a later owner decision — 25.2 delivered the principal half | **Partial** — P0 |
 | 9 | Cost control | **Implemented in 25.10; tests added, automated checks skipped per `AGENTS.MD` §4**: scoped atomic budgets (`forUpdate()`, `ai-agent-quota.service.ts`), model rates (`ai-agent-pricing.service.ts`) and per-run ceilings stay unchanged; the installation-level **cost and usage view** now reads the same two ledgers (`ai_agent_runs`, `ai_agent_provider_requests`) and answers "which agent/model/trigger spent what, over which window" from the UI and from a CSV export (`apps/api/src/ai-agents/ai-agent-cost-report.ts`, `ai-agent-cost-report.service.ts`; `GET /api/v1/AIAgents/action/usage` and `.../usage/export`). The window is the module's own period grammar (`this_month`, `rolling:30d`, `all`) resolved in the caller's zone; cost stays labelled `estimate`/`none`/`unknown`, and only provider keys and model ids are exposed. The soft limit now **warns before the hard limit stops work**: the unlocked quota pre-check writes an in-app notification to the administrators (`ai-agent-quota-notification.service.ts`), deduped per policy, dimension and period. No credit balance, no per-seat allowance, no payment flow, no new billing table. | Workspace credits (1 credit = $1), personal weekly AI allowance, token-priced model calls and a per-action breakdown including model in Settings → Billing — **Live-verified 25.1** (`https://docs.twenty.com/user-guide/billing/capabilities/credits.md`, `https://docs.twenty.com/user-guide/billing/how-tos/billing-faq.md`). Corrected URL: the 25 plan's old `/billing/capabilities/credits.md` path 404s. | Installation-level usage/cost view and soft-limit warnings; **credits/billing are an explicit skip** — 25.10 delivered | **Implemented; verification to be run by developer** — P1 |
 | 10 | Evaluation | **Implemented and verified** at source level: deterministic graders, 24 tool cases × 2 languages × 3 assistants (`TOOLS_PER_ASSISTANT = 8`), injection, ACL-masking and hallucinated-citation negatives (`crm-chat-evaluation.test.ts:761,934,958`); `human_review` pending by design, `model_review` advisory (`ai-agent-evaluations.service.ts:25-26,139,145`). **25.11 adds a versioned golden dataset (46 cases: 40 deterministic, 4 `human_review`, 2 `model_review`; VI + EN), a deterministic tool router and the tool-routing accuracy metric (baseline 1.00, floor 1.00) in the nightly DB-free gate** (`apps/api/src/ai-agents/eval/`, `apps/api/test/ai-golden-eval.test.ts`, `docs/quality/phase-25-eval-evidence.md`). | SDK testing guidance exists; **no comparable published golden suite was found** in the primary sources reviewed (overview, AI FAQ, skills-and-agents, credits, billing FAQ) — `Hypothesis` (an absence claim, not a verified negative). | Versioned dataset and tool-routing accuracy threshold in the nightly DB-free gate — **25.11 delivered** | **Implemented, insufficiently verified** (the model's own routing on free-form prompts is unproven; the gate measures the deterministic intent contract) — P0 |
-| 11 | MCP / extensions | **Implemented and verified**: shipped MCP-compatible tool door (`GET/POST /api/v1/AIAgents/action/mcp/tools|call`, `docs/reference/compatibility-matrix.md:364`), idempotent direct calls (19-AI.23), extension SDK with signed packages, and `modules/webhook-integration`. Model-backed retrieval stays deferred. | `defineMcpServer()` is **beta, "not live yet"** — Live-verified 25.0 (skills-and-agents.md). | Document the shipped adapter as an advantage; no new MCP surface without a live use case — 25.3 / 25.12 | **Implemented and verified** (protocol half) — P1 |
-| 12 | Truthfulness | **Partial → corrected here.** G99's three drifts are fixed in 25.1: `plans/SPEC.md` tool ceiling and trigger status, the CRM Chat contract status line, and `docs/reference/compatibility-matrix.md` / `docs/reference/alpha-status.md` / README. Accepted posture: "Optional protected assistive use only" at `docs/compatibility/advanced-integrations.md:123`; model-backed retrieval deferred; `human_review` pending. The former Anthropic structured-output gap was closed in 25.3 without relaxing `validateBoundedJsonSchema()`. | Documentation is part of the product; no direct parity row — Documented. | One canonical matrix and honest skip list — 25.1 / 25.12 | **Fixed for G99; overall parity review remains Open** — P0 |
+| 11 | MCP / extensions | **Implemented and verified**: shipped MCP-compatible tool door (`GET/POST /api/v1/AIAgents/action/mcp/tools|call`, `docs/reference/compatibility-matrix.md:369`), idempotent direct calls (19-AI.23), extension SDK with signed packages, and `modules/webhook-integration`. Model-backed retrieval stays deferred. | `defineMcpServer()` is **beta, "not live yet"** — Live-verified 25.0 (skills-and-agents.md). | Document the shipped adapter as an advantage; no new MCP surface without a live use case — 25.3 / 25.12 | **Implemented and verified** (protocol half) — P1 |
+| 12 | Truthfulness | **Partial → corrected here.** G99's three drifts are fixed in 25.1: `plans/SPEC.md` tool ceiling and trigger status, the CRM Chat contract status line, and `docs/reference/compatibility-matrix.md` / `docs/reference/alpha-status.md` / README. Accepted posture: "Optional protected assistive use only" at `docs/compatibility/advanced-integrations.md:123`; model-backed retrieval deferred; `human_review` pending. The former Anthropic structured-output gap was closed in 25.3 without relaxing `validateBoundedJsonSchema()`. | Documentation is part of the product; no direct parity row — Documented. | One canonical matrix and honest skip list — 25.1 / 25.12 | **Fixed for G99; the AI capability review is delivered (25.12) — the product release review remains Open** — P0 |
 
 Summary: rows 1, 7, 8 and 12 are **Partial** (real capability, named gap); rows 3, 5, 6 and 9 are
 **Implemented in 25.6/25.7/25.8/25.10 with tests added** (watched fields/conditions; bounded attachment
@@ -67,6 +73,15 @@ are untrusted; an installation-level cost and usage view with soft-limit warning
 the bounded workflow AI action** (25.5; system agents/code-defined steps are an accepted skip); row
 10 is **Implemented, insufficiently verified**; row 11 is **Implemented and verified** for the
 protocol half. No row claims full Twenty parity. Feature-gated code is not claimed as enabled behaviour.
+
+**25.12 review result.** Every row above was re-checked against the repository in the 25.12 review: each
+row traces to a test file that exists, and one stale line reference was repaired
+(`docs/reference/compatibility-matrix.md:369`). No row was deleted and no claim was downgraded, because
+none of them lacked an evidence path. The per-row verification state — **Verified**, **Source-verified**
+(the cited suite exists but has not been run since `AGENTS.MD` §4 assigned the runs to the developer),
+**Partial** or **Accepted skip** — is recorded in `docs/quality/phase-25-release-review.md` §5, and the
+citation sweep that enforces it is `apps/api/test/ai-capability-matrix-evidence.test.ts` in the nightly
+DB-free lane.
 
 ## 3. Twenty source log (all fetched 2026-11-18 unless noted)
 
@@ -256,3 +271,29 @@ executed parity evidence belongs to 25.11 and 25.12.
   new router, guard or authorization path. A browser spec would re-test presentation only. The SPA
   was additionally built to a temporary outDir (`vite build`, success) to cover the new tab and
   picker beyond typecheck.
+
+---
+
+## 9. The 25.12 review — what it verified, and what it did not run
+
+The phase's own review is `docs/quality/phase-25-release-review.md`; the release note is
+`docs/releases/2026-11-21-phase-25.md`. The review's job was to make this matrix trustworthy, not to
+restate it, so it did three things:
+
+- **Citation sweep.** All path/line citations in this file were resolved against the repository; **one was
+  stale** (the MCP-door reference in `docs/reference/compatibility-matrix.md` pointed at a blank line) and now
+  points at the MCP-door row itself. The sweep is no longer a one-off: `apps/api/test/ai-capability-matrix-evidence.test.ts`
+  re-runs it in the nightly DB-free lane and fails when a citation stops resolving.
+- **Boundary sweep.** The whole Phase 25 delta (116 changed code files, three additive migrations) was
+  inspected for the six things the phase must not introduce: a tenant dimension, a billing surface, an
+  arbitrary code path, a live vendor call, a weakened Phase 23 control and an extra database. **None is
+  present** — the SSRF guard and the shared address classifier are untouched, no exception was added to the
+  security register, and the only `eval(` in the delta is a test fixture asserting that the workflow
+  validator *rejects* it.
+- **Honest limits.** No gate command was executed (`AGENTS.MD` §4), so the review marks each row
+  **Source-verified** where its suite has not been run, and it grants **GO for alpha/pilot, AI capability
+  only** — never production readiness, never full Twenty parity, never a claim about the model's own
+  routing quality.
+
+**What would move a row from Source-verified to Verified:** one executed run of the suite the row cites.
+That is the whole remaining distance for rows 1, 2, 3, 5, 6, 7, 8, 9, 10 and 11.

@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-11-16
+updated: 2026-11-21
 ---
 
 Nothing inside the application opens a list of what changed. There is no **What's new** screen, no version
@@ -20,6 +20,7 @@ whoever maintains your instance.
 
 | Document | What it is | Latest dated entry |
 | --- | --- | --- |
+| `docs/releases/2026-11-21-phase-25.md` | The AI capability parity note: what the assistant, the agents, the skills, the triggers and the evaluation gate now do, and the review that decides alpha/pilot only. | 2026-11-21. |
 | `docs/releases/2026-11-15-phase-24.md` | The interim product-completion note: single-tenant charter, production install artifacts, and what is still open. | 2026-11-15. |
 | `docs/releases/2026-11-13-phase-23.md` | The security-hardening release note: verified controls, migrations 089–094, operational actions and the NO-GO decision. | 2026-11-13. |
 | `docs/releases/2026-10-29-phase-22.md` | The hardening release note for the whole product: verified scope, migrations, operational actions and the remaining release blockers. | 2026-10-29. |
@@ -43,13 +44,27 @@ A note in this repository is written as evidence, not as marketing. Four parts a
 
 ## The most recent release
 
-The newest dated note is the **Phase 24 interim product-completion note**, updated 2026-11-16 with
-**Phase 24.6 (real inbound mail)** and **Phase 24.7 (installation-wide email/calendar sync)**, 2026-11-15,
-with the **Phase 23 security-hardening release**, 2026-11-13, behind it. Phase 24 is still in progress: it
-ratifies single-tenancy as the product boundary, ships production install artifacts, delivers real
-inbound mail and the installation-wide email/calendar sync, and corrects release documentation, while
-the release decision stays **NO-GO for production** — the same backup, licence and unsigned-exception
-blockers as Phase 23. What a reader can notice:
+The newest dated note is the **Phase 25 AI capability parity note**, 2026-11-21. Phase 25 is complete as a
+phase: it brought the assistant and the agent runtime up to parity with what Twenty ships, and then reviewed
+itself. Its decision is **GO for alpha/pilot for the AI capability only** — the production decision stays
+**NO-GO** for the reasons below. Behind it sits the **Phase 24 interim product-completion note**,
+2026-11-15, with the **Phase 23 security-hardening release**, 2026-11-13, behind that. What a reader of
+Phase 25 can notice:
+
+| What you see | What it means |
+| --- | --- |
+| The chat answers with the record you are looking at | The page sends the identifier; the server resolves it under your own permissions and drops what you may not read. |
+| A published agent always runs as a named person | The principal is pinned in the published version and stamped on every run, so a run is never anonymous. |
+| A workflow step can ask an agent | One bounded action, strict parameters, and an approval that can only be stricter than the agent's own policy. |
+| The assistant can look something up on the web | One search tool over an endpoint you configure, off by default, refused for internal addresses, and every hit is cited and treated as untrusted data. |
+| A usage view answers "what did the AI cost this month?" | One windowed read-out over the ledgers the product already keeps, with a CSV export. No credits, no billing. |
+| A nightly check fails when a tool grant breaks | A versioned evaluation set with a routing-accuracy floor that may only rise; it runs in the existing nightly lane. |
+
+The Phase 24 note is the interim product-completion note: it ratifies single-tenancy as the product
+boundary, ships production install artifacts, delivers real inbound mail and the installation-wide
+email/calendar sync, and corrects release documentation, while the release decision stays **NO-GO for
+production** — the same backup, licence and unsigned-exception blockers as Phase 23. What a reader can
+notice:
 
 | What you see | What it means |
 | --- | --- |
@@ -71,10 +86,12 @@ data. What a reader can notice:
 | Attachments and exports respect the same permissions as the record | Attachment reads require the parent's ACL and CSV export blanks read-denied columns. |
 
 > [!WARNING]
-> Both the Phase 23 and Phase 24 notes record the release as **blocked for production** (NO-GO):
+> The Phase 23, Phase 24 and Phase 25 notes record the release as **blocked for production** (NO-GO):
 > there is still no restore rehearsal and no approved RPO/RTO, no `LICENSE`/distribution decision,
 > and the High/Critical exceptions await owner signatures. A backup artifact can be written; a
 > tested restore does not exist yet. Each note names the open gaps with an owner and a review date.
+> The Phase 25 note adds a narrower decision: the **AI capability** is cleared for alpha/pilot, and
+> nothing else.
 
 ### The last module release
 

@@ -1,8 +1,14 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8, 25.9, 25.10 and 25.11 implemented (25.0–25.4 on 2026-11-18;
-> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9, 25.10 and 25.11 on 2026-11-21; canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8, 25.9, 25.10, 25.11 and 25.12 implemented
+> (25.0–25.4 on 2026-11-18;
+> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9, 25.10, 25.11 and 25.12 on 2026-11-21;
+> canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
+> **The phase is complete:** every sub-phase 25.0–25.12 is implemented, and the 25.12 review
+> (`docs/quality/phase-25-release-review.md`) records the decision — **GO for alpha/pilot, AI capability
+> only; NO-GO for production** while the Phase 24.12 gate stays open. The release note is
+> `docs/releases/2026-11-21-phase-25.md`.
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
 > JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
 > 25.4 added versioned, non-executable skill text records through additive migration 098. Migration
@@ -18,8 +24,9 @@
 > `?lastEventId=` resume parameter. 25.10 needs no migration either: the installation-level cost
 > and usage view reads the existing run and provider ledgers, and the soft-limit warning is an
 > in-app notification row. 25.11 needs no migration either: the golden dataset is a repository file
-> and the gate reads the existing tool registry. No dependency or release action.
-> Work continues at 25.12 (AI capability review and go/no-go).
+> and the gate reads the existing tool registry. 25.12 needs no migration either: the review is a
+> document and its evidence check is a filesystem test. No dependency or release action.
+> **Phase 25 closes here**; the 25.12 decision is recorded in `docs/quality/phase-25-release-review.md`.
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -593,6 +600,29 @@ Report what is now at parity, what is better, what is deliberately skipped and w
 
 - `docs/quality/phase-25-release-review.md` contains an evidence-linked status for every matrix row, residual P1/P2 risks with owners, and an honest go/no-go for **AI capability only**.
 - No claim of full Twenty parity or production readiness without the corresponding gate.
+
+### Delivered (2026-11-21)
+
+- **The review.** `docs/quality/phase-25-release-review.md` gives every matrix row an evidence-linked status
+  (**Verified**, **Source-verified**, **Partial** or **Accepted skip**), the residual P1/P2 risks with their
+  owners and review dates, the boundary checks the phase must not cross, and the decision.
+- **The decision.** **GO for alpha/pilot, AI capability only.** **NO-GO for production**, unchanged: the
+  Phase 24.12 gate is open, and the four Phase 23 §8 conditions plus three AI conditions (feature-gated
+  off, the fake provider or an operator-accepted one, and no claim about model routing) apply.
+- **The rows.** Every row was re-verified against the repository: one stale citation was repaired
+  (`docs/reference/compatibility-matrix.md`), no row was deleted and no claim was downgraded, because none
+  of them lacked an evidence path. The per-row verdict lives in the review §5.
+- **The boundary.** The whole Phase 25 delta was inspected for the six things it must not introduce — a
+  tenant dimension, a billing surface, an arbitrary code path, a live vendor call, a weakened Phase 23
+  control and an extra database. **None is present**; the SSRF guard and the shared address classifier are
+  untouched and no security exception was added.
+- **The machine check.** `apps/api/test/ai-capability-matrix-evidence.test.ts` runs in the existing nightly
+  DB-free lane and fails when a matrix citation stops resolving — the review's evidence claim is now a
+  check, not a promise.
+- **Not executed.** No gate command was run (`AGENTS.MD` §4). The commands and the empty result columns are
+  in the review §9, and no document records a result as if it had been produced.
+- **The release note.** `docs/releases/2026-11-21-phase-25.md`, mirrored by the in-app release-notes pages
+  in `en` and `vi`.
 
 ---
 

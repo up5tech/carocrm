@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-11-16
+updated: 2026-11-21
 ---
 
 Trong ứng dụng không có gì mở ra danh sách những gì đã thay đổi. Không có màn hình **Có gì mới**,
@@ -20,6 +20,7 @@ người bảo trì phiên bản của bạn.
 
 | Tài liệu | Là gì | Mục ghi ngày mới nhất |
 | --- | --- | --- |
+| `docs/releases/2026-11-21-phase-25.md` | Ghi chú parity khả năng AI: trợ lý, agent, skill, trigger và cổng đánh giá giờ làm được gì, cùng bản rà soát chỉ cấp phép alpha/pilot. | 2026-11-21. |
 | `docs/releases/2026-11-15-phase-24.md` | Ghi chú trung gian về hoàn thiện sản phẩm: hiến chương single-tenant, artefact cài đặt production, real inbound mail và email/calendar sync toàn cài đặt, cùng những gì còn mở. | 2026-11-16. |
 | `docs/releases/2026-11-13-phase-23.md` | Ghi chú phát hành tăng cường bảo mật: các kiểm soát đã kiểm chứng, migration 089–094, việc vận hành cần làm và quyết định NO-GO. | 2026-11-13. |
 | `docs/releases/2026-10-29-phase-22.md` | Ghi chú phát hành tăng cường cho toàn sản phẩm: phạm vi đã kiểm chứng, migration, việc vận hành cần làm và các blocker còn lại. | 2026-10-29. |
@@ -43,13 +44,26 @@ Một ghi chú trong kho này được viết như bằng chứng, không như t
 
 ## Bản phát hành gần nhất
 
-Ghi chú có ngày mới nhất là **ghi chú trung gian hoàn thiện sản phẩm Phase 24**, được cập nhật
-2026-11-16 với **Phase 24.6 (real inbound mail)** và **Phase 24.7 (email/calendar sync toàn cài
-đặt)**, với **bản phát hành tăng cường bảo mật Phase 23**, 2026-11-13, ngay sau đó. Phase 24
-vẫn đang chạy: nó phê chuẩn single-tenant làm ranh giới sản phẩm, cung cấp artefact cài đặt
-production, cung cấp real inbound mail và email/calendar sync toàn cài đặt, và sửa tài liệu phát
-hành, trong khi quyết định phát hành vẫn là **NO-GO cho production** — cùng các blocker về backup,
-giấy phép và exception chưa ký như Phase 23. Điều người đọc có thể nhận thấy:
+Ghi chú có ngày mới nhất là **ghi chú parity khả năng AI Phase 25**, ngày 2026-11-21. Phase 25 đã hoàn
+tất với tư cách một phase: nó đưa trợ lý và runtime agent lên ngang với những gì Twenty thực sự cung cấp,
+rồi tự rà soát lại chính nó. Quyết định của phase là **GO cho alpha/pilot, chỉ cho khả năng AI** — quyết
+định production vẫn là **NO-GO** vì những lý do dưới đây. Phía sau là **ghi chú trung gian hoàn thiện sản
+phẩm Phase 24**, 2026-11-15, rồi đến **bản phát hành tăng cường bảo mật Phase 23**, 2026-11-13. Điều
+người đọc Phase 25 có thể nhận thấy:
+
+| Bạn thấy | Điều đó nghĩa là |
+| --- | --- |
+| Chat trả lời dựa trên bản ghi bạn đang xem | Trang gửi kèm định danh; máy chủ tra cứu theo đúng quyền của bạn và bỏ qua phần bạn không được đọc. |
+| Agent đã publish luôn chạy dưới tên một người cụ thể | Principal được ghim trong phiên bản đã publish và đóng dấu lên mọi lần chạy, nên không lần chạy nào vô danh. |
+| Một bước workflow có thể hỏi agent | Một hành động có giới hạn, tham số nghiêm ngặt, và yêu cầu phê duyệt không bao giờ lỏng hơn chính sách của agent. |
+| Trợ lý có thể tra cứu trên web | Một công cụ tìm kiếm trên đúng endpoint bạn cấu hình, mặc định tắt, từ chối địa chỉ nội bộ, và mọi kết quả đều được trích dẫn và coi là dữ liệu không tin cậy. |
+| Màn hình usage trả lời "tháng này AI tốn bao nhiêu?" | Một bản đọc theo khoảng thời gian trên đúng hai sổ ghi đã có, kèm xuất CSV. Không credit, không billing. |
+| Kiểm tra đêm thất bại khi một tool grant hỏng | Bộ dữ liệu đánh giá có phiên bản và một sàn độ chính xác định tuyến chỉ được phép tăng; nó chạy trong lane đêm sẵn có. |
+
+Ghi chú Phase 24 là ghi chú trung gian hoàn thiện sản phẩm: nó phê chuẩn single-tenant làm ranh giới sản
+phẩm, cung cấp artefact cài đặt production, cung cấp real inbound mail và email/calendar sync toàn cài
+đặt, và sửa tài liệu phát hành, trong khi quyết định phát hành vẫn là **NO-GO cho production** — cùng các
+blocker về backup, giấy phép và exception chưa ký như Phase 23. Điều người đọc có thể nhận thấy:
 
 | Bạn thấy | Điều đó nghĩa là |
 | --- | --- |
@@ -71,10 +85,12 @@ hàng thật. Điều người đọc có thể nhận thấy:
 | Attachment và export tôn trọng cùng quyền với bản ghi | Đọc attachment yêu cầu ACL của bản ghi cha và export CSV bỏ trống cột bị cấm đọc. |
 
 > [!WARNING]
-> Cả ghi chú Phase 23 và Phase 24 đều ghi nhận bản phát hành **bị chặn cho production** (NO-GO):
+> Cả ghi chú Phase 23, Phase 24 và Phase 25 đều ghi nhận bản phát hành **bị chặn cho production** (NO-GO):
 > vẫn chưa có diễn tập restore và chưa có RPO/RTO được duyệt, chưa có quyết định `LICENSE`/phân phối,
 > và các exception mức High/Critical vẫn chờ chủ sở hữu ký. Artifact backup có thể ghi được; chưa có
 > restore đã kiểm chứng. Mỗi ghi chú nêu các khoảng trống còn mở kèm chủ sở hữu và ngày rà soát.
+> Ghi chú Phase 25 bổ sung một quyết định hẹp hơn: **khả năng AI** được phép alpha/pilot, và không gì
+> khác.
 
 ### Bản phát hành module gần nhất
 

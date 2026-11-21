@@ -2943,19 +2943,30 @@ recovered from documented artifacts; and the final review records an honest go/n
 
 ## Phase 25 — AI Capability Parity (Single-Tenant)
 
-Status: **In progress** (2026-11-20): 25.0 baseline, 25.1 documentation truthfulness, 25.2
+Status: **Complete as a phase** (2026-11-21): 25.0 baseline, 25.1 documentation truthfulness, 25.2
 version-pinned agent principal, 25.3 provider capability parity, 25.4 reusable versioned skills,
 25.5 bounded workflow AI action, 25.6 watched-field/condition trigger filters, 25.7 bounded
-attachment input and 25.8 grounded web search implemented. 25.4
+attachment input, 25.8 grounded web search, 25.9 CRM Chat page context, 25.10 installation-level cost
+and usage visibility, 25.11 golden evaluations and the tool-routing gate, and 25.12 the AI capability
+review and go/no-go. 25.4
 added the phase's first schema change (additive migration 098); 25.5 added additive migration 099
 for the `workflow` run trigger; 25.6 and 25.7 need no migration; 25.8 added additive migration 100
 for the `approved_external_source` citation source type and a nullable `retrieved_at`, and keeps the
-search endpoint in the existing settings row. No dependency or release action has been taken. 25.6,
-25.7 and 25.8 automated checks are assigned to the developer per `AGENTS.MD` §4.
+search endpoint in the existing settings row; 25.9, 25.10, 25.11 and 25.12 need no migration. No
+dependency or release action has been taken. The automated checks of 25.6 through 25.12 are assigned to
+the developer per `AGENTS.MD` §4; the 25.12 review records that state per matrix row instead of
+claiming a green gate.
 Since 25.1 the single canonical AI claim source is `docs/architecture/ai-capability-matrix.md`. Scope, work order, owner decisions and
 acceptance criteria live in `plans/PLAN_Phase_25_AI_Capability_Parity.md`. This phase follows Phase 24 (`docs/quality/phase-24-12-release-review.md`
 still records an open production gate) and does **not** reopen that gate: its own review is AI-capability only and
 permits alpha/pilot evidence while 24.12 stays open.
+
+**25.12 decision (2026-11-21):** `docs/quality/phase-25-release-review.md` — **GO for alpha/pilot, AI
+capability only**; **NO-GO for production**, unchanged, because the Phase 24.12 blockers (backup/restore
+drill, licence outcome, unsigned High/Critical exceptions) are owner decisions, not AI-capability ones. The
+release note is `docs/releases/2026-11-21-phase-25.md`. Every matrix row was re-verified against the
+repository (one stale citation repaired, none deleted); the citation sweep is now the nightly DB-free
+test `apps/api/test/ai-capability-matrix-evidence.test.ts`.
 
 Phase 25 turns the existing AIAgents / CRM Chat engine into a parity-level product surface: an evidence-based
 capability matrix against Twenty v2.59, an explicit least-privilege agent principal, reusable versioned skills, a

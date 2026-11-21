@@ -149,8 +149,25 @@ production go/no-go.
   `docs/quality/phase-25-eval-evidence.md`. **No** live model call, no real customer record and no
   test database were involved; the suites were **not executed** in the authoring session
   (AGENTS.MD §4).
+- **25.12** AI capability review and go/no-go — the phase's closing deliverable. Every row of the
+  canonical capability matrix (`docs/architecture/ai-capability-matrix.md`) was re-verified against the
+  repository and given an evidence-linked status (**Verified**, **Source-verified**, **Partial** or
+  **Accepted skip**); one stale line reference was repaired, and **no row was deleted and no claim
+  downgraded**, because none of them lacked an evidence path. The review also inspects the whole Phase 25
+  delta for the six things the phase must not introduce — a tenant dimension, a billing surface, an
+  arbitrary code path, a live vendor call, a weakened Phase 23 control and an extra database: **none is
+  present** (the SSRF guard and the shared address classifier are untouched, no security exception was
+  added, and the only three migrations are additive). **Decision: GO for alpha/pilot, AI capability only;
+  NO-GO for production**, unchanged, because the Phase 24.12 blockers are owner decisions rather than
+  AI-capability ones. The residual P1/P2 risks carry owners and review dates. The review's evidence claim
+  is now a **test**: `apps/api/test/ai-capability-matrix-evidence.test.ts` runs in the existing nightly
+  DB-free lane and fails when a matrix citation stops resolving. The release note is
+  `docs/releases/2026-11-21-phase-25.md`, mirrored by the in-app release-notes pages in `en` and `vi`.
+  **No** gate command was executed in the authoring session (AGENTS.MD §4) and no document records a
+  result as if it had been produced.
 
-Not shipped by 25.11: assignable agent roles and code-defined agents.
+Not shipped by 25.12: assignable agent roles and code-defined agents. Phase 25 is complete as a phase;
+the next AI workstream is the release of what the review left open.
 
 ### Phase 24
 

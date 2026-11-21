@@ -31,6 +31,9 @@ const PURE_API_TESTS = [
   // deterministic router and the live tool catalogue. It is the nightly gate's tool-routing
   // accuracy check, and it is where a broken tool grant is caught.
   'ai-golden-eval.test.ts',
+  // Phase 25.12: the AI capability review's own evidence check — every path/line citation of the
+  // canonical matrix must still resolve, or the claim is no longer traceable. Filesystem only.
+  'ai-capability-matrix-evidence.test.ts',
   'ai-agent-periods.test.ts',
   // Phase 25.8: the web-search suite drives a fake transport and a stub ledger, so the bounded
   // search tool, the SSRF refusals and the citation reference codec all run in the DB-free lane.

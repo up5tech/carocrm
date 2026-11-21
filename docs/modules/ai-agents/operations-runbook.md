@@ -88,6 +88,20 @@ operator enables both switches, and an agent opts in itself:
   executed by the gate.
 - Evidence, commands and the metric: `docs/quality/phase-25-eval-evidence.md`.
 
+## AI capability review (25.12)
+
+- What the phase decided: **GO for alpha/pilot — AI capability only; NO-GO for production** (unchanged,
+  because the Phase 24.12 gate is open). The review is `docs/quality/phase-25-release-review.md`; the
+  release note is `docs/releases/2026-11-21-phase-25.md`.
+- Read it before changing an AI claim. It records, per matrix row, whether the claim is **Verified**,
+  **Source-verified**, **Partial** or an **Accepted skip**, plus the residual P1/P2 risks with their owners.
+- The canonical matrix is `docs/architecture/ai-capability-matrix.md`. Its citations are **machine-checked**:
+  `apps/api/test/ai-capability-matrix-evidence.test.ts` runs in the nightly DB-free lane and fails when a
+  cited path or line stops resolving. If you move code, fix the citation in the same commit.
+- Before a pilot: run the commands in the review §9 (`pnpm ci:gate`, `pnpm ci:api-spec --strict`,
+  `pnpm eval:ai`, the AI integration batch and the browser spec) in the target environment, and keep the AI
+  features **feature-gated off** until you do.
+
 ## Retention / deletion request
 
 - Dry run: `POST /api/v1/AIAgents/action/retention/dryRun`.

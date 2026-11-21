@@ -113,6 +113,7 @@
 | G100 | The chat page context covers exactly one record; a list selection is still a client-written sentence, and the browser suite cannot exercise the ACL-drop path | crm-chat | Low | Deferred (25.9) — see the resolution below |
 | G101 | The soft-limit warning needs run traffic, and the cost report aggregates its window in memory | ai-agents | Low | Deferred (25.10) — see the resolution below |
 | G102 | The nightly golden gate measures a deterministic intent router, not the model's own routing; four cases wait for a human review | ai-agents | Low | Accepted (25.11) — the limit is documented, not fixed; see the resolution below |
+| G103 | The Phase 25 AI suites have not been executed since `AGENTS.MD` §4 assigned the runs to the developer; every "source-verified" matrix row is unproven at runtime | ai-agents | Medium | Open (25.12) — one nightly run closes it; see the resolution below |
 
 **Phase 23.11 status note (2026-11-13).** The Phase 23 security workstream is finished and its release review is
 recorded in `docs/quality/phase-23-security-release-review.md` with a **NO-GO** decision. Two rows block a
@@ -1314,3 +1315,31 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
   billable model call, and the honest claim is the deterministic intent contract, not model behaviour.
   `docs/quality/phase-25-eval-evidence.md` §1 and §7 state the limit; the review backlog is §6 of that
   document. Closing the remaining distance would need a model-backed lane, which is a separate decision.
+  The 25.12 review re-affirmed this acceptance as a named P1 residual risk with an owner
+  (`docs/quality/phase-25-release-review.md` §6) — the gap is carried, not forgotten.
+
+---
+
+## G103 — The Phase 25 AI suites have not been executed, so the "source-verified" rows are unproven at runtime
+
+- **Module / contract:** ai-agents — Phase 25.12 (AI capability review and go/no-go).
+- **Evidence (25.12, 2026-11-21):**
+  - `AGENTS.MD` §4 keeps lint, typecheck, the test suites and `pnpm verify` with the developer, so the
+    25.6–25.12 sub-phases shipped with tests written and checks assigned, not run.
+  - The 25.12 review (`docs/quality/phase-25-release-review.md` §5) therefore marks each matrix row
+    **Source-verified** — the cited suite exists and the claim traces to code — instead of **Verified**.
+    Rows 4 and 12 keep their earlier executed evidence; rows 1, 2, 3, 5, 6, 7, 8, 9, 10 and 11 await one
+    run each.
+  - What *was* checked at source level: every path/line citation of the canonical matrix resolves (one stale
+    reference repaired), and the whole Phase 25 delta was inspected for a tenant dimension, a billing
+    surface, an arbitrary code path, a live vendor call, a weakened Phase 23 control and an extra database.
+    None is present.
+- **Impact:** no data loss and no security impact. A defect that only a runtime check would catch — a
+  fixture shape, a route contract, a race in a trigger — remains unproven, and the alpha/pilot decision
+  rests on source-level evidence rather than on a green gate.
+- **Severity:** Medium.
+- **Resolution (25.12, 2026-11-21):** **Open.** The commands are listed in
+  `docs/quality/phase-25-release-review.md` §9 with empty result columns; running them turns every
+  Source-verified row into a Verified one and closes this gap. The citation sweep is already automated
+  (`apps/api/test/ai-capability-matrix-evidence.test.ts`, nightly DB-free lane), so the *traceability* of the
+  claims does not depend on the developer running anything.
