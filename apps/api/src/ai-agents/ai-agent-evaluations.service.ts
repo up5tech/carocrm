@@ -49,6 +49,13 @@ export interface EvalCaseResult {
   readonly detail: string;
   /** Who turned a pending review into a result. A decision with no author is not an audit trail. */
   readonly decidedByUserId?: string | undefined;
+  /**
+   * Phase 25.11 — who must decide a pending `human_review` case. The agent's owner (or its team)
+   * is accountable for the review; a review nobody owns is a backlog nobody reads.
+   */
+  readonly reviewOwner?: string | undefined;
+  /** When the pending review has to be decided by. */
+  readonly reviewDue?: string | undefined;
 }
 
 export interface EvalRunView {
@@ -76,6 +83,11 @@ export interface EvalSuiteView {
     readonly title: string;
     readonly grader: string;
     readonly kind: 'deterministic' | 'review';
+    /**
+     * Phase 25.11 — the deadline a `human_review` case carries, when the case declares one. A
+     * case without a deadline uses the default window of the run that raised it.
+     */
+    readonly reviewDue?: string | undefined;
   }[];
 }
 
@@ -226,6 +238,7 @@ export class AIAgentEvaluationService {
             title: row.title,
             grader: row.grader,
             kind: REVIEW_GRADERS.has(row.grader) ? ('review' as const) : ('deterministic' as const),
+            ...(REVIEW_GRADERS.has(row.grader) ? { reviewDue: configuredReviewDue(row.grader_config) } : {}),
           })),
       })),
     };
@@ -311,6 +324,7 @@ export class AIAgentEvaluationService {
       title: row.title,
       grader: row.grader,
       kind: REVIEW_GRADERS.has(row.grader) ? 'review' : 'deterministic',
+      ...(REVIEW_GRADERS.has(row.grader) ? { reviewDue: configuredReviewDue(input.graderConfig) } : {}),
     };
   }
 
@@ -584,11 +598,16 @@ export class AIAgentEvaluationService {
     }
     if (entry.grader === 'human_review') {
       const alreadyDecided = false; // decided through `decide()` on the stored run
+      // Phase 25.11 — a pending review names its owner and its deadline: the agent's owner (or
+      // its team) is accountable, and the case may not stay open forever.
+      const owner = agent.owner_user_id ?? agent.team_id;
       return {
         ...base,
         passed: alreadyDecided,
         outcome: 'pending',
         detail: 'Awaiting a human decision; publish requires an approval once the deterministic cases pass.',
+        ...(owner === null || owner === '' ? {} : { reviewOwner: owner }),
+        reviewDue: reviewDue(entry.grader_config, new Date()),
       };
     }
     if (config === null) {
@@ -759,6 +778,28 @@ const KNOWN_GRADERS: ReadonlySet<string> = new Set([
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/**
+ * Phase 25.11 — how long a human review may stay pending before it is overdue.
+ *
+ * The deadline is the case's own when it declares one (`grader_config.reviewDue`); otherwise it
+ * is the default window measured from the run that raised it. A review with a deadline can be
+ * chased; a review without one is just a pending row.
+ */
+const HUMAN_REVIEW_DEADLINE_DAYS = 14;
+
+/** The deadline a case declares, when it declares one. */
+function configuredReviewDue(graderConfig: unknown): string | undefined {
+  const configured = asRecord(graderConfig)['reviewDue'];
+  return typeof configured === 'string' && configured.trim() !== '' ? configured.trim() : undefined;
+}
+
+/** The deadline of one pending review: the case's own, or the default window from the run. */
+function reviewDue(graderConfig: unknown, from: Date): string {
+  const configured = configuredReviewDue(graderConfig);
+  if (configured !== undefined) return configured;
+  return new Date(from.getTime() + HUMAN_REVIEW_DEADLINE_DAYS * 86_400_000).toISOString();
 }
 
 function asRecordArray(value: unknown): unknown[] {

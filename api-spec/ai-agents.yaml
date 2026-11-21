@@ -773,7 +773,7 @@ endpoints:
     auth: authenticated
     permissions: "capability use (AIAgent read)"
     request: none
-    response: "200 { list: EvalSuiteView[] } — suites with their cases"
+    response: "200 { list: EvalSuiteView[] } — suites with their cases; a human_review case carries the review deadline it declares"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED]
     pagination: none
     sorting: "fixed: suite_key ascending"
@@ -821,7 +821,7 @@ endpoints:
     auth: authenticated
     permissions: "capability use (AIAgent read) plus agent visibility; deterministic graders only — no model calls"
     request: "RunEvaluationSchema { suiteId? } (strict; defaults to the first enabled suite)"
-    response: "200 EvalRunView { id, agentId, suiteId, suiteKey, configChecksum, agentVersion, status, results[], createdAt }"
+    response: "200 EvalRunView { id, agentId, suiteId, suiteKey, configChecksum, agentVersion, status, results[{caseKey,grader,kind,passed,outcome,detail,decidedByUserId,reviewOwner,reviewDue}], createdAt }"
     errors: [AUTHENTICATION_REQUIRED, AUTHORIZATION_DENIED, VALIDATION_FAILED, NOT_FOUND]
     pagination: none
     sorting: none

@@ -111,6 +111,8 @@
 | G98 | The three sample extension packages in `modules/` are unsigned | extensions | Low | Accepted (23.6) |
 | G99 | AI documentation drift: SPEC `MAX_TOOLS` 24 vs code 32; "schedule/integration triggers not implemented" vs shipped gated doors; chat contract status line stale | ai-agents / crm-chat (docs) | Low | Fixed (25.1) — see resolution and executed checks below |
 | G100 | The chat page context covers exactly one record; a list selection is still a client-written sentence, and the browser suite cannot exercise the ACL-drop path | crm-chat | Low | Deferred (25.9) — see the resolution below |
+| G101 | The soft-limit warning needs run traffic, and the cost report aggregates its window in memory | ai-agents | Low | Deferred (25.10) — see the resolution below |
+| G102 | The nightly golden gate measures a deterministic intent router, not the model's own routing; four cases wait for a human review | ai-agents | Low | Accepted (25.11) — the limit is documented, not fixed; see the resolution below |
 
 **Phase 23.11 status note (2026-11-13).** The Phase 23 security workstream is finished and its release review is
 recorded in `docs/quality/phase-23-security-release-review.md` with a **NO-GO** decision. Two rows block a
@@ -1287,3 +1289,28 @@ recorded or signed. See `docs/quality/phase-24-test-evidence.md` §24.2.
 - **Resolution (25.10, 2026-11-21):** **Deferred (P2).** A scheduled sweep could raise the warning
   without traffic, and a rollup table would bound the report cost. Both are separate changes, and
   neither belongs to the read-only view 25.10 delivers.
+
+---
+
+## G102 — The nightly golden gate measures a deterministic intent router, not the model's own routing
+
+- **Module / contract:** ai-agents — Phase 25.11 (golden evaluations and the tool-routing gate).
+- **Evidence (25.11, 2026-11-21):**
+  - The nightly DB-free gate has no model and no database, so the golden suite routes each prompt with a
+    **deterministic phrase table** (`apps/api/src/ai-agents/eval/ai-agent-tool-routing.ts`), English and
+    Vietnamese. It measures the *contract* — which tool serves which intent, with which effect class, and
+    whether the agent still holds it — and it cannot measure how a real model routes a free-form prompt.
+  - The tool contributions of the sales, projects, lead-score and marketing-automation modules are outside the
+    dataset: the golden set speaks about the AI Agents catalogue, so those four read tools are not covered by
+    the metric.
+  - Four dataset cases cannot be judged by arithmetic (prompt injection, an ACL-masked field, two bounded
+    answers). They are `human_review`, they name an owner and a deadline, and they wait for a person.
+    The machine-checked half of those cases lives in the adversarial, chat-evaluation and citation suites.
+- **Impact:** no data loss and no security impact. A routing regression that the phrase table can see — a
+  renamed tool, a reclassified effect class, a broken grant — fails the gate; a regression only a live model
+  would show does not.
+- **Severity:** Low.
+- **Resolution (25.11, 2026-11-21):** **Accepted.** The limit is the point of the design: the gate makes no
+  billable model call, and the honest claim is the deterministic intent contract, not model behaviour.
+  `docs/quality/phase-25-eval-evidence.md` §1 and §7 state the limit; the review backlog is §6 of that
+  document. Closing the remaining distance would need a model-backed lane, which is a separate decision.

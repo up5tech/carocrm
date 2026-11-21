@@ -88,6 +88,41 @@ export {
   WEB_SEARCH_REF_KIND,
   webSearchLedgerRow,
 } from './ai-web-search.js';
+// Phase 25.11 — the golden dataset, the deterministic tool router and the metric the
+// nightly gate enforces.
+export type {
+  GoldenCase,
+  GoldenDisposition,
+  GoldenExpectation,
+  GoldenLanguage,
+} from './eval/ai-agent-golden-dataset.js';
+export {
+  advisoryGoldenCases,
+  deterministicGoldenCases,
+  GOLDEN_CASES,
+  GOLDEN_DATASET_ID,
+  GOLDEN_DATASET_VERSION,
+  GOLDEN_READ_TOOLS,
+  GOLDEN_WRITE_TOOLS,
+  reviewGoldenCases,
+} from './eval/ai-agent-golden-dataset.js';
+export type { GoldenCaseResult, GoldenOutcome, GoldenRoutingMetric, GoldenRunResult } from './eval/ai-agent-golden-runner.js';
+export {
+  goldenDatasetHash,
+  goldenDatasetIssues,
+  goldenRoutingCaseCount,
+  GOLDEN_ROUTING_BASELINE,
+  GOLDEN_ROUTING_THRESHOLD,
+  runGoldenDataset,
+} from './eval/ai-agent-golden-runner.js';
+export type {
+  GoldenToolEffect,
+  ToolCatalogueEntry,
+  ToolIntent,
+  ToolRoutingCandidate,
+  ToolRoutingResult,
+} from './eval/ai-agent-tool-routing.js';
+export { isWriteEffect, routeTool, tokenize, TOOL_INTENTS } from './eval/ai-agent-tool-routing.js';
 
 /**
  * `AIAgents` barrel (AGENTS.md §5.1, docs/module-guide.md).

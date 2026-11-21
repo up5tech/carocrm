@@ -128,9 +128,29 @@ production go/no-go.
   never joined, so no credential can reach the report or the export. **No** credit balance, per-seat
   allowance, payment flow or billing table was added — credits and billing remain an explicit skip
   (D1).
+- **25.11** Golden evaluations and the tool-routing regression gate. A **versioned golden dataset**
+  (46 cases: 40 deterministic, 4 `human_review`, 2 `model_review`; English and Vietnamese) lives in the
+  repository (`apps/api/src/ai-agents/eval/ai-agent-golden-dataset.ts`, v1.0.0) and covers search,
+  summary, aggregate, report, cross-module, chat page-context, the workflow, skill and trigger
+  surfaces, and the five negatives the plan names (prompt injection, an ACL-masked field, a
+  hallucinated citation, an unknown tool, an oversized output). **Tool-routing accuracy** is now a
+  measurable metric with a baseline and a floor that may only rise (1.00 over the 40 deterministic
+  cases), enforced by a **DB-free suite in the existing nightly gate** — no second test runner, no
+  second CI provider (G78 stands). The gate names its failures: a **broken tool grant**
+  (`grant_missing`), a **read-only prompt that reaches a write tool** (`write_on_read_prompt`), a
+  renamed tool (`unknown_tool`), a reclassified effect class (`effect_changed`) or a misrouted
+  prompt. The catalogue it checks is the **live** one, so a tool that disappears or changes class
+  fails the gate. `human_review` cases carry an owner and a deadline (in the dataset and in the
+  product's evaluation service: the agent's owner, and 14 days from the run by default), and
+  `model_review` stays **advisory and billable-free** — the gate never makes a model call. A second,
+  database-backed suite asserts the **selected tool** on the surfaces the golden suite cannot reach
+  on its own: a manual run, a workflow AI step, a scheduled trigger, a skill and a web search with
+  its citation. Commands, counts, the metric and the review backlog are recorded in
+  `docs/quality/phase-25-eval-evidence.md`. **No** live model call, no real customer record and no
+  test database were involved; the suites were **not executed** in the authoring session
+  (AGENTS.MD §4).
 
-Not shipped by 25.10: assignable agent roles, code-defined agents and the golden evaluation gate
-(25.11).
+Not shipped by 25.11: assignable agent roles and code-defined agents.
 
 ### Phase 24
 

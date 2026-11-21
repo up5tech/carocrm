@@ -71,6 +71,23 @@ operator enables both switches, and an agent opts in itself:
   created, so an installation that stopped creating runs sees the state on the Usage tab and in the
   budget list instead.
 
+## Golden evaluation gate (25.11)
+
+- Run it: `pnpm eval:ai` — the same DB-free suite the scheduled nightly gate runs
+  (`vitest.ci.config.ts`). No database, no network, no model call.
+- What it measures: **tool-routing accuracy** over the versioned golden dataset — the share of
+  deterministic cases whose prompt reaches the tool the dataset names, with that tool's real effect
+  class, and with only the granted tools in reach. The floor is 1.00 and may only rise.
+- A red run names the reason: `grant_missing` (the agent does not hold the tool its prompt needs),
+  `write_on_read_prompt` (a read-only prompt reached a write tool), `unknown_tool` / `unknown_grant`
+  (the catalogue and the dataset disagree), `effect_changed` (a tool changed class) or `misrouted`.
+- The catalogue it checks is the live one. Renaming or removing a tool, or reclassifying one, fails
+  the gate — that is the point.
+- The `human_review` cases (four of them) wait for a person: their owner and deadline are in
+  `docs/quality/phase-25-eval-evidence.md` §6. The `model_review` cases are advisory and are never
+  executed by the gate.
+- Evidence, commands and the metric: `docs/quality/phase-25-eval-evidence.md`.
+
 ## Retention / deletion request
 
 - Dry run: `POST /api/v1/AIAgents/action/retention/dryRun`.

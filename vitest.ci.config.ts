@@ -27,6 +27,10 @@ const PURE_API_TESTS = [
   // Phase 23.5 SSRF boundary suite. Both belong in the nightly gate rather than the sandbox layer.
   'ai-agent-adversarial.test.ts',
   'ai-agent-actor.test.ts',
+  // Phase 25.11: the golden suite is DB-free by construction — a versioned dataset, a
+  // deterministic router and the live tool catalogue. It is the nightly gate's tool-routing
+  // accuracy check, and it is where a broken tool grant is caught.
+  'ai-golden-eval.test.ts',
   'ai-agent-periods.test.ts',
   // Phase 25.8: the web-search suite drives a fake transport and a stub ledger, so the bounded
   // search tool, the SSRF refusals and the citation reference codec all run in the DB-free lane.

@@ -1,7 +1,7 @@
 # PLAN — Phase 25: AI Capability Parity (Single-Tenant)
 
-> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8, 25.9 and 25.10 implemented (25.0–25.4 on 2026-11-18;
-> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9 and 25.10 on 2026-11-21; canonical claims:
+> **Status:** 25.0, 25.1, 25.2, 25.3, 25.4, 25.5, 25.6, 25.7, 25.8, 25.9, 25.10 and 25.11 implemented (25.0–25.4 on 2026-11-18;
+> 25.5 and 25.6 on 2026-11-19; 25.7 and 25.8 on 2026-11-20; 25.9, 25.10 and 25.11 on 2026-11-21; canonical claims:
 > `docs/architecture/ai-capability-matrix.md`; D1–D7 defaults stand, no override was recorded).
 > 25.0–25.1 were documentation-only; 25.2 pinned the execution principal in the versioned config
 > JSONB; 25.3 added the derived provider capability table and the Anthropic structured-output fallback;
@@ -17,8 +17,9 @@
 > `GET action/page-context` route, the `pageContext` request/response field and the
 > `?lastEventId=` resume parameter. 25.10 needs no migration either: the installation-level cost
 > and usage view reads the existing run and provider ledgers, and the soft-limit warning is an
-> in-app notification row. No dependency or release action.
-> Work continues at 25.11.
+> in-app notification row. 25.11 needs no migration either: the golden dataset is a repository file
+> and the gate reads the existing tool registry. No dependency or release action.
+> Work continues at 25.12 (AI capability review and go/no-go).
 > **Workstream type:** AI product parity and productisation of the existing AIAgents / CRM Chat engine. Not a new business module, not a security workstream, not a rewrite of the Entity Engine, and not a platform-DX race with Twenty.
 > **Predecessor:** Phase 24 (`plans/PLAN_Phase_24_Product_Completion.md`) — product completion, 24.0–24.11 delivered, **24.12 release review in progress**; the release decision remains **NO-GO for production** (`docs/quality/phase-24-12-release-review.md`, `docs/releases/2026-11-15-phase-24.md`). Phase 25 does not reopen the 24.12 gate.
 > **Comparison target:** Twenty CRM, SDK **v2.59.0** published 2026-11-16 (`sdk/v2.59.0`), plus the AI user-guide and developer documentation retrieved 2026-11-18. Twenty documents skills/agents as **alpha** and externally declared MCP servers as **beta, "not live yet"**; parity means matching *shipped* value, not copying a beta.
@@ -542,6 +543,35 @@ Make AI parity claims testable. Twenty publishes SDK testing guidance; CaroCRM s
 - The dataset version, threshold and results are reproducible from a documented command with no network.
 - A deliberately broken tool grant is detected by the gate before it reaches a release review.
 - No live model call, no real customer record, no test database.
+
+### Delivered (2026-11-21)
+
+- **The dataset.** `apps/api/src/ai-agents/eval/ai-agent-golden-dataset.ts` holds 46 versioned cases
+  (`GOLDEN_DATASET_VERSION = 1.0.0`): 40 deterministic, 4 `human_review`, 2 `model_review`, in English
+  and Vietnamese, over search, summary, aggregate, report, cross-module, chat page-context, the
+  workflow, skill and trigger surfaces, and the five negatives the plan names.
+- **The metric.** `ai-agent-golden-runner.ts` judges a case and reports the reason it failed:
+  `tool-routing accuracy` is the share of deterministic cases whose prompt reaches the tool the dataset
+  names, with that tool's real effect class, and with only the granted tools in reach. Baseline and floor
+  are 1.00; the floor may only rise.
+- **The gate.** `apps/api/test/ai-golden-eval.test.ts` is DB-free by construction and runs in the
+  **existing** nightly lane (`vitest.ci.config.ts`): no second runner, no second CI provider (G78
+  stands). It checks the **live** catalogue, so a tool that disappears, is renamed or changes effect
+  class fails the gate, and it proves that a deliberately broken grant fails the case with
+  `grant_missing` and drops the metric below the floor.
+- **The surfaces.** `apps/api/test/ai-agent-golden-routing.test.ts` asserts the **selected tool** — not
+  only the final text — for a manual run, a workflow AI step, a scheduled trigger, a skill (which
+  cannot grant a tool the agent does not hold) and a web search with its citation, all through the
+  deterministic fake provider.
+- **The dispositions.** `human_review` cases carry an owner and a deadline in the dataset, and the
+  product's evaluation service now does the same (the agent's owner, and 14 days from the run by
+  default). `model_review` stays advisory and is never executed by the gate: the gate makes no billable
+  model call.
+- **The evidence.** `docs/quality/phase-25-eval-evidence.md` records the dataset version and hash, the
+  counts, the metric, the floor, the commands, the review backlog and the limits of the claim.
+- **Explicitly not delivered:** a model-backed routing lane (a live model call is a billable call), and
+  golden cases for the tool contributions of the sales, projects, lead-score and marketing-automation
+  modules — both are recorded in G102.
 
 ---
 
